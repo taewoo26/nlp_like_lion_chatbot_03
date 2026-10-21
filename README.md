@@ -48,7 +48,7 @@
 ## 4. 폴더 구조
 
 ```
-pii-rag-chatbot/
+nlp_like_lion_chatbot_03/
 ├── detection/        # 탐지기 (rule/, token_cls/, llm/) + 공통 인터페이스
 ├── pseudonym/        # 정규화, HMAC 토큰 생성, 매핑 테이블
 ├── rag/              # 청킹, 임베딩, 적재, 검색, 답변 생성
@@ -71,8 +71,8 @@ pii-rag-chatbot/
 ### 5-2. 설치
 
 ```bash
-git clone <repo-url>
-cd pii-rag-chatbot
+git clone https://github.com/taewoo26/nlp_like_lion_chatbot_03.git
+cd nlp_like_lion_chatbot_03
 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
