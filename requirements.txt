@@ -1,0 +1,9 @@
+# 필요에 따라 추가하고 PR로 공유하기
+python-dotenv
+pandas
+kiwipiepy
+psycopg[binary]
+pgvector
+openai
+fastapi
+uvicorn
