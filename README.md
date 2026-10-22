@@ -38,7 +38,7 @@
 
 | 구분 | 사용 기술 |
 | --- | --- |
-| Language | Python 3.x |
+| Language | Python 3.13.x |
 | 탐지 | 정규식, Kiwi(kiwipiepy), 토큰 분류 모델(BIOES), LLM |
 | 가명처리 | HMAC-SHA256 |
 | 벡터 DB | PostgreSQL + pgvector (Docker) |
@@ -65,7 +65,7 @@ nlp_like_lion_chatbot_03/
 ## 5. 시작하기
 
 ### 5-1. 사전 준비
-- Python 3.x
+- Python 3.13.x (3.13.7에서 확인)
 - Docker Desktop (Windows는 WSL2 필요)
 
 ### 5-2. 설치
@@ -74,9 +74,9 @@ nlp_like_lion_chatbot_03/
 git clone https://github.com/taewoo26/nlp_like_lion_chatbot_03.git
 cd nlp_like_lion_chatbot_03
 
-python -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 cp .env.example .env             # 키 값 직접 입력
 ```
@@ -86,12 +86,25 @@ cp .env.example .env             # 키 값 직접 입력
 ```bash
 cd infra
 docker compose up -d
+docker compose ps
+cd ..
+```
+
+로컬 개발용 PostgreSQL 16 + pgvector 컨테이너가 `localhost:5433`에서 실행됩니다.
+초기화 시 `rag` 데이터베이스에 `vector` 확장을 설치하고 별도의 `vault`
+데이터베이스를 만듭니다. 접속 정보는 `.env.example`의 로컬 개발용 값과 같습니다.
+운영 환경에서는 비밀번호와 접근 권한을 별도로 설정해야 합니다.
+
+동작 확인:
+
+```bash
+docker compose -f infra/compose.yaml exec db psql -U chatbot -d rag -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
 ### 5-4. 실행
 
 ```bash
-# TODO: 실제 명령어로 교체
+# 아래 모듈은 아직 구현 전이며, 구현 후 실제 명령어로 교체합니다.
 python -m detection.run_compare --split dev     # 탐지기 비교
 python -m rag.ingest --split dev                # 가명처리 + 적재
 uvicorn service.main:app --reload               # API 서버
