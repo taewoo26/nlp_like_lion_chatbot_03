@@ -22,6 +22,7 @@
     mask_rec : 라벨과 무관하게, 정답 개인정보 글자 중 예측 구간이 덮은 글자 비율 (가려졌는가)
 """
 import argparse
+from result_paths import private_output
 import csv
 import json
 import os
@@ -214,7 +215,7 @@ def main():
     ap.add_argument("--gold", required=True, help="정답 jsonl (dev/test)")
     ap.add_argument("--pred", action="append", required=True,
                     help="이름=예측.jsonl  (반복 실행은 이름=r1.jsonl,r2.jsonl,r3.jsonl)")
-    ap.add_argument("--out", default="results")
+    ap.add_argument("--out", type=private_output, default="local_results/eval")
     a = ap.parse_args()
 
     docs = load_gold(a.gold)

@@ -3,6 +3,10 @@
 *.key
 secrets/
 
+# 개인 실험 원본·예측·상세 오류·검증 기록 (공유 요약은 results/)
+/local_results/
+AGENTS.md
+
 # 데이터셋 (특히 holdout은 최종 평가 전까지 열지 않음)
 data/
 pii_synth_finance/
