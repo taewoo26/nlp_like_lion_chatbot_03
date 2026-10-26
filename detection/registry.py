@@ -20,6 +20,8 @@ DETECTORS = {
     "hybrid_v2": "detection.hybrid:HybridV2Detector",
     "hybrid_v3": "detection.hybrid:HybridV3Detector",
     "hybrid_v4": "detection.hybrid:HybridV4Detector",
+    "hybrid_v5": "detection.hybrid:HybridV5Detector",
+    "hybrid_v6": "detection.hybrid:HybridV6Detector",
     # 팀원 버전 예시: "rule_jmy": "detection.rule.rule_jmy:RuleDetector",
 }
 

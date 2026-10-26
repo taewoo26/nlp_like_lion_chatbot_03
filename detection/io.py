@@ -12,7 +12,15 @@ SPLIT_FILES = {
 
 
 def gold_path(split: str) -> Path:
-    """data/dev/파일 또는 data/파일 둘 다 지원."""
+    """data/dev/파일 또는 data/파일 둘 다 지원.
+    자체 검증셋은 셋 이름을 붙여 부른다: custom_A → data/custom/pii_custom_A.jsonl"""
+    if split.startswith("custom_"):
+        p = DATA_DIR / "custom" / f"pii_{split}.jsonl"
+        if p.exists():
+            return p
+        raise SystemExit(f"{p} 가 없습니다. 먼저 scripts/tagged_to_jsonl.py --name {split[7:]} 로 만드세요.")
+    if split not in SPLIT_FILES:
+        raise SystemExit(f"모르는 split: {split} (dev, test, holdout, custom, custom_A 처럼)")
     name = SPLIT_FILES[split]
     for p in (DATA_DIR / split / name, DATA_DIR / name):
         if p.exists():

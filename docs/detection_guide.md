@@ -1,5 +1,14 @@
 # 탐지기 실행 가이드 (실전 1)
 
+> **최종 선정 탐지기: `hybrid_v5`** (규칙 기반 + Veil 결합). 처음이면 [docs/getting_started.md](getting_started.md)부터.
+>
+> | | dev | test | holdout 개선 전 (v4) | holdout 개선 후 (v5) |
+> |---|---|---|---|---|
+> | strict F1 | 1.000 | 0.994 | 0.950 | 0.997 |
+> | mask_rec | 1.000 | 0.999 | 0.980 | 0.999 |
+>
+> holdout 개선 전 평가는 커밋 `9d44bd4`(2026-10-26 10:04)의 hybrid_v4로 수행. 개선 후 holdout 점수는 holdout을 보고 맞춘 결과라 일반화 성능이 아님.
+
 ## 구조
 
 ```
@@ -9,12 +18,16 @@ dev.jsonl ─▶ 탐지기.detect(text) ─▶ 경계 후처리 ─▶ preds/<�
 | 파일 | 역할 |
 | --- | --- |
 | `detection/base.py` | `Span`, `BaseDetector`, 채점 라벨 7종 |
-| `detection/io.py` | 데이터 읽기 (holdout 차단), 예측 jsonl 저장 |
+| `detection/io.py` | 데이터 읽기 (`--split dev/test/custom/holdout`), 예측 jsonl 저장 |
 | `detection/postprocess.py` | 공통 경계 후처리 (조사·호칭·괄호 떼기, 겹침 정리) |
 | `detection/run_detect.py` | 실행 · 문서별 ms 측정 · 1만 건 환산 출력 |
 | `detection/registry.py` | 탐지기 이름 → 클래스 |
 | `detection/rule/` | 규칙 기반 (정규식 + Kiwi 이름) |
 | `detection/token_cls/moai.py` | 기준 모델 (ONNX + 모델 카드 Viterbi) |
+| `detection/token_cls/veil_detector.py` | 추가 모델 Veil (ONNX INT8, 저장소 veil.py 원본 사용) |
+| `detection/token_cls/hf_token.py` | 추가 모델 atonlee·piilot (transformers + torch) |
+| `detection/hybrid.py` | 결합 탐지기 hybrid ~ hybrid_v5 |
+| `detection/rule/*_v2.py`, `*_v3.py` | 결합용 규칙 개선 버전 (원본 v1은 비교용으로 유지) |
 | `detection/llm/llm_detector.py` | LLM (OpenAI 호환) |
 | `eval/run_compare.py` | 회사 제공 채점기 (수정 금지) |
 

@@ -1,0 +1,31 @@
+# 팀 공통 벡터 DB (PostgreSQL 17 + pgvector 0.8.7)
+# 실행: cd infra && docker compose --env-file ../.env up -d
+name: pii-rag
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg17-trixie
+    container_name: pii-rag-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # init 스크립트에서 계정을 만들 때 사용
+      RAG_DB_USER: ${RAG_DB_USER}
+      RAG_DB_PASSWORD: ${RAG_DB_PASSWORD}
+      VAULT_DB_USER: ${VAULT_DB_USER}
+      VAULT_DB_PASSWORD: ${VAULT_DB_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -222,3 +222,140 @@ class HybridV4Detector(HybridV3Detector):
                 spans.append(sp)
                 taken.append((sp.start, sp.end))
         return spans
+
+
+# ---------------------------------------------------------------------------
+# v5: holdout 개선 (개선 전 평가 기록 후 수정 — 커밋 9d44bd4 이후)
+#  - 정규식 v3: 국제번호 +82, 주소 앞 우편번호·뒤 (○○동)
+#  - 공통 후처리: '+' 유지, 괄호 짝 복구
+#  - 이름 오탐 필터 (규칙·Veil 공통):
+#      경조사 용어 '조모상', '장인상' 등 (부고 문서에서 '김미영 사원 조모상')
+#      회사·상품 꼬리로 끝나는 이름 '미르보안' (표 안의 회사명)
+# ---------------------------------------------------------------------------
+from detection.rule.regex_detector_v3 import RegexDetectorV3  # noqa: E402
+
+KIN_EVENTS = {"조부상", "조모상", "부친상", "모친상", "장인상", "장모상", "빙부상", "빙모상",
+              "시부상", "시모상", "외조부상", "외조모상", "본인상"}
+ORG_TAIL = re.compile(r"(보안|은행|카드|증권|보험|생명|캐피탈|테크|시스템|솔루션|컴퍼니|그룹|파트너스|랩스|소프트)$")
+
+
+def person_ok_v5(sp: Span) -> bool:
+    if sp.label != "person":
+        return True
+    name = sp.text.replace(" ", "")
+    return name not in KIN_EVENTS and not ORG_TAIL.search(name)
+
+
+class HybridV5Detector(HybridV4Detector):
+    name = "hybrid_v5"
+
+    def __init__(self):
+        super().__init__()
+        self.regex = RegexDetectorV3()
+
+    def detect(self, text: str) -> list[Span]:
+        out = []
+        for sp in super().detect(text):
+            if sp.label == "person" and not sp.text:
+                sp = Span(sp.start, sp.end, sp.label, text[sp.start:sp.end], sp.confidence)
+            if person_ok_v5(sp):
+                out.append(sp)
+        return out
+
+
+# ---------------------------------------------------------------------------
+# v6: 자체 검증셋 E(형식 변형 집중 63건) 오류 분석 반영
+#  - 정규식 v4: 해외·국제 전화(+1, +81, +86, 82-10), 괄호 지역번호, 15자리 카드, 지번 주소, 사업자번호 제외
+#  - Veil 번호 수용 기준 확대: 전화는 '+'·'82'로 시작해도 OK(최대 15자리), 카드는 15·16자리
+#  - 이름: Veil 구간이 규칙 구간을 완전히 감싸면 더 긴 Veil 구간 사용 ('마이클' → '마이클 존슨')
+#  - 공통 후처리: 괄호 지역번호 유지, 외국인 이름 끝 '이' 보존('왕리웨이')
+# ---------------------------------------------------------------------------
+from detection.rule.regex_detector_v4 import RegexDetectorV4  # noqa: E402
+
+
+def veil_number_ok_v6(text: str, sp: Span) -> bool:
+    v = text[sp.start:sp.end].strip()
+    d = _digits(v)
+    before = text[max(0, sp.start - 12):sp.start]
+    if sp.label == "phone_number":
+        intl = v.startswith("+") or (d.startswith("82") and not d.startswith("0"))
+        return (d.startswith("0") or intl) and 9 <= len(d) <= 15 and not REP_NUMBER.search(before)
+    if sp.label == "card_number":
+        return len(d) in (15, 16)
+    return veil_number_ok(text, sp)
+
+
+def _wider_name_ok(text: str, v: Span, sp: Span, rule_names: list[Span]) -> bool:
+    """Veil 이름 구간(v)이 규칙 이름(sp)을 감쌀 때, v를 써도 되는 경우만 True.
+    ('마이클' → '마이클 존슨'은 OK. dev에서 Veil이 '김은영\n\n윤 선영'처럼 두 사람을 한 구간으로
+     묶은 경우가 있어 아래 조건으로 막음)
+    - 구간 안에 줄바꿈·쉼표·구분자가 없을 것
+    - 구간 안에 다른 규칙 이름이 없을 것 (두 사람을 하나로 묶지 않게)
+    - 덧붙는 부분이 직함·호칭이 아닐 것 ('김은영 대리')"""
+    vt = text[v.start:v.end]
+    if re.search(r"[\n,/|·:;()]", vt):
+        return False
+    if any(o is not sp and not (o.end <= v.start or v.end <= o.start) for o in rule_names):
+        return False
+    extra = (text[v.start:sp.start] + " " + text[sp.end:v.end]).strip()
+    from detection.rule.name_detector_v2 import TITLES
+    return bool(extra) and not any(extra == t or extra.startswith(t) for t in TITLES)
+
+
+class HybridV6Detector(HybridV5Detector):
+    name = "hybrid_v6"
+
+    def __init__(self):
+        super().__init__()
+        self.regex = RegexDetectorV4()
+
+    def detect(self, text: str) -> list[Span]:
+        veil_all = self.veil.detect(text)
+        veil_names = [sp for sp in veil_all if sp.label == "person" and veil_person_ok(text, sp)]
+        veil_nums = [sp for sp in veil_all if sp.label != "person" and veil_number_ok_v6(text, sp)]
+
+        # 1) 번호·주소 (v4와 같은 순서)
+        spans = self.regex.detect(text)
+        for i, s in enumerate(spans):
+            if s.label == "account_number" and CARD_SHAPE.fullmatch(s.text):
+                spans[i] = Span(s.start, s.end, "card_number", s.text, s.confidence)
+        for v in veil_nums:
+            inside = [s for s in spans if v.start <= s.start and s.end <= v.end
+                      and (s.start, s.end) != (v.start, v.end)]
+            others = [s for s in spans if s not in inside]
+            if inside and _free(v, [(o.start, o.end) for o in others]):
+                spans = others + [v]
+        taken = [(s.start, s.end) for s in spans]
+        for v in veil_nums:
+            if _free(v, taken):
+                spans.append(v)
+                taken.append((v.start, v.end))
+
+        # 2) 이름: 규칙 → (Veil이 더 길게 감싸면 Veil 구간) → 남은 Veil
+        rule_names = [sp for sp in self.names.detect(text)]
+        names = []
+        for sp in rule_names:
+            if not _free(sp, taken):
+                continue
+            if sp.confidence == "rule:weak" and not _overlaps(sp, veil_names):
+                continue
+            wider = [v for v in veil_names
+                     if v.start <= sp.start and sp.end <= v.end and (v.end - v.start) > (sp.end - sp.start)
+                     and _free(v, taken) and _wider_name_ok(text, v, sp, rule_names)]
+            names.append(wider[0] if wider else sp)
+        for sp in names:
+            if _free(sp, [(n.start, n.end) for n in spans if n.label == "person"]):
+                spans.append(sp)
+        taken = [(s.start, s.end) for s in spans]
+        for sp in veil_names:
+            if _free(sp, taken):
+                spans.append(sp)
+                taken.append((sp.start, sp.end))
+
+        out = []
+        for sp in spans:
+            if not sp.text:
+                sp = Span(sp.start, sp.end, sp.label, text[sp.start:sp.end], sp.confidence)
+            if person_ok_v5(sp):
+                out.append(sp)
+        return out

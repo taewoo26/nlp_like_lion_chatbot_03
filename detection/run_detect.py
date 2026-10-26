@@ -39,7 +39,8 @@ def run_once(detector, docs, raw: bool = False) -> list[dict]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--detector", required=True)
-    ap.add_argument("--split", default="dev", choices=["dev", "test", "custom", "holdout"])
+    ap.add_argument("--split", default="dev",
+                    help="dev | test | holdout | custom_A, custom_E 처럼 자체 검증셋 이름")
     ap.add_argument("--runs", type=int, default=1, help="반복 실행 횟수 (LLM 일관성)")
     ap.add_argument("--limit", type=int, default=0, help="앞 N건만 (빠른 확인용)")
     ap.add_argument("--raw", action="store_true", help="경계 후처리 끄기 (전후 비교용)")

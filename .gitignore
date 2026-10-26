@@ -38,3 +38,4 @@ Thumbs.db
 # 탐지 결과·채점 결과 (각자 생성, 공유는 노션/보고서로)
 preds/
 results/*/
+*_viewer.html

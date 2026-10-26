@@ -15,16 +15,22 @@
 1. 아래 프롬프트를 GPT에 붙여 넣고 10건씩 2~3번 생성 (가능하면 Gemini 등 다른 AI로도 10건)
 2. 결과를 `data/custom/gpt_1.txt`, `data/custom/gpt_2.txt` … 로 저장 (`data/`는 커밋 안 됨)
 3. 팀원 1명이 태그 검토 (라벨 기준과 다르면 직접 수정)
-4. 변환 → 탐지 → 채점
+4. 변환 → 탐지 → 채점 (셋 이름을 붙여서 관리)
 ```bash
-python scripts/tagged_to_jsonl.py data/custom/gpt_1.txt data/custom/gpt_2.txt
-python -m detection.run_detect --detector rule --split custom
-python -m detection.run_detect --detector veil --split custom
-python -m detection.run_detect --detector hybrid_v2 --split custom
-python eval/run_compare.py --gold data/custom/pii_custom.jsonl \
-  --pred rule=preds/rule_custom.jsonl --pred veil=preds/veil_custom.jsonl \
-  --pred hybrid_v2=preds/hybrid_v2_custom.jsonl --out results/compare_custom
+# 변환: data/custom/e_*.txt → data/custom/pii_custom_E.jsonl
+python scripts/tagged_to_jsonl.py data/custom/e_1.txt data/custom/e_2.txt --name E
+
+# 탐지: --split custom_E
+for d in rule veil hybrid_v5; do python -m detection.run_detect --detector $d --split custom_E; done
+
+# 채점
+python eval/run_compare.py --gold data/custom/pii_custom_E.jsonl \
+  --pred rule=preds/rule_custom_E.jsonl --pred veil=preds/veil_custom_E.jsonl \
+  --pred hybrid_v5=preds/hybrid_v5_custom_E.jsonl --out results/compare_E
 ```
+- 파일 이름 규칙: `data/custom/<셋 소문자>_<번호>.txt` → `--name <셋 대문자>` → `--split custom_<셋 대문자>`
+- 셋마다 정답·예측·결과 파일 이름이 달라서 서로 덮어쓰지 않음
+- txt를 고치면 **변환부터 다시** (본문이 바뀌면 예전 예측의 위치가 어긋남)
 
 ## GPT에 붙여 넣을 프롬프트
 

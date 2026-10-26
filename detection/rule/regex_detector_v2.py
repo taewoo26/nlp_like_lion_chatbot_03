@@ -21,11 +21,12 @@ PATTERNS_V2 = [(lab, ACCOUNT_V2 if lab == "account_number" else pat) for lab, pa
 
 class RegexDetectorV2(RegexDetector):
     name = "regex_v2"
+    patterns = PATTERNS_V2
 
     def detect(self, text: str) -> list[Span]:
         taken = [False] * len(text)
         spans: list[Span] = []
-        for label, pat in PATTERNS_V2:
+        for label, pat in self.patterns:
             for m in pat.finditer(text):
                 s, e = m.start(), m.end()
                 val = m.group()

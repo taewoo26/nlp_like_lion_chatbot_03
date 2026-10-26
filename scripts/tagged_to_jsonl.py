@@ -13,9 +13,9 @@ LLM은 글자 위치(start/end)를 정확히 세지 못한다. 그래서 LLM에�
 라벨 줄임말: person, phone, email, address, rrn, account, card
 
 사용법
-    python scripts/tagged_to_jsonl.py data/custom/gpt_docs.txt
-    → data/custom/pii_custom.jsonl 생성 (기존 파일 덮어씀)
-    python scripts/tagged_to_jsonl.py data/custom/a.txt data/custom/b.txt   # 여러 파일 합치기
+    python scripts/tagged_to_jsonl.py data/custom/e_1.txt data/custom/e_2.txt --name E
+    → data/custom/pii_custom_E.jsonl 생성 → 탐지: --split custom_E
+    (--name 없이 쓰면 예전처럼 data/custom/pii_custom.jsonl)
 """
 import json
 import re
@@ -32,7 +32,7 @@ LABELS = {
     "card": "card_number",
 }
 TAG = re.compile(r"\[\[([a-z_]+):(.+?)\]\]")
-OUT = Path("data/custom/pii_custom.jsonl")
+OUT_DIR = Path("data/custom")
 
 
 def parse_doc(raw: str, doc_id: str) -> tuple[str, list[dict]]:
@@ -57,10 +57,14 @@ def parse_doc(raw: str, doc_id: str) -> tuple[str, list[dict]]:
     return full, ents
 
 
-def main(paths: list[str]) -> None:
+def main(paths: list[str], name: str = "") -> None:
+    OUT = OUT_DIR / (f"pii_custom_{name}.jsonl" if name else "pii_custom.jsonl")
     docs, n = [], 0
     for p in paths:
-        chunks = re.split(r"^### DOC[ \t]*(.*)$", Path(p).read_text(encoding="utf-8"), flags=re.M)
+        raw = Path(p).read_text(encoding="utf-8")
+        raw = re.sub(r"^```.*$", "", raw, flags=re.M)          # 코드블록 표시 제거
+        # '### DOC 유형' 외에 복사 과정에서 바뀐 형태도 허용: 'DOC 유형', '**DOC 유형**', '## DOC: 유형'
+        chunks = re.split(r"^[ \t]*(?:#{1,6}[ \t]*)?\**[ \t]*DOC\b[ \t:.-]*(.*?)[ \t*]*$", raw, flags=re.M)
         # chunks = [앞부분, 유형1, 본문1, 유형2, 본문2, ...]
         for doc_type, body in zip(chunks[1::2], chunks[2::2]):
             body = body.strip("\n")
@@ -73,7 +77,8 @@ def main(paths: list[str]) -> None:
                          "source": Path(p).name, "text": text, "entities": ents,
                          "hard_cases": [] if ents else ["no_pii"]})
     if not docs:
-        raise SystemExit("문서를 하나도 못 찾았어요. 각 문서 앞에 '### DOC 유형' 줄이 있는지 확인하세요.")
+        raise SystemExit("문서를 하나도 못 찾았어요. 각 문서 앞에 '### DOC 유형' 줄이 있는지 확인하세요.\n"
+                         "(기존 data/custom/pii_custom.jsonl은 바뀌지 않았어요 → 이 상태로 채점하면 이전 셋 점수가 나와요)")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with OUT.open("w", encoding="utf-8") as f:
         for d in docs:
@@ -88,6 +93,9 @@ def main(paths: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        raise SystemExit(__doc__)
-    main(sys.argv[1:])
+    import argparse
+    ap = argparse.ArgumentParser(description="태그 문서(txt) → 정답 jsonl")
+    ap.add_argument("files", nargs="+", help="data/custom/e_1.txt e_2.txt …")
+    ap.add_argument("--name", default="", help="셋 이름 (E → data/custom/pii_custom_E.jsonl)")
+    a = ap.parse_args()
+    main(a.files, a.name)
