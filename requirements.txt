@@ -1,9 +1,18 @@
-# 필요에 따라 추가하고 PR로 공유하기
+# 공통
 python-dotenv
+numpy
 pandas
 kiwipiepy
+# 기준 모델 (MoAI ONNX) — 모델 카드 권장 버전
+onnxruntime>=1.28,<1.29
+huggingface-hub>=1.5
+transformers>=5.6
+# 추가 토큰 분류 모델 (atonlee, piilot) — CPU로 실행
+torch
+# LLM
+openai
+# 실전 2 이후
 psycopg[binary]
 pgvector
-openai
 fastapi
 uvicorn
