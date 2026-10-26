@@ -1,20 +1,20 @@
-
 services:
   db:
-    image: pgvector/pgvector:pg17
-    container_name: chatbot-postgres
-    restart: unless-stopped
-
+    image: pgvector/pgvector:0.8.7-pg16
     environment:
       POSTGRES_USER: chatbot
-      POSTGRES_PASSWORD: local_dev_password
-      POSTGRES_DB: chatbot_db
-
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: rag
     ports:
-      - "5432:5432"
-
+      - "127.0.0.1:5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatbot -d rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  postgres_data:
+  pgdata:

@@ -1,163 +1,65 @@
-"""Regex + Kiwi baseline; no spaced-name merging or josa postprocessing.
-
-Rules use public formats and generic context words, never gold PII lists.
-Names are conservative NNP candidates, not a complete Korean NER system.
-"""
-
+"""규칙 기반 탐지기 (정규식). 이름(person)은 이후 Kiwi로 추가한다."""
 import re
-from datetime import date
-
-from kiwipiepy import Kiwi
 
 from detection.base import BaseDetector, Span
+from detection.rule.names import detect_names, has_strong_cue, trim_particle
+
+# 원문 → detector.py
+#         ├─ 정규식 → email / 주민번호 / 카드 / 계좌 / 전화 / 주소
+#         └─ names.py → 이름 후보(넓게)
+#                         └─ (use_kiwi=True일 때만) kiwi_filter.py → 후보 걸러냄
+
+
+# 앞에서부터 우선순위: 겹치면 먼저 나온 라벨이 이긴다
+# (예: 주민번호 안의 숫자가 전화번호로 잡히는 것을 막는다)
+PATTERNS = [
+    # 이메일: \w 는 한글도 포함하므로 영문·숫자만 쓴다 (뒤에 붙은 조사 '로'가 딸려 오는 것 방지)
+    ("email", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"),
+    ("resident_registration_number", r"(?<!\d)\d{6}-\d{7}(?!\d)"),
+    ("card_number", r"(?<!\d)\d{4}-\d{4}-\d{4}-\d{4}(?!\d)"),
+    ("account_number", r"(?<!\d)\d{3}-\d{6}-\d{2}(?!\d)"),
+    ("phone_number",
+        r"(?<!\d)01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)"
+        r"|(?<!\d)02[-. ]?\d{3,4}[-. ]?\d{4}(?!\d)"
+    ),
+    # 주소는 이름 탐지보다 먼저 돌려야 함 (이름 후보가 주소 안에 들어있을 수 있음)
+    ("address", 
+        r"(?:서울특별시|부산광역시|대구광역시|인천광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|"
+        r"경기도|강원도|충청북도|충청남도|전라북도|전라남도|경상북도|경상남도|제주특별자치도)"
+        r"(?:\s[가-힣]+시)?"          # 경기도 성남시 같은 중간 '시'
+        r"\s[가-힣]+(?:구|군)"         # 연수구, 분당구, 일산동구
+        r"\s[가-힣0-9]+(?:로|길)"      # 온누리로, 별빛길
+        r"\s\d+(?:-\d+)?"              # 건물번호
+        r"(?:,\s?(?:\d+동\s)?\d+(?:호|층))?"   # , 101동 1202호 / , 302호 / , 13층
+        ),
+]
+
 
 
 class RuleDetector(BaseDetector):
-    name = "rules"
-
-    # Lower ranks win overlaps; longer spans win within the same label.
-    _PRIORITY = {
-        "resident_registration_number": 0,
-        "card_number": 1,
-        "account_number": 2,
-        "email": 3,
-        "address": 4,
-        "phone_number": 5,
-        "person": 6,
-    }
-
-    def __init__(self):
-        self.kiwi = Kiwi(num_workers=1)
-        # Numeric boundaries also reject fragments of longer hyphenated IDs.
-        left, right = r"(?<![0-9A-Za-z-])", r"(?![0-9-])"
-        self._rrn = re.compile(
-            left + r"[0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12][0-9]|3[01])"
-            r"-[1-4][0-9]{6}" + right
-        )
-        self._card = re.compile(
-            left + r"[0-9]{4}(?P<sep>[-. ])[0-9]{4}(?P=sep)"
-            r"[0-9]{4}(?P=sep)[0-9]{4}" + right
-        )
-        self._account = re.compile(left + r"[0-9]{3}-[0-9]{6}-[0-9]{2}" + right)
-        self._phone = re.compile(
-            left + r"(?:01[016789](?P<msep>[-. ]?)[0-9]{3,4}(?P=msep)[0-9]{4}"
-            r"|(?:02|0[3-6][1-5])(?P<asep>[-. ]?)[0-9]{3,4}(?P=asep)[0-9]{4})"
-            + right
-        )
-        self._email = re.compile(
-            r"(?<![A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])"
-            r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+"
-            r"(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@"
-            r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+"
-            r"[A-Za-z]{2,}(?![A-Za-z0-9_-])"
-        )
-        # Require a road, building number and a detailed floor/unit address.
-        # Horizontal whitespace only: never bridge documents' text lines.
-        self._address = re.compile(
-            r"(?<![가-힣])(?:[가-힣]{2,}(?:특별자치시|특별자치도|특별시|광역시|도))"
-            r"[ \t]+(?:[가-힣]+(?:시|군|구|읍|면|동)[ \t]+){1,3}"
-            r"[가-힣A-Za-z0-9·]+(?:로|길)[ \t]+[0-9]+(?:-[0-9]+)?"
-            r"[ \t]*,?[ \t]*(?:[0-9]+동[ \t]+)?"
-            r"(?:[0-9]+층(?:[ \t]+[0-9]+호)?|[0-9]+호)"
-        )
-        self._account_context = re.compile(r"계좌|[가-힣]+은행|[가-힣]+저축은행")
-        self._card_context = re.compile(r"카드")
-        self._name_chars = re.compile(r"[가-힣]{2,4}\Z")
-        self._name_before = re.compile(
-            r"(?:고객명|성명|이름|담당자|담당|고객|수신자|발신자)"
-            r"[ \t]*(?::[ \t]*)?\Z"
-        )
-        self._name_after = re.compile(
-            r"[ \t]*(?:님|씨|고객|대리|과장|차장|부장|팀장|사원|주임|"
-            r"대표|이사|상무|전무|본부장|팀원)"
-        )
-        self._nonperson_after = re.compile(
-            r"[ \t]*(?:포인트|플러스|체크|신용|카드|상품|은행|저축은행|"
-            r"주식회사|보안|부서|지점|센터|운영팀|관리팀)"
-        )
-        self._nonperson_suffix = re.compile(
-            r"(?:회사|은행|보안|카드|센터|지점|부서|본부|팀|상품)\Z"
-        )
-
-    @staticmethod
-    def _span(text: str, start: int, end: int, label: str) -> Span:
-        return Span(start=start, end=end, label=label, text=text[start:end])
-
-    @staticmethod
-    def _left_context(text: str, start: int, width: int = 48) -> str:
-        """Only inspect the current line, not unrelated previous fields."""
-        return text[max(0, start - width):start].rsplit("\n", 1)[-1].rsplit("\r", 1)[-1]
-
-    def _detect_structured(self, text: str) -> list[Span]:
-        spans = []
-        for match in self._rrn.finditer(text):
-            value = match.group()
-            year = (1900 if value[7] in "12" else 2000) + int(value[:2])
-            try:
-                date(year, int(value[2:4]), int(value[4:6]))
-            except ValueError:
-                continue
-            # Synthetic values need not satisfy a real-world checksum.
-            spans.append(self._span(text, *match.span(), "resident_registration_number"))
-        for pattern, label, context in (
-            (self._card, "card_number", self._card_context),
-            (self._account, "account_number", self._account_context),
-            (self._email, "email", None),
-            (self._phone, "phone_number", None),
-        ):
-            for match in pattern.finditer(text):
-                if context is not None and not context.search(self._left_context(text, match.start())):
-                    continue
-                spans.append(self._span(text, *match.span(), label))
-        return spans
-
-    def _detect_addresses(self, text: str) -> list[Span]:
-        return [self._span(text, *m.span(), "address") for m in self._address.finditer(text)]
-
-    def _detect_persons(self, text: str) -> list[Span]:
-        spans = []
-        for token in self.kiwi.tokenize(text):
-            if token.tag != "NNP":
-                continue
-            start, end = token.start, token.start + token.len
-            surface = text[start:end]
-            if not self._name_chars.fullmatch(surface) or surface != token.form:
-                continue
-            # Do not accept a trailing fragment of a longer Hangul word.
-            if start and "가" <= text[start - 1] <= "힣":
-                continue
-            before = self._left_context(text, start)
-            after = text[end:end + 24].split("\n", 1)[0].split("\r", 1)[0]
-            if self._nonperson_suffix.search(surface) or self._nonperson_after.match(after):
-                continue
-            if self._name_before.search(before) or self._name_after.match(after):
-                # Keep Kiwi's original offsets. No token joining, suffix
-                # stripping, josa dictionary or lost-name recovery here.
-                spans.append(self._span(text, start, end, "person"))
-        return spans
-
-    def _resolve_overlaps(self, spans: list[Span]) -> list[Span]:
-        unique = {(s.label, s.start, s.end): s for s in spans}
-        ordered = sorted(
-            unique.values(),
-            key=lambda s: (self._PRIORITY[s.label], -(s.end - s.start), s.start, s.end),
-        )
-        accepted = []
-        for candidate in ordered:
-            if not any(candidate.start < s.end and s.start < candidate.end for s in accepted):
-                accepted.append(candidate)
-        return sorted(accepted, key=lambda s: (s.start, s.end, s.label))
+    def __init__(self, use_kiwi: bool = False):
+        self.use_kiwi = use_kiwi
+        self.name = "rule_kiwi" if use_kiwi else "rule"
 
     def detect(self, text: str) -> list[Span]:
-        if not isinstance(text, str):
-            raise TypeError("text must be a string")
-        if not text:
-            return []
-        candidates = self._detect_structured(text)
-        candidates.extend(self._detect_addresses(text))
-        candidates.extend(self._detect_persons(text))
-        spans = self._resolve_overlaps(candidates)
-        for span in spans:
-            if not (0 <= span.start < span.end <= len(text)) or span.text != text[span.start:span.end]:
-                raise ValueError("Detector produced an invalid source span")
-        return spans
+        spans: list[Span] = []
+        for label, pat in PATTERNS:
+            for m in re.finditer(pat, text):
+                if any(m.start() < s.end and s.start < m.end() for s in spans):
+                    continue    # 이미 잡힌 구간과 겹치면 버림
+                spans.append(Span(m.start(), m.end(), label, m.group()))
+
+        cands = detect_names(text)            # 이름 1단계: 후보를 넓게 (반드시 if 문보다 먼저!)
+        if self.use_kiwi:                     # 이름 2단계: Kiwi로 거르되, 강한 문맥 단서가 있으면 살린다
+            from detection.rule.kiwi_filter import filter_names
+            kept = filter_names(text, cands) + [s for s in cands if has_strong_cue(text, s)]
+            names = list({(s.start, s.end): s for s in kept}.values())
+        else:
+            names = cands
+        names = [trim_particle(text, s, cands) for s in names]   # 끝에 딸려 온 조사 떼기
+
+        for s in names:
+            if not any(s.start < o.end and o.start < s.end for o in spans):
+                spans.append(s)
+        return sorted(spans, key=lambda s: s.start)
+    
