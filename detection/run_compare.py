@@ -20,11 +20,18 @@
     strict   : 라벨·시작·끝이 모두 정답과 같아야 정답
     partial  : 라벨이 같고 위치가 겹치면 정답 (경계 오류 허용, 예측 하나는 정답 하나에만 매칭)
     mask_rec : 라벨과 무관하게, 정답 개인정보 글자 중 예측 구간이 덮은 글자 비율 (가려졌는가)
+
+어려운 사례 표
+    정답 파일의 hard_cases(문서 태그)와 person 개체의 form(full/spaced/given)을 사용합니다.
+    Holdout 보강 태그(card/id/account/address_format_variant, single_char_given_name,
+    compound_surname)는 태그가 붙은 문서 안에서 해당 변형 개체만 골라 재현율을 계산하며,
+    정답 파일에 그 태그가 없으면 표에 나오지 않습니다.
 """
 import argparse
 import csv
 import json
 import os
+import re
 from collections import Counter, defaultdict
 from itertools import combinations
 
@@ -136,6 +143,21 @@ def summarize(docs, preds):
 
 HARD_TAGS = ("josa_attached", "spaced_name", "given_only", "phone_format_variant", "homonym")
 
+# [추가] Holdout 보강 태그: 태그가 붙은 문서 안에서, 해당 변형에 해당하는 개체만 골라 재현율을 계산
+COMPOUND_SURNAMES = ("남궁", "제갈", "선우", "황보", "독고", "사공", "서문")
+VARIANT_TAGS = {
+    "card_format_variant": ("card_number",
+                            lambda e: not re.fullmatch(r"9410-\d{4}-\d{4}-\d{4}", e["text"])),
+    "id_format_variant": ("resident_registration_number", lambda e: "-" not in e["text"]),
+    "account_format_variant": ("account_number",
+                               lambda e: not re.fullmatch(r"\d{3}-\d{6}-\d{2}", e["text"])),
+    "address_format_variant": ("address", lambda e: True),
+    "single_char_given_name": ("person",
+                               lambda e: e.get("form") != "given" and len(e["text"].replace(" ", "")) == 2),
+    "compound_surname": ("person",
+                         lambda e: e.get("form") != "given" and e["text"].startswith(COMPOUND_SURNAMES)),
+}
+
 
 def hard_case_table(docs, preds):
     """원본 hard_case_recall: 태그 문서의 이름(phone_format_variant는 전화번호) partial 재현율.
@@ -152,6 +174,17 @@ def hard_case_table(docs, preds):
                     n += 1
                     hit += any(p["label"] == lab and overlap(g, p) for p in P)
         out[f"{tag} ({lab})"] = (hit / n if n else None, n, "recall")
+    for tag, (lab, want) in VARIANT_TAGS.items():
+        hit = n = 0
+        for d, P in zip(docs, preds):
+            if tag not in d.get("hard_cases", []):
+                continue
+            for g in d["gold"]:
+                if g["label"] == lab and want(g):
+                    n += 1
+                    hit += any(p["label"] == lab and overlap(g, p) for p in P)
+        if n:
+            out[f"{tag} ({lab})"] = (hit / n, n, "recall")
     for form in ("full", "spaced", "given"):
         n = hit = 0
         for d, P in zip(docs, preds):

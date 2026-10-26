@@ -1,0 +1,2 @@
+﻿system,strict_p,strict_r,strict_f1,partial_p,partial_r,partial_f1,mask_rec,ms_per_doc
+hf_koelectra_dev,0.9856,0.9982,0.9918,0.9856,0.9982,0.9918,0.9996,85.5

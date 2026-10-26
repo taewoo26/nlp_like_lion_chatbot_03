@@ -1,0 +1,8 @@
+﻿label,hf_koelectra_dev_recall,hf_koelectra_dev_precision
+person,0.9971,0.9798
+phone_number,1.0,1.0
+email,1.0,1.0
+address,1.0,1.0
+resident_registration_number,1.0,0.9524
+account_number,1.0,1.0
+card_number,1.0,1.0
