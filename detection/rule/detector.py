@@ -2,8 +2,7 @@
 import re
 
 from detection.base import BaseDetector, Span
-from detection.rule.names import detect_names
-
+from detection.rule.names import detect_names, has_strong_cue, trim_particle
 
 # 원문 → detector.py
 #         ├─ 정규식 → email / 주민번호 / 카드 / 계좌 / 전화 / 주소
@@ -49,10 +48,16 @@ class RuleDetector(BaseDetector):
                 if any(m.start() < s.end and s.start < m.end() for s in spans):
                     continue    # 이미 잡힌 구간과 겹치면 버림
                 spans.append(Span(m.start(), m.end(), label, m.group()))
-        names = detect_names(text)            # 이름 1단계: 성씨 + 문맥 규칙
-        if self.use_kiwi:                     # 이름 2단계: Kiwi 품사로 거르기
+
+        cands = detect_names(text)            # 이름 1단계: 후보를 넓게 (반드시 if 문보다 먼저!)
+        if self.use_kiwi:                     # 이름 2단계: Kiwi로 거르되, 강한 문맥 단서가 있으면 살린다
             from detection.rule.kiwi_filter import filter_names
-            names = filter_names(text, names)
+            kept = filter_names(text, cands) + [s for s in cands if has_strong_cue(text, s)]
+            names = list({(s.start, s.end): s for s in kept}.values())
+        else:
+            names = cands
+        names = [trim_particle(text, s, cands) for s in names]   # 끝에 딸려 온 조사 떼기
+
         for s in names:
             if not any(s.start < o.end and o.start < s.end for o in spans):
                 spans.append(s)

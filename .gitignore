@@ -36,3 +36,7 @@ Thumbs.db
 
 # 로컬 실험 결과
 /results/
+
+# 로컬 테스트 캐시·개인 시각화
+.pytest_cache/
+/outputs/

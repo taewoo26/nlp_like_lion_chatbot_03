@@ -103,12 +103,9 @@ docker compose -f infra/compose.yaml exec db psql -U chatbot -d rag -c "SELECT e
 
 ### 5-4. 실행
 
-```bash
-# 아래 모듈은 아직 구현 전이며, 구현 후 실제 명령어로 교체합니다.
-python -m detection.run_compare --split dev     # 탐지기 비교
-python -m rag.ingest --split dev                # 가명처리 + 적재
-uvicorn service.main:app --reload               # API 서버
-```
+탐지기 설치·실행은 [팀 사용 안내](docs/detector_handoff.md), 비교 결과는 [조합 비교표](docs/detector_comparison.md)를 참고하세요.
+
+가명처리·RAG·API 실행 명령은 해당 모듈 구현 후 추가합니다.
 
 ## 6. 환경 변수
 
