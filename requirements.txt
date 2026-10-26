@@ -1,9 +1,15 @@
 # 필요에 따라 추가하고 PR로 공유하기
 python-dotenv
 pandas
-kiwipiepy
+kiwipiepy==0.24.1
 psycopg[binary]
 pgvector
 openai
 fastapi
 uvicorn
+
+# CPU 탐지: 현재 로컬 검증 버전
+numpy==2.5.4
+onnxruntime==1.28.0
+transformers==5.20.2
+huggingface-hub==2.2.0
