@@ -1,6 +1,54 @@
 from detection.base import Span
 from detection.combo import drop_contextual_non_names, drop_surname_title, merge_spans
 from detection.rule.detector import RuleDetector
+from detection.combo import ComboDetector, POLICIES
+from unittest.mock import Mock
+import pytest
+
+
+@pytest.mark.parametrize('policy', ['union', 'split'])
+def test_existing_policy_calls_name_filters(policy):
+    text = '허 부장님, 내선 7999. 허민수 씨에게 연락했다.'
+    full_start = text.index('허민수')
+    full = Span(full_start, full_start + 3, 'person', '허민수')
+    extension = text.index('내선')
+    det = ComboDetector.__new__(ComboDetector)
+    det.policy = policy
+    det.modes = POLICIES[policy]
+    det.rule = Mock()
+    det.rule.detect.return_value = []
+    det.model = Mock()
+    det.model.detect.return_value = [Span(0, 1, 'person', '허'),
+                                   Span(extension, extension + 1, 'person', '내'), full]
+    assert det.detect(text) == [full]
+
+
+@pytest.mark.parametrize('policy', ['split_clean', 'split_v2'])
+def test_new_policies_keep_their_processing(monkeypatch, policy):
+    det = ComboDetector.__new__(ComboDetector)
+    det.policy = policy
+    det.modes = POLICIES[policy]
+    det.rule = Mock()
+    det.rule.detect.return_value = []
+    det.model = Mock()
+    det.model.detect.return_value = []
+    def unexpected(*args):
+        raise AssertionError('기존 필터가 새 정책에 적용됨')
+    monkeypatch.setattr('detection.combo.drop_contextual_non_names', unexpected)
+    monkeypatch.setattr('detection.combo.drop_surname_title', unexpected)
+    det._detect_v2 = Mock(return_value=[])
+    filter_names = Mock(return_value=[])
+    clean_spans = Mock(return_value=[])
+    monkeypatch.setattr('detection.combo.filter_model_names', filter_names)
+    monkeypatch.setattr('detection.combo.clean', clean_spans)
+    assert det.detect('확인') == []
+    if policy == 'split_v2':
+        det._detect_v2.assert_called_once()
+        filter_names.assert_not_called()
+        clean_spans.assert_not_called()
+    else:
+        filter_names.assert_called_once()
+        clean_spans.assert_called_once()
 
 
 def test_rule_wins_on_overlap():
