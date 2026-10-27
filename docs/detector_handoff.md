@@ -1,6 +1,6 @@
 # 조합 탐지기 사용 안내
 
-규칙(rule_kiwi)과 토큰 분류 모델을 결합한 탐지기의 설치·사용·평가 방법입니다. 모델 파일과 평가 데이터는 별도로 준비합니다.
+**목적:** 규칙(rule_kiwi)과 토큰 분류 모델을 결합한 탐지기의 설치·사용·평가 방법만 관리합니다. 판정 기준·dev/test 결과는 [평가 보고서](탐지%20모델%20코드%20최종%20보고서.md), holdout 결과는 [holdout 평가 보고서](holdout%20평가%20보고서.md)를 봅니다. 모델 파일과 평가 데이터는 별도로 준비합니다.
 
 ## 설치와 실행
 
@@ -41,7 +41,7 @@ python -m eval.run_compare --gold data/dev/pii_synth_finance_dev.jsonl --pred ko
 python -m eval.show_summary --dir results/team_dev_v1
 ```
 
-기존 파일과 겹치면 새 tag를 사용합니다. 채점에는 항상 `--out`을 지정합니다. test는 숫자 확인, 개선은 dev에서 진행하며 holdout 평가 시점은 팀이 정합니다.
+기존 파일과 겹치면 새 tag를 사용합니다. 채점에는 항상 `--out`을 지정합니다. 개선 자료와 최종 확인 자료를 구분합니다. 현재 데이터 사용 이력과 holdout 최초 결과는 평가 보고서에 기록되어 있습니다.
 
 ## 주요 파일과 역할
 
@@ -63,4 +63,4 @@ python -m eval.show_summary --dir results/team_dev_v1
 | `tests/` | 조합 정책·모델 어댑터 단위 테스트 |
 | `requirements.txt`, `requirements-dev.txt` | 실행 의존성·테스트 의존성 |
 
-모델별 설정은 [토큰 분류 모델 안내](../detection/token_cls/README.md), 성능은 [조합 비교표](detector_comparison.md)를 참고합니다. 예측·채점 결과는 `results/`, 모델은 `models/`, 평가 데이터는 `data/`에 저장됩니다. 이 폴더들은 Git에 포함되지 않으므로 새 환경에서는 별도로 준비하거나 생성합니다.
+모델별 설정은 [토큰 분류 모델 안내](../detection/token_cls/README.md), 초기 후보 비교는 [조합 비교표](detector_comparison.md)를 참고합니다. 예측·채점 결과는 `results/`, 모델은 `models/`, 평가 데이터는 `data/`에 저장됩니다. 이 폴더들은 Git에 포함되지 않으므로 새 환경에서는 별도로 준비하거나 생성합니다.

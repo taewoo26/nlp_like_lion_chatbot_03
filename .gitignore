@@ -7,6 +7,8 @@ secrets/
 data/
 pii_synth_finance/
 *holdout*
+# 팀 공유 평가 보고서만 포함 (holdout 원본·결과는 계속 제외)
+!/docs/holdout 평가 보고서.md
 
 # 모델 파일
 models/

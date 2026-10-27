@@ -103,7 +103,7 @@ docker compose -f infra/compose.yaml exec db psql -U chatbot -d rag -c "SELECT e
 
 ### 5-4. 실행
 
-탐지기 설치·실행은 [팀 사용 안내](docs/detector_handoff.md), 비교 결과는 [조합 비교표](docs/detector_comparison.md)를 참고하세요.
+탐지기 설치·실행은 [팀 사용 안내](docs/detector_handoff.md), 판정 기준·최신 결과·오류 분석은 [평가 보고서](docs/탐지%20모델%20코드%20최종%20보고서.md), 개선 전 후보 비교는 [초기 비교표](docs/detector_comparison.md)를 참고하세요.
 
 가명처리·RAG·API 실행 명령은 해당 모듈 구현 후 추가합니다.
 
