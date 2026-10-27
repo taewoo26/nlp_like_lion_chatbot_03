@@ -14,6 +14,9 @@ import numpy as np
 from detection.base import BaseDetector, Span
 
 REVISION = "60731c85761bd46d23db2e742082a7223696e1c1"
+MODEL_ID = "BCCard/MoAI-Privacy-Filter-INT8"
+FILES = ("config.json", "viterbi_calibration.json", "tokenizer.json",
+         "tokenizer_config.json", "model_quantized.onnx", "model_quantized.onnx_data")
 LABEL_MAP = {
     "PERSON": "person", "PHONE": "phone_number", "EMAIL": "email",
     "ADDRESS": "address", "RRN": "resident_registration_number",
@@ -99,19 +102,34 @@ class MoAIDetector(BaseDetector):
     name = "moai"
 
     def __init__(self, model_dir=None, threads=2):
+        from detection.moai.runtime import prepare_runtime
+        prepare_runtime()
         import onnxruntime as ort
-        from transformers import AutoTokenizer
+        from transformers import PreTrainedTokenizerFast
 
         if threads < 1:
             raise ValueError("threads must be positive")
         self.model_dir = Path(model_dir) if model_dir else (
             Path(__file__).resolve().parents[2] / "models" / "moai-int8" / REVISION)
-        if not (self.model_dir / "model_quantized.onnx").is_file():
-            raise FileNotFoundError("모델 준비 필요: python -m eval.moai_smoke --revision " + REVISION)
-        config = json.loads((self.model_dir / "config.json").read_text())
-        calibration = json.loads((self.model_dir / "viterbi_calibration.json").read_text())
+        if model_dir is None and not all((self.model_dir / name).is_file() for name in FILES):
+            from huggingface_hub import snapshot_download
+            self.model_dir = Path(snapshot_download(
+                MODEL_ID, revision=REVISION, local_files_only=True,
+                cache_dir=Path(__file__).resolve().parents[2] / "models" / "huggingface",
+                allow_patterns=list(FILES),
+            ))
+        missing = [name for name in FILES if not (self.model_dir / name).is_file()]
+        if missing:
+            raise FileNotFoundError(f"Incomplete local MoAI model: {', '.join(missing)}")
+        config = json.loads((self.model_dir / "config.json").read_text(encoding="utf-8"))
+        calibration = json.loads((self.model_dir / "viterbi_calibration.json").read_text(encoding="utf-8"))
         self.decoder = BIOESDecoder(config["id2label"], calibration["operating_points"]["default"]["biases"])
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_dir, local_files_only=True)
+        # Load the same Rust backend without resolving tokenizer_class through
+        # transformers: newer model metadata names TokenizersBackend, which
+        # transformers 4.57 does not expose. No model/tokenizer files are changed.
+        self.tokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=str(self.model_dir / "tokenizer.json"),
+        )
         options = ort.SessionOptions()
         options.intra_op_num_threads = threads
         options.inter_op_num_threads = 1
