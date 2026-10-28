@@ -1,0 +1,20 @@
+﻿system,doc_id,error_type,label,gold_text,pred_text,confidence,context
+hf_veil_kiwi_dev,D0003,오탐,address,,7999,,자: 김은영 대리 / 내선 【7999】  1. 고객 정보 - 성명
+hf_veil_kiwi_dev,D0013,미탐,person,박준서,,,"월 3일  참석: 김은영, 【박준서】, 김서연 불참: 이서연 ("
+hf_veil_kiwi_dev,D0018,오탐,person,,하린,,신상품 출시 안내: 【하린】 포인트 카드 출시일: 20
+hf_veil_kiwi_dev,D0018,오탐,person,,하린,,: 2026년 1월 5일  【하린】 포인트 카드는 여행과 일상
+hf_veil_kiwi_dev,D0025,오탐,address,,7678,,자: 김은영 대리 / 내선 【7678】  1. 고객 정보 - 성명
+hf_veil_kiwi_dev,D0028,오탐,address,,다온편의점,,2-9154  새벽 시간대 【다온편의점】에서 소액 결제가 반복되어 
+hf_veil_kiwi_dev,D0042,미탐,person,김민준,,,"월 8일  참석: 이상훈, 【김민준】, 정성호 불참: 최혜진 ("
+hf_veil_kiwi_dev,D0042,미탐,person,정성호,,," 참석: 이상훈, 김민준, 【정성호】 불참: 최혜진 (연차)  "
+hf_veil_kiwi_dev,D0042,미탐,person,김민준,,, 자동화 진행률 70% - 【김민준】: 고객 문의 응대 스크립트
+hf_veil_kiwi_dev,D0042,미탐,person,정성호,,,크립트 개정안 작성 중 - 【정성호】: 연체 고객 안내 문자 문
+hf_veil_kiwi_dev,D0045,오탐,address,,4876,,자: 신승현 과장 / 내선 【4876】  1. 고객 정보 - 성명
+hf_veil_kiwi_dev,D0053,오탐,address,,6865,,자: 신승현 과장 / 내선 【6865】  1. 고객 정보 - 성명
+hf_veil_kiwi_dev,D0061,오탐,person,,봄날,,86-5072 카드 상품: 【봄날】 체크카드 카드번호: 941
+hf_veil_kiwi_dev,D0082,오탐,person,,미르,,"시스템 테스트 일정 협의  【미르】보안 권선영 매니저님께,  "
+hf_veil_kiwi_dev,D0084,경계 오류,person,남궁다은,남궁다,,관리팀 김하준  탐지 내용 【남궁다은】 고객 명의 카드(9410-
+hf_veil_kiwi_dev,D0084,경계 오류,person,남궁다은,남궁다,,7740)로 확인 전화 → 【남궁다은】 고객 본인이 결제하지 않았
+hf_veil_kiwi_dev,D0086,미탐,phone_number,0244837272,,,박도윤 드림 IT운영팀 | 【0244837272】 | dy.park05@sa
+hf_veil_kiwi_dev,D0089,오탐,address,,5954,,자: 김은영 대리 / 내선 【5954】  1. 고객 정보 - 성명
+hf_veil_kiwi_dev,D0098,오탐,address,,3415,,자: 신승현 과장 / 내선 【3415】  1. 고객 정보 - 성명
