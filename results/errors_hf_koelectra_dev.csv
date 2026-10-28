@@ -1,0 +1,4 @@
+﻿system,doc_id,error_type,label,gold_text,pred_text,confidence,context
+hf_koelectra_dev,D0007,미탐,person,은서,,,서 달래 김서연: 알겠어. 【은서】랑 같이 정리해서 올릴게
+hf_koelectra_dev,D0007,오탐,person,,달래,, 부장님이 내일까지 보고서 【달래】 김서연: 알겠어. 은서랑 
+hf_koelectra_dev,D0009,오탐,person,,달래,, 부장님이 내일까지 보고서 【달래】 이윤서: 알겠어. 소율이랑
