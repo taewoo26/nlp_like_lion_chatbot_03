@@ -11,7 +11,14 @@ filter_model_names()  : 규칙이 못 잡고 모델만 잡은 이름을 merge �
 import re
 
 from detection.base import Span
+from functools import lru_cache
+
 from detection.rule.kiwi_filter import _get_kiwi
+
+
+@lru_cache(maxsize=512)
+def _tok(text):
+    return tuple(_get_kiwi().tokenize(text))
 from detection.rule.names import SURNAME_PAT, TITLES, has_strong_cue
 
 # ---------- clean() ----------
@@ -32,7 +39,7 @@ SURNAME_BEFORE = re.compile(rf"(?:^|(?<=[^가-힣]))({SURNAME_PAT}) $")         
 
 
 def _doc_tokens(text, span):
-    return [t for t in _get_kiwi().tokenize(text) if t.start < span.end and span.start < t.start + t.len]
+    return [t for t in _tok(text) if t.start < span.end and span.start < t.start + t.len]
 
 
 def _line_tokens(text, span):
@@ -41,7 +48,7 @@ def _line_tokens(text, span):
     ls = text.rfind("\n", 0, span.start) + 1
     le = text.find("\n", span.end)
     le = len(text) if le == -1 else le
-    toks = _get_kiwi().tokenize(text[ls:le])
+    toks = _tok(text[ls:le])
     return [t for t in toks if ls + t.start < span.end and span.start < ls + t.start + t.len]
 
 
