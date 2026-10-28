@@ -1,7 +1,0 @@
-The constrained Viterbi decoder in decoding.py is a NumPy adaptation of:
-https://github.com/openai/privacy-filter/blob/f7f00ca7fb869683eb732c010299d901457f19c3/opf/_core/decoding.py
-OpenAI privacy-filter, Copyright OpenAI, licensed under Apache License 2.0.
-Modifications: NumPy float32 CPU arrays, config-driven BIOES taxonomy,
-standalone calibration loading. Runtime does not depend on PyTorch.
-Model weights: BCCard/MoAI-Privacy-Filter-INT8, Apache License 2.0,
-downloaded separately under models/ (ignored by Git).

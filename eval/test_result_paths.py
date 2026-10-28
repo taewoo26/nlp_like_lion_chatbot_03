@@ -24,16 +24,20 @@ class OutputRoutingTests(unittest.TestCase):
         target = str(SHARED_RESULTS/'must_not_be_created')
         commands = [
             ['-m', 'detection.rule.run', '--input', 'missing.jsonl', '--output', target],
-            ['-m', 'detection.token_cls.run', '--input', 'missing.jsonl', '--out', target],
-            ['-m', 'detection.token_cls.smoke', '--input', 'missing.jsonl', '--out', target],
-            ['-m', 'detection.token_cls.analyze', '--gold', 'missing.jsonl', '--run', target],
-            ['-m', 'detection.moai.run', '--input', 'missing.jsonl', '--out', target],
-            ['-m', 'detection.moai.smoke', '--out', target],
-            ['-m', 'detection.moai.test_reference', '--source', 'missing.py', '--out', target],
+            ['-m', 'experiments.legacy.token_cls.run', '--input', 'missing.jsonl', '--out', target],
+            ['-m', 'experiments.legacy.token_cls.smoke', '--input', 'missing.jsonl', '--out', target],
+            ['-m', 'experiments.legacy.token_cls.analyze', '--gold', 'missing.jsonl', '--run', target],
+            ['-m', 'experiments.legacy.moai.run', '--input', 'missing.jsonl', '--out', target],
+            ['-m', 'experiments.legacy.moai.smoke', '--out', target],
+            ['-m', 'experiments.legacy.moai.test_reference', '--source', 'missing.py', '--out', target],
             ['-m', 'eval.cross_analysis', '--out', target],
             ['run_compare.py', '--gold', 'missing.jsonl', '--pred', 'x=missing.jsonl', '--out', target],
         ]
         for command in commands:
+            # Legacy implementations are intentionally absent in shared checkouts.
+            if (command[0] == '-m' and command[1].startswith('experiments.legacy.')
+                    and not (ROOT / 'experiments/legacy').is_dir()):
+                continue
             with self.subTest(command=command):
                 result = subprocess.run([sys.executable, '-B', *command], cwd=ROOT, capture_output=True)
                 self.assertEqual(result.returncode, 2, result.stderr)

@@ -40,3 +40,6 @@ Thumbs.db
 # 로컬 테스트 캐시·개인 시각화
 .pytest_cache/
 /outputs/
+
+# Local-only legacy detectors and experiments
+/experiments/

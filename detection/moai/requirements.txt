@@ -1,6 +1,0 @@
-# No torch or transformers needed; tokenizer.json uses the Rust backend.
-onnxruntime==1.28.0
-numpy==2.5.4
-tokenizers==0.22.1
-huggingface-hub==0.36.0
-msvc-runtime==14.51.36231; sys_platform == 'win32'
