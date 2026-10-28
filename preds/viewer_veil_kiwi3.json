@@ -1,0 +1,8236 @@
+[
+  {
+    "id": "D0001",
+    "doc_type": "공지",
+    "text": "[필수] 하반기 개인정보 보호 교육 안내\n대상: 전 임직원\n기간: 2026년 4월 9일 ~ 2026년 10월 11일\n\n이번 교육에서는 생성형 AI 서비스에 고객 정보를 입력하지 않는 원칙, 메신저로 고객 연락처를 주고받지 않는 원칙을 다룹니다. 미이수 시 인사 평가에 반영될 수 있습니다.\n교육 문의: 정보보호팀 (내선 5448)",
+    "hard_cases": [
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0002",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026년 9월 21일 18:28\n상담원: 김은영\n\n윤 선영 고객(01003492063)이 기존 새봄 사업자 운영자금 대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 50,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 sy.yoon07@example.net로 발송함.\n윤선영은 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 48,
+        "end": 51,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "윤 선영",
+        "start": 53,
+        "end": 57,
+        "person_id": "P051",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "01003492063",
+        "start": 61,
+        "end": 72,
+        "person_id": "P051"
+      },
+      {
+        "label": "email",
+        "text": "sy.yoon07@example.net",
+        "start": 221,
+        "end": 242,
+        "person_id": "P051"
+      },
+      {
+        "label": "person",
+        "text": "윤선영",
+        "start": 249,
+        "end": 252,
+        "person_id": "P051",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 48,
+        "end": 51
+      },
+      {
+        "label": "person",
+        "start": 53,
+        "end": 57
+      },
+      {
+        "label": "phone_number",
+        "start": 61,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 221,
+        "end": 242
+      },
+      {
+        "label": "person",
+        "start": 249,
+        "end": 252
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0003",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026년 2월 28일\n상담 채널: 영업점 방문 (여의도지점)\n담당자: 김은영 대리 / 내선 7999\n\n1. 고객 정보\n- 성명: 최채원\n- 주민등록번호: 751126-2236007\n- 휴대전화: 010-0129-0753\n- 주소: 인천광역시 연수구 온누리로 145, 302호\n- 직업: 프리랜서 디자이너\n\n2. 상담 내용\n최채원 고객은 카드론 상품으로 3000,000원 대출을 문의함. 희망 기간은 24개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 고객보호팀 최지영 팀장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 가람저축은행 741-853629-72",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 56,
+        "end": 59,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 89,
+        "end": 92,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "751126-2236007",
+        "start": 103,
+        "end": 117,
+        "person_id": "P046"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0129-0753",
+        "start": 126,
+        "end": 139,
+        "person_id": "P046"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 온누리로 145, 302호",
+        "start": 146,
+        "end": 170,
+        "person_id": "P046"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 197,
+        "end": 200,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 292,
+        "end": 295,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "741-853629-72",
+        "start": 368,
+        "end": 381,
+        "person_id": "P046"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 56,
+        "end": 59
+      },
+      {
+        "label": "person",
+        "start": 89,
+        "end": 92
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 103,
+        "end": 117
+      },
+      {
+        "label": "phone_number",
+        "start": 126,
+        "end": 139
+      },
+      {
+        "label": "address",
+        "start": 146,
+        "end": 170
+      },
+      {
+        "label": "person",
+        "start": 197,
+        "end": 200
+      },
+      {
+        "label": "person",
+        "start": 292,
+        "end": 295
+      },
+      {
+        "label": "account_number",
+        "start": 368,
+        "end": 381
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0004",
+    "doc_type": "공지",
+    "text": "모바일 앱 보안 업데이트 안내 (2026년 5월 11일)\n\n모바일 앱 보안 모듈이 2026-06-25에 업데이트됩니다. 업데이트 이후에는 이전 버전 앱에서 로그인이 제한되니 최신 버전으로 업데이트해 주세요.\n한결같이 안전한 서비스를 위해 노력하겠습니다. 점검 후 이상 없음이 확인되면 별도 안내는 드리지 않습니다.",
+    "hard_cases": [
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0005",
+    "doc_type": "공지",
+    "text": "[공지] 정기 시스템 점검 안내\n당사 IT운영팀 | 2026년 5월 1일\n\n카드 승인 시스템 정기 점검으로 아래 시간 동안 일부 서비스 이용이 제한됩니다.\n- 점검 일시: 2026-09-23 02:00 ~ 05:00\n- 제한 서비스: 온라인 결제, 앱 카드 등록, 포인트 조회\n점검 중 문의는 고객센터 대표번호 1599-0000으로 해주시기 바랍니다.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0006",
+    "doc_type": "민원현황",
+    "text": "2026년 2분기 민원 현황 요약\n- 총 접수: 1383건 (전 분기 대비 7% 감소)\n- 유형별: 결제 오류 106건, 연회비 184건, 개인정보 24건\n- 평균 처리 기간: 8일\n- 금융감독원 이첩 민원: 11건\n- 대표 민원번호 예시: 202611910266\n주요 개선 과제: 자동이체 배치 점검 주기 단축, 연락처 변경 반영 지연 해소\n작성: 고객보호팀",
+    "hard_cases": [
+      "decoy_numbers",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0007",
+    "doc_type": "사내메신저",
+    "text": "[사내 메신저] 2026-08-04\n김서연: 승현아, 오늘 회의 자료 어디 있어?\n신승현: 공유 폴더에 올려놨어. 근데 전서윤 고객 건은 아직 정리 못 했어\n김서연: 그 고객 연락처 010-0863-1041 맞지? 내가 오후에 전화해 볼게\n신승현: 응 부탁해. 아 그리고 허 부장님이 내일까지 보고서 달래\n김서연: 알겠어. 은서랑 같이 정리해서 올릴게",
+    "hard_cases": [
+      "given_only",
+      "josa_attached",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 20,
+        "end": 23,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "승현",
+        "start": 25,
+        "end": 27,
+        "person_id": "P013",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 46,
+        "end": 49,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "전서윤",
+        "start": 67,
+        "end": 70,
+        "person_id": "P052",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 88,
+        "end": 91,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0863-1041",
+        "start": 102,
+        "end": 115,
+        "person_id": "P052"
+      },
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 134,
+        "end": 137,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 171,
+        "end": 174,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "은서",
+        "start": 181,
+        "end": 183,
+        "person_id": "P007",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 20,
+        "end": 23
+      },
+      {
+        "label": "person",
+        "start": 25,
+        "end": 27
+      },
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 67,
+        "end": 70
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 102,
+        "end": 115
+      },
+      {
+        "label": "person",
+        "start": 134,
+        "end": 137
+      },
+      {
+        "label": "person",
+        "start": 171,
+        "end": 174
+      },
+      {
+        "label": "person",
+        "start": 181,
+        "end": 183
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0008",
+    "doc_type": "공지",
+    "text": "모바일 앱 보안 업데이트 안내 (2026-01-20)\n\n모바일 앱 보안 모듈이 2026-09-18에 업데이트됩니다. 업데이트 이후에는 이전 버전 앱에서 로그인이 제한되니 최신 버전으로 업데이트해 주세요.\n한결같이 안전한 서비스를 위해 노력하겠습니다. 점검 후 이상 없음이 확인되면 별도 안내는 드리지 않습니다.",
+    "hard_cases": [
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0009",
+    "doc_type": "사내메신저",
+    "text": "[사내 메신저] 2026년 3월 13일\n이윤서: 지영아, 오늘 회의 자료 어디 있어?\n최지영: 공유 폴더에 올려놨어. 근데 정하은 고객 건은 아직 정리 못 했어\n이윤서: 그 고객 연락처 010-0922-9038 맞지? 내가 오후에 전화해 볼게\n최지영: 응 부탁해. 아 그리고 허 부장님이 내일까지 보고서 달래\n이윤서: 알겠어. 소율이랑 같이 정리해서 올릴게",
+    "hard_cases": [
+      "given_only",
+      "homonym",
+      "josa_attached",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 22,
+        "end": 25,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "지영",
+        "start": 27,
+        "end": 29,
+        "person_id": "P011",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 48,
+        "end": 51,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정하은",
+        "start": 69,
+        "end": 72,
+        "person_id": "P073",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 90,
+        "end": 93,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0922-9038",
+        "start": 104,
+        "end": 117,
+        "person_id": "P073"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 136,
+        "end": 139,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 173,
+        "end": 176,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "소율",
+        "start": 183,
+        "end": 185,
+        "person_id": "P004",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 22,
+        "end": 25
+      },
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 48,
+        "end": 51
+      },
+      {
+        "label": "person",
+        "start": 69,
+        "end": 72
+      },
+      {
+        "label": "person",
+        "start": 90,
+        "end": 93
+      },
+      {
+        "label": "phone_number",
+        "start": 104,
+        "end": 117
+      },
+      {
+        "label": "person",
+        "start": 136,
+        "end": 139
+      },
+      {
+        "label": "person",
+        "start": 173,
+        "end": 176
+      },
+      {
+        "label": "person",
+        "start": 183,
+        "end": 185
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0010",
+    "doc_type": "공지",
+    "text": "[공지] 정기 시스템 점검 안내\n당사 IT운영팀 | 2026-11-28\n\n카드 승인 시스템 정기 점검으로 아래 시간 동안 일부 서비스 이용이 제한됩니다.\n- 점검 일시: 2026.07.02 02:00 ~ 05:00\n- 제한 서비스: 온라인 결제, 앱 카드 등록, 포인트 조회\n점검 중 문의는 고객센터 대표번호 1599-0000으로 해주시기 바랍니다.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0011",
+    "doc_type": "공지",
+    "text": "[필수] 하반기 개인정보 보호 교육 안내\n대상: 전 임직원\n기간: 2026년 3월 10일 ~ 2026년 7월 1일\n\n이번 교육에서는 생성형 AI 서비스에 고객 정보를 입력하지 않는 원칙, 메신저로 고객 연락처를 주고받지 않는 원칙을 다룹니다. 미이수 시 인사 평가에 반영될 수 있습니다.\n교육 문의: 정보보호팀 (내선 6352)",
+    "hard_cases": [
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0012",
+    "doc_type": "회의록",
+    "text": "회의록\n회의명: 차세대 카드 시스템 이관 점검\n일시: 2026년 7월 27일 17:45\n장소: 본사 12층 회의실\n참석자: 박예린(팀장), 남성호, 이소율, 오다은(데이터온시스템즈)\n작성자: 남성호\n\n논의 내용\n1. 박 예린 팀장이 지난 분기 추진 현황을 공유함.\n2. 데이터온시스템즈 오다은 매니저는 시스템 이관 일정이 2주 지연될 수 있다고 보고함.\n3. 이소율은 고객 안내 문자 발송 시점을 이관 이후로 미루자고 제안함.\n\n결정 사항\n- 이관 일정 확정: 2026.03.20\n- 고객 안내 문구는 남 부장이 초안을 작성하고 소율 씨가 검토\n\n다음 회의: 2026-05-19",
+    "hard_cases": [
+      "given_only",
+      "josa_attached",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "박예린",
+        "start": 69,
+        "end": 72,
+        "person_id": "P030",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "남성호",
+        "start": 78,
+        "end": 81,
+        "person_id": "P027",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 83,
+        "end": 86,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "오다은",
+        "start": 88,
+        "end": 91,
+        "person_id": "P034",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "남성호",
+        "start": 107,
+        "end": 110,
+        "person_id": "P027",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박 예린",
+        "start": 121,
+        "end": 125,
+        "person_id": "P030",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "오다은",
+        "start": 160,
+        "end": 163,
+        "person_id": "P034",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 201,
+        "end": 204,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "소율",
+        "start": 296,
+        "end": 298,
+        "person_id": "P004",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 69,
+        "end": 72
+      },
+      {
+        "label": "person",
+        "start": 78,
+        "end": 81
+      },
+      {
+        "label": "person",
+        "start": 83,
+        "end": 86
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "person",
+        "start": 107,
+        "end": 110
+      },
+      {
+        "label": "person",
+        "start": 121,
+        "end": 125
+      },
+      {
+        "label": "person",
+        "start": 160,
+        "end": 163
+      },
+      {
+        "label": "person",
+        "start": 201,
+        "end": 204
+      },
+      {
+        "label": "person",
+        "start": 296,
+        "end": 298
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0013",
+    "doc_type": "회의록",
+    "text": "[주간 회의] 고객보호팀 주간 업무 점검\n2026년 10월 3일\n\n참석: 김은영, 박준서, 김서연\n불참: 이서연 (연차)\n\n- 김은영: 신규 카드 발급 심사 자동화 진행률 70%\n- 박준서: 고객 문의 응대 스크립트 개정안 작성 중\n- 김서연: 연체 고객 안내 문자 문구 법무 검토 요청 완료\n\n공유 사항\n이서연이 복귀하면 개인정보 처리방침 개정 내용을 팀 전체에 공유하기로 함.",
+    "hard_cases": [
+      "homonym",
+      "josa_attached"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 41,
+        "end": 44,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박준서",
+        "start": 46,
+        "end": 49,
+        "person_id": "P015",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 51,
+        "end": 54,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 59,
+        "end": 62,
+        "person_id": "P068",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 71,
+        "end": 74,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박준서",
+        "start": 102,
+        "end": 105,
+        "person_id": "P015",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 132,
+        "end": 135,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 171,
+        "end": 174,
+        "person_id": "P068",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 41,
+        "end": 44
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 54
+      },
+      {
+        "label": "person",
+        "start": 59,
+        "end": 62
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 102,
+        "end": 105
+      },
+      {
+        "label": "person",
+        "start": 132,
+        "end": 135
+      },
+      {
+        "label": "person",
+        "start": 171,
+        "end": 174
+      },
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0014",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n지영 씨, 안녕하세요.\n어제 접수된 민원 건(202625845497) 회신 초안 보내드립니다. 민원인 정하은 고객 주소가 경기도 성남시 분당구 다솜길 33, 13층으로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 허수아 부장님께 바로 올려 주셔도 됩니다.\n\n김은정 드림",
+    "hard_cases": [
+      "given_only",
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "지영",
+        "start": 27,
+        "end": 29,
+        "person_id": "P011",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "정하은",
+        "start": 84,
+        "end": 87,
+        "person_id": "P073",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "경기도 성남시 분당구 다솜길 33, 13층",
+        "start": 95,
+        "end": 118,
+        "person_id": "P073"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 166,
+        "end": 169,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김은정",
+        "start": 191,
+        "end": 194,
+        "person_id": "P031",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 118
+      },
+      {
+        "label": "person",
+        "start": 166,
+        "end": 169
+      },
+      {
+        "label": "person",
+        "start": 191,
+        "end": 194
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0015",
+    "doc_type": "인사발령",
+    "text": "인사 발령 공지\n새봄카드 인사팀 | 2026년 9월 28일\n\n다음과 같이 인사 발령을 공지합니다.\n\n1. 승진\n- 고객보호팀 최지영\n- 여신심사팀 박도윤\n\n2. 전보\n- 김은영 대리: 여신심사팀 → 리스크관리팀\n- 안소연 대리: 인사팀 → 디지털전략팀\n\n발령일: 2026.06.23\n문의: 인사팀 전경희 (내선 6212, kh.jeon50@saebomcard.example.com)",
+    "hard_cases": [
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 70,
+        "end": 73,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 82,
+        "end": 85,
+        "person_id": "P070",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 95,
+        "end": 98,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 120,
+        "end": 123,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "전경희",
+        "start": 166,
+        "end": 169,
+        "person_id": "P026",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "kh.jeon50@saebomcard.example.com",
+        "start": 180,
+        "end": 212,
+        "person_id": "P026"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 70,
+        "end": 73
+      },
+      {
+        "label": "person",
+        "start": 82,
+        "end": 85
+      },
+      {
+        "label": "person",
+        "start": 95,
+        "end": 98
+      },
+      {
+        "label": "person",
+        "start": 120,
+        "end": 123
+      },
+      {
+        "label": "person",
+        "start": 166,
+        "end": 169
+      },
+      {
+        "label": "email",
+        "start": 180,
+        "end": 212
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0016",
+    "doc_type": "고객정보변경",
+    "text": "고객 정보 변경 처리 내역\n처리일: 2026년 5월 18일\n처리자: 김서준 (고객센터)\n\n변경 요청 고객: 노성호\n본인 확인: 주민등록번호 990123-1485662 / 신분증 대조 완료\n\n변경 항목\n- 휴대전화: 010-0132-9355 → 010-0564-6078\n- 주소: 부산광역시 수영구 별빛길 21, 101동 1202호 → 광주광역시 북구 온누리로 72, 204호\n- 이메일: sh.noh18@example.net\n\n비고: 이전 연락처로 발송 예약된 안내 문자는 모두 취소함. 노성호는 결제일 변경도 원했으나 다음 달부터 적용 가능하다고 안내함.",
+    "hard_cases": [
+      "josa_attached"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 38,
+        "end": 41,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "노성호",
+        "start": 60,
+        "end": 63,
+        "person_id": "P050",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "990123-1485662",
+        "start": 78,
+        "end": 92,
+        "person_id": "P050"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0132-9355",
+        "start": 120,
+        "end": 133,
+        "person_id": "P050"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0564-6078",
+        "start": 136,
+        "end": 149,
+        "person_id": "P050"
+      },
+      {
+        "label": "address",
+        "text": "부산광역시 수영구 별빛길 21, 101동 1202호",
+        "start": 156,
+        "end": 184,
+        "person_id": "P050"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 온누리로 72, 204호",
+        "start": 187,
+        "end": 209,
+        "person_id": "P050"
+      },
+      {
+        "label": "email",
+        "text": "sh.noh18@example.net",
+        "start": 217,
+        "end": 237,
+        "person_id": "P050"
+      },
+      {
+        "label": "person",
+        "text": "노성호",
+        "start": 273,
+        "end": 276,
+        "person_id": "P050",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 38,
+        "end": 41
+      },
+      {
+        "label": "person",
+        "start": 60,
+        "end": 63
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 78,
+        "end": 92
+      },
+      {
+        "label": "phone_number",
+        "start": 120,
+        "end": 133
+      },
+      {
+        "label": "phone_number",
+        "start": 136,
+        "end": 149
+      },
+      {
+        "label": "address",
+        "start": 156,
+        "end": 184
+      },
+      {
+        "label": "address",
+        "start": 187,
+        "end": 209
+      },
+      {
+        "label": "email",
+        "start": 217,
+        "end": 237
+      },
+      {
+        "label": "person",
+        "start": 273,
+        "end": 276
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0017",
+    "doc_type": "인사발령",
+    "text": "인사 발령 공지\n새봄카드 인사팀 | 2026-03-12\n\n다음과 같이 인사 발령을 공지합니다.\n\n1. 승진\n- 카드운영팀 이소율\n- 고객센터 정성호\n\n2. 전보\n- 허수아 부장: 리스크관리팀 → 리스크관리팀\n- 김은정 부장: 고객보호팀 → 디지털전략팀\n\n발령일: 2026년 1월 9일\n문의: 인사팀 김윤서 (내선 6209, ys.kim15@saebomcard.example.com)",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 68,
+        "end": 71,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 79,
+        "end": 82,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 92,
+        "end": 95,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김은정",
+        "start": 118,
+        "end": 121,
+        "person_id": "P031",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김윤서",
+        "start": 167,
+        "end": 170,
+        "person_id": "P016",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "ys.kim15@saebomcard.example.com",
+        "start": 181,
+        "end": 212,
+        "person_id": "P016"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 79,
+        "end": 82
+      },
+      {
+        "label": "person",
+        "start": 92,
+        "end": 95
+      },
+      {
+        "label": "person",
+        "start": 118,
+        "end": 121
+      },
+      {
+        "label": "person",
+        "start": 167,
+        "end": 170
+      },
+      {
+        "label": "email",
+        "start": 181,
+        "end": 212
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0018",
+    "doc_type": "상품안내",
+    "text": "신상품 출시 안내: 하린 포인트 카드\n출시일: 2026년 1월 5일\n\n하린 포인트 카드는 여행과 일상 소비를 함께 챙기는 카드입니다.\n주요 혜택\n- 해외 결제 수수료 면제\n- 대중교통 10% 할인\n- 연회비 없음\n\n봄날처럼 가벼운 소비 생활을 응원합니다. 자세한 내용은 고객센터 1599-0000으로 문의하세요.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0019",
+    "doc_type": "인사발령",
+    "text": "인사 발령 공지\n새봄카드 인사팀 | 2026-06-06\n\n다음과 같이 인사 발령을 공지합니다.\n\n1. 승진\n- 여신심사팀 김은영\n- IT운영팀 박도윤\n\n2. 전보\n- 김서준 대리: 고객센터 → 리스크관리팀\n- 이준우 사원: IT운영팀 → 디지털전략팀\n\n발령일: 2026-09-23\n문의: 인사팀 안소연 (내선 4470, sy.ahn20@saebomcard.example.com)",
+    "hard_cases": [
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 68,
+        "end": 71,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 80,
+        "end": 83,
+        "person_id": "P071",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 93,
+        "end": 96,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 117,
+        "end": 120,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 165,
+        "end": 168,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.ahn20@saebomcard.example.com",
+        "start": 179,
+        "end": 210,
+        "person_id": "P006"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 80,
+        "end": 83
+      },
+      {
+        "label": "person",
+        "start": 93,
+        "end": 96
+      },
+      {
+        "label": "person",
+        "start": 117,
+        "end": 120
+      },
+      {
+        "label": "person",
+        "start": 165,
+        "end": 168
+      },
+      {
+        "label": "email",
+        "start": 179,
+        "end": 210
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0020",
+    "doc_type": "공지",
+    "text": "[필수] 하반기 개인정보 보호 교육 안내\n대상: 전 임직원\n기간: 2026-01-22 ~ 2026년 4월 6일\n\n이번 교육에서는 생성형 AI 서비스에 고객 정보를 입력하지 않는 원칙, 메신저로 고객 연락처를 주고받지 않는 원칙을 다룹니다. 미이수 시 인사 평가에 반영될 수 있습니다.\n교육 문의: 정보보호팀 (내선 3262)",
+    "hard_cases": [
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0021",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026년 7월 11일)\n\n담당: 고객센터 정 부장\n고객: 오 서연 님 / 010-0957-9616\n\n오서연님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-6398-2146-5847 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 대전광역시 유성구 온누리로 117, 10층으로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "오 서연",
+        "start": 47,
+        "end": 51,
+        "person_id": "P044",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0957-9616",
+        "start": 56,
+        "end": 69,
+        "person_id": "P044"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 71,
+        "end": 74,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-6398-2146-5847",
+        "start": 173,
+        "end": 192,
+        "person_id": "P044"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 117, 10층",
+        "start": 220,
+        "end": 243,
+        "person_id": "P044"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 47,
+        "end": 51
+      },
+      {
+        "label": "phone_number",
+        "start": 56,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "card_number",
+        "start": 173,
+        "end": 192
+      },
+      {
+        "label": "address",
+        "start": 220,
+        "end": 243
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0022",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026-10-15 16:21\n상담원: 김은영\n\n노 성호 고객(010.0564.6078)이 기존 새봄 중금리 대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 30,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 sh.noh18@example.net로 발송함.\n노성호는 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 46,
+        "end": 49,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "노 성호",
+        "start": 51,
+        "end": 55,
+        "person_id": "P050",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0564.6078",
+        "start": 59,
+        "end": 72,
+        "person_id": "P050"
+      },
+      {
+        "label": "email",
+        "text": "sh.noh18@example.net",
+        "start": 216,
+        "end": 236,
+        "person_id": "P050"
+      },
+      {
+        "label": "person",
+        "text": "노성호",
+        "start": 243,
+        "end": 246,
+        "person_id": "P050",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 55
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 216,
+        "end": 236
+      },
+      {
+        "label": "person",
+        "start": 243,
+        "end": 246
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0023",
+    "doc_type": "고객정보변경",
+    "text": "고객 정보 변경 처리 내역\n처리일: 2026년 6월 18일\n처리자: 김서준 (고객센터)\n\n변경 요청 고객: 정지호\n본인 확인: 주민등록번호 990719-1530082 / 신분증 대조 완료\n\n변경 항목\n- 휴대전화: 01002062733 → 010-0612-9154\n- 주소: 대전광역시 유성구 온누리로 163, 7층 → 광주광역시 북구 하늬로 148, 102동 1301호\n- 이메일: jh.jung91@example.com\n\n비고: 이전 연락처로 발송 예약된 안내 문자는 모두 취소함. 정지호는 결제일 변경도 원했으나 다음 달부터 적용 가능하다고 안내함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 38,
+        "end": 41,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정지호",
+        "start": 60,
+        "end": 63,
+        "person_id": "P057",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "990719-1530082",
+        "start": 78,
+        "end": 92,
+        "person_id": "P057"
+      },
+      {
+        "label": "phone_number",
+        "text": "01002062733",
+        "start": 120,
+        "end": 131,
+        "person_id": "P057"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0612-9154",
+        "start": 134,
+        "end": 147,
+        "person_id": "P057"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 163, 7층",
+        "start": 154,
+        "end": 176,
+        "person_id": "P057"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 하늬로 148, 102동 1301호",
+        "start": 179,
+        "end": 207,
+        "person_id": "P057"
+      },
+      {
+        "label": "email",
+        "text": "jh.jung91@example.com",
+        "start": 215,
+        "end": 236,
+        "person_id": "P057"
+      },
+      {
+        "label": "person",
+        "text": "정지호",
+        "start": 272,
+        "end": 275,
+        "person_id": "P057",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 38,
+        "end": 41
+      },
+      {
+        "label": "person",
+        "start": 60,
+        "end": 63
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 78,
+        "end": 92
+      },
+      {
+        "label": "phone_number",
+        "start": 120,
+        "end": 131
+      },
+      {
+        "label": "phone_number",
+        "start": 134,
+        "end": 147
+      },
+      {
+        "label": "address",
+        "start": 154,
+        "end": 176
+      },
+      {
+        "label": "address",
+        "start": 179,
+        "end": 207
+      },
+      {
+        "label": "email",
+        "start": 215,
+        "end": 236
+      },
+      {
+        "label": "person",
+        "start": 272,
+        "end": 275
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0024",
+    "doc_type": "인사발령",
+    "text": "인사 발령 공지\n새봄카드 인사팀 | 2026-11-17\n\n다음과 같이 인사 발령을 공지합니다.\n\n1. 승진\n- IT운영팀 이준우\n- 채권관리팀 이상훈\n\n2. 전보\n- 이소율 차장: 카드운영팀 → 리스크관리팀\n- 정성호 부장: 고객센터 → 디지털전략팀\n\n발령일: 2026년 8월 4일\n문의: 인사팀 안소연 (내선 3682, sy.ahn20@saebomcard.example.com)",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 68,
+        "end": 71,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 80,
+        "end": 83,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 93,
+        "end": 96,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 118,
+        "end": 121,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 166,
+        "end": 169,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.ahn20@saebomcard.example.com",
+        "start": 180,
+        "end": 211,
+        "person_id": "P006"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 80,
+        "end": 83
+      },
+      {
+        "label": "person",
+        "start": 93,
+        "end": 96
+      },
+      {
+        "label": "person",
+        "start": 118,
+        "end": 121
+      },
+      {
+        "label": "person",
+        "start": 166,
+        "end": 169
+      },
+      {
+        "label": "email",
+        "start": 180,
+        "end": 211
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0025",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026년 2월 8일\n상담 채널: 영업점 방문 (해운대지점)\n담당자: 김은영 대리 / 내선 7678\n\n1. 고객 정보\n- 성명: 김수빈\n- 주민등록번호: 880120-2735847\n- 휴대전화: 010-0114-4332\n- 주소: 대전광역시 유성구 가람로 121, 108동 1203호\n- 직업: 프리랜서 디자이너\n\n2. 상담 내용\n김수빈 고객은 새봄 직장인 신용대출 상품으로 50,000원 대출을 문의함. 희망 기간은 12개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 리스크관리팀 허수아 부장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 온누리은행 643-626169-44",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 55,
+        "end": 58,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 88,
+        "end": 91,
+        "person_id": "P049",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "880120-2735847",
+        "start": 102,
+        "end": 116,
+        "person_id": "P049"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0114-4332",
+        "start": 125,
+        "end": 138,
+        "person_id": "P049"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 가람로 121, 108동 1203호",
+        "start": 145,
+        "end": 174,
+        "person_id": "P049"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 201,
+        "end": 204,
+        "person_id": "P049",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 303,
+        "end": 306,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "643-626169-44",
+        "start": 378,
+        "end": 391,
+        "person_id": "P049"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 55,
+        "end": 58
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 102,
+        "end": 116
+      },
+      {
+        "label": "phone_number",
+        "start": 125,
+        "end": 138
+      },
+      {
+        "label": "address",
+        "start": 145,
+        "end": 174
+      },
+      {
+        "label": "person",
+        "start": 201,
+        "end": 204
+      },
+      {
+        "label": "person",
+        "start": 303,
+        "end": 306
+      },
+      {
+        "label": "account_number",
+        "start": 378,
+        "end": 391
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0026",
+    "doc_type": "민원현황",
+    "text": "2026년 3분기 민원 현황 요약\n- 총 접수: 1081건 (전 분기 대비 2% 감소)\n- 유형별: 결제 오류 118건, 연회비 85건, 개인정보 19건\n- 평균 처리 기간: 7일\n- 금융감독원 이첩 민원: 14건\n- 대표 민원번호 예시: 202638197129\n주요 개선 과제: 자동이체 배치 점검 주기 단축, 연락처 변경 반영 지연 해소\n작성: 고객보호팀",
+    "hard_cases": [
+      "decoy_numbers",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0027",
+    "doc_type": "고객정보변경",
+    "text": "고객 정보 변경 처리 내역\n처리일: 2026년 9월 5일\n처리자: 김서준 (고객센터)\n\n변경 요청 고객: 오서연\n본인 확인: 주민등록번호 830628-1247274 / 신분증 대조 완료\n\n변경 항목\n- 휴대전화: 01001878582 → 01009579616\n- 주소: 대전광역시 유성구 미리내로 42, 303호 → 대전광역시 유성구 온누리로 117, 10층\n- 이메일: sy.oh93@example.net\n\n비고: 이전 연락처로 발송 예약된 안내 문자는 모두 취소함. 오서연은 결제일 변경도 원했으나 다음 달부터 적용 가능하다고 안내함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 37,
+        "end": 40,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 59,
+        "end": 62,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "830628-1247274",
+        "start": 77,
+        "end": 91,
+        "person_id": "P044"
+      },
+      {
+        "label": "phone_number",
+        "text": "01001878582",
+        "start": 119,
+        "end": 130,
+        "person_id": "P044"
+      },
+      {
+        "label": "phone_number",
+        "text": "01009579616",
+        "start": 133,
+        "end": 144,
+        "person_id": "P044"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 미리내로 42, 303호",
+        "start": 151,
+        "end": 174,
+        "person_id": "P044"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 117, 10층",
+        "start": 177,
+        "end": 200,
+        "person_id": "P044"
+      },
+      {
+        "label": "email",
+        "text": "sy.oh93@example.net",
+        "start": 208,
+        "end": 227,
+        "person_id": "P044"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 263,
+        "end": 266,
+        "person_id": "P044",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 37,
+        "end": 40
+      },
+      {
+        "label": "person",
+        "start": 59,
+        "end": 62
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 77,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 119,
+        "end": 130
+      },
+      {
+        "label": "phone_number",
+        "start": 133,
+        "end": 144
+      },
+      {
+        "label": "address",
+        "start": 151,
+        "end": 174
+      },
+      {
+        "label": "address",
+        "start": 177,
+        "end": 200
+      },
+      {
+        "label": "email",
+        "start": 208,
+        "end": 227
+      },
+      {
+        "label": "person",
+        "start": 263,
+        "end": 266
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0028",
+    "doc_type": "이상거래탐지",
+    "text": "이상거래 확인 통화 기록 - 2026-07-25\n담당: 김 하준\n대상: 정지호 / 010-0612-9154\n\n새벽 시간대 다온편의점에서 소액 결제가 반복되어 확인 전화를 드림. 정지호님은 해당 결제가 자녀의 게임 결제라고 답변하여 정상 거래로 처리함.\n고객 요청으로 온라인 결제 한도를 1500,000원으로 낮춤.",
+    "hard_cases": [
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김 하준",
+        "start": 31,
+        "end": 35,
+        "person_id": "P018",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "정지호",
+        "start": 40,
+        "end": 43,
+        "person_id": "P057",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0612-9154",
+        "start": 46,
+        "end": 59,
+        "person_id": "P057"
+      },
+      {
+        "label": "person",
+        "text": "정지호",
+        "start": 99,
+        "end": 102,
+        "person_id": "P057",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 31,
+        "end": 35
+      },
+      {
+        "label": "person",
+        "start": 40,
+        "end": 43
+      },
+      {
+        "label": "phone_number",
+        "start": 46,
+        "end": 59
+      },
+      {
+        "label": "person",
+        "start": 99,
+        "end": 102
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0029",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-21230\n상담일시: 2026-03-27 17:09\n상담원: 김서준 (고객센터)\n\n고객명: 윤선영\n연락처: 01003492063\n카드 상품: 한결 플러스 카드\n카드번호: 9410-1585-0643-1712\n\n상담 내용\n윤선영 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 660109-2189643 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(대전광역시 유성구 미리내로 153, 11층)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "윤선영",
+        "start": 88,
+        "end": 91,
+        "person_id": "P051",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01003492063",
+        "start": 97,
+        "end": 108,
+        "person_id": "P051"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-1585-0643-1712",
+        "start": 132,
+        "end": 151,
+        "person_id": "P051"
+      },
+      {
+        "label": "person",
+        "text": "윤선영",
+        "start": 159,
+        "end": 162,
+        "person_id": "P051",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "660109-2189643",
+        "start": 203,
+        "end": 217,
+        "person_id": "P051"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 미리내로 153, 11층",
+        "start": 317,
+        "end": 340,
+        "person_id": "P051"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 97,
+        "end": 108
+      },
+      {
+        "label": "card_number",
+        "start": 132,
+        "end": 151
+      },
+      {
+        "label": "person",
+        "start": 159,
+        "end": 162
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 203,
+        "end": 217
+      },
+      {
+        "label": "address",
+        "start": 317,
+        "end": 340
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0030",
+    "doc_type": "연체안내",
+    "text": "연체 안내 통화 기록\n통화일시: 2026-02-19 16:14\n담당: 채권관리팀 이상훈\n고객: 정은영 (010-0597-9946)\n\n연체 내역: 카드 대금 250,000원, 연체 73일\n통화 내용: 정은영님은 이번 주 금요일까지 하늘빛은행 계좌(449-265055-57)에서 납부하겠다고 약속함. 약속일이 지나도 입금되지 않으면 등록 주소(부산광역시 수영구 별빛길 135, 7층)로 안내문을 발송할 예정임을 설명함.\n비고: 고객이 직장으로 연락하지 말 것을 요청함.",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 45,
+        "end": 48,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정은영",
+        "start": 53,
+        "end": 56,
+        "person_id": "P056",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0597-9946",
+        "start": 58,
+        "end": 71,
+        "person_id": "P056"
+      },
+      {
+        "label": "person",
+        "text": "정은영",
+        "start": 111,
+        "end": 114,
+        "person_id": "P056",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "449-265055-57",
+        "start": 137,
+        "end": 150,
+        "person_id": "P056"
+      },
+      {
+        "label": "address",
+        "text": "부산광역시 수영구 별빛길 135, 7층",
+        "start": 190,
+        "end": 211,
+        "person_id": "P056"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 45,
+        "end": 48
+      },
+      {
+        "label": "person",
+        "start": 53,
+        "end": 56
+      },
+      {
+        "label": "phone_number",
+        "start": 58,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 111,
+        "end": 114
+      },
+      {
+        "label": "account_number",
+        "start": 137,
+        "end": 150
+      },
+      {
+        "label": "address",
+        "start": 190,
+        "end": 211
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0031",
+    "doc_type": "민원처리",
+    "text": "[고객 불만 접수] 자동이체 중복 출금\n접수번호 SB-2026-23395 / 2026년 12월 27일\n\n고객 전서윤님이 이번 달 카드 대금이 온누리은행 계좌(917-282973-24)에서 두 번 출금되었다고 항의함. 담당 김 대리가 거래 내역을 확인한 결과 새봄카드 배치 오류로 중복 출금된 것이 맞음.\n중복 출금액 120,000원은 당일 환급 처리함. 전 서윤 고객은 재발 방지 대책을 요청하였고, IT운영팀 이준우 사원에게 원인 분석을 의뢰함.\n회신 방법: 이메일(sy.jeon68@example.com)",
+    "hard_cases": [
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "전서윤",
+        "start": 61,
+        "end": 64,
+        "person_id": "P052",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "917-282973-24",
+        "start": 88,
+        "end": 101,
+        "person_id": "P052"
+      },
+      {
+        "label": "person",
+        "text": "전 서윤",
+        "start": 198,
+        "end": 202,
+        "person_id": "P052",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 230,
+        "end": 233,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.jeon68@example.com",
+        "start": 262,
+        "end": 283,
+        "person_id": "P052"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 61,
+        "end": 64
+      },
+      {
+        "label": "account_number",
+        "start": 88,
+        "end": 101
+      },
+      {
+        "label": "person",
+        "start": 198,
+        "end": 202
+      },
+      {
+        "label": "person",
+        "start": 230,
+        "end": 233
+      },
+      {
+        "label": "email",
+        "start": 262,
+        "end": 283
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0032",
+    "doc_type": "업무메일",
+    "text": "제목: 개인정보 처리 위탁 점검 결과 공유\n\n정보보호팀 정서현입니다.\n코드브릿지에 대한 상반기 개인정보 처리 위탁 점검 결과를 공유드립니다.\n\n1. 점검 일시: 2026-02-04\n2. 점검자: 정서현, 이서연\n3. 수탁사 담당자: 문은정 매니저 (010.0561.7253, ej.moon49@codebridge.example.com)\n4. 주요 지적 사항: 상담 녹취 파일 보관 기간 초과, 퇴사자 계정 미삭제 2건\n\n수탁사에는 2026년 9월 6일까지 개선 계획 제출을 요청했습니다. 관련 문의는 이 서연 과장에게 해주세요.",
+    "hard_cases": [
+      "homonym",
+      "phone_format_variant",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 31,
+        "end": 34,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 109,
+        "end": 112,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 114,
+        "end": 117,
+        "person_id": "P068",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "문은정",
+        "start": 130,
+        "end": 133,
+        "person_id": "P037",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0561.7253",
+        "start": 139,
+        "end": 152,
+        "person_id": "P037"
+      },
+      {
+        "label": "email",
+        "text": "ej.moon49@codebridge.example.com",
+        "start": 154,
+        "end": 186,
+        "person_id": "P037"
+      },
+      {
+        "label": "person",
+        "text": "이 서연",
+        "start": 280,
+        "end": 284,
+        "person_id": "P068",
+        "form": "spaced"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 31,
+        "end": 34
+      },
+      {
+        "label": "person",
+        "start": 109,
+        "end": 112
+      },
+      {
+        "label": "person",
+        "start": 114,
+        "end": 117
+      },
+      {
+        "label": "person",
+        "start": 130,
+        "end": 133
+      },
+      {
+        "label": "phone_number",
+        "start": 139,
+        "end": 152
+      },
+      {
+        "label": "email",
+        "start": 154,
+        "end": 186
+      },
+      {
+        "label": "person",
+        "start": 280,
+        "end": 284
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0033",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026-04-24\n상담 채널: 영업점 방문 (해운대지점)\n담당자: 신승현 과장 / 내선 2011\n\n1. 고객 정보\n- 성명: 오영호\n- 주민등록번호: 680327-1573407\n- 휴대전화: 010-0995-6081\n- 주소: 대전광역시 유성구 별빛길 132, 6층\n- 직업: 중소기업 사무직\n\n2. 상담 내용\n오영호 고객은 새봄 중금리 대출 상품으로 3000,000원 대출을 문의함. 희망 기간은 60개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 리스크관리팀 허수아 부장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 하늘빛은행 476-811256-83",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 54,
+        "end": 57,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "오영호",
+        "start": 87,
+        "end": 90,
+        "person_id": "P063",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "680327-1573407",
+        "start": 101,
+        "end": 115,
+        "person_id": "P063"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0995-6081",
+        "start": 124,
+        "end": 137,
+        "person_id": "P063"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 별빛길 132, 6층",
+        "start": 144,
+        "end": 165,
+        "person_id": "P063"
+      },
+      {
+        "label": "person",
+        "text": "오영호",
+        "start": 191,
+        "end": 194,
+        "person_id": "P063",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 293,
+        "end": 296,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "476-811256-83",
+        "start": 368,
+        "end": 381,
+        "person_id": "P063"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 54,
+        "end": 57
+      },
+      {
+        "label": "person",
+        "start": 87,
+        "end": 90
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 101,
+        "end": 115
+      },
+      {
+        "label": "phone_number",
+        "start": 124,
+        "end": 137
+      },
+      {
+        "label": "address",
+        "start": 144,
+        "end": 165
+      },
+      {
+        "label": "person",
+        "start": 191,
+        "end": 194
+      },
+      {
+        "label": "person",
+        "start": 293,
+        "end": 296
+      },
+      {
+        "label": "account_number",
+        "start": 368,
+        "end": 381
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0034",
+    "doc_type": "고객정보변경",
+    "text": "고객 정보 변경 처리 내역\n처리일: 2026-10-08\n처리자: 김서준 (고객센터)\n\n변경 요청 고객: 박준우\n본인 확인: 주민등록번호 730601-1475260 / 신분증 대조 완료\n\n변경 항목\n- 휴대전화: 010-0362-4920 → 010-0186-5072\n- 주소: 경기도 성남시 분당구 누리길 10, 801호 → 대전광역시 유성구 온누리로 131, 901호\n- 이메일: jw.park77@example.org\n\n비고: 이전 연락처로 발송 예약된 안내 문자는 모두 취소함. 박준우는 결제일 변경도 원했으나 다음 달부터 적용 가능하다고 안내함.",
+    "hard_cases": [
+      "josa_attached"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 36,
+        "end": 39,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박준우",
+        "start": 58,
+        "end": 61,
+        "person_id": "P061",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "730601-1475260",
+        "start": 76,
+        "end": 90,
+        "person_id": "P061"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0362-4920",
+        "start": 118,
+        "end": 131,
+        "person_id": "P061"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0186-5072",
+        "start": 134,
+        "end": 147,
+        "person_id": "P061"
+      },
+      {
+        "label": "address",
+        "text": "경기도 성남시 분당구 누리길 10, 801호",
+        "start": 154,
+        "end": 178,
+        "person_id": "P061"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 131, 901호",
+        "start": 181,
+        "end": 205,
+        "person_id": "P061"
+      },
+      {
+        "label": "email",
+        "text": "jw.park77@example.org",
+        "start": 213,
+        "end": 234,
+        "person_id": "P061"
+      },
+      {
+        "label": "person",
+        "text": "박준우",
+        "start": 270,
+        "end": 273,
+        "person_id": "P061",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 36,
+        "end": 39
+      },
+      {
+        "label": "person",
+        "start": 58,
+        "end": 61
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 76,
+        "end": 90
+      },
+      {
+        "label": "phone_number",
+        "start": 118,
+        "end": 131
+      },
+      {
+        "label": "phone_number",
+        "start": 134,
+        "end": 147
+      },
+      {
+        "label": "address",
+        "start": 154,
+        "end": 178
+      },
+      {
+        "label": "address",
+        "start": 181,
+        "end": 205
+      },
+      {
+        "label": "email",
+        "start": 213,
+        "end": 234
+      },
+      {
+        "label": "person",
+        "start": 270,
+        "end": 273
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0035",
+    "doc_type": "회의록",
+    "text": "회의록\n회의명: 콜센터 위탁 운영 성과 점검\n일시: 2026-05-03 18:31\n장소: 본사 12층 회의실\n참석자: 정성호(부장), 이소율, 김서준, 강민재(미르보안)\n작성자: 이소율\n\n논의 내용\n1. 정 성호 부장이 지난 분기 추진 현황을 공유함.\n2. 미르보안 강민재 책임은 시스템 이관 일정이 2주 지연될 수 있다고 보고함.\n3. 김서준은 고객 안내 문자 발송 시점을 이관 이후로 미루자고 제안함.\n\n결정 사항\n- 이관 일정 확정: 2026.02.22\n- 고객 안내 문구는 이 차장이 초안을 작성하고 서준 씨가 검토\n\n다음 회의: 2026.03.02",
+    "hard_cases": [
+      "given_only",
+      "josa_attached",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 66,
+        "end": 69,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 75,
+        "end": 78,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 80,
+        "end": 83,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "강민재",
+        "start": 85,
+        "end": 88,
+        "person_id": "P039",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 100,
+        "end": 103,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정 성호",
+        "start": 114,
+        "end": 118,
+        "person_id": "P002",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "강민재",
+        "start": 149,
+        "end": 152,
+        "person_id": "P039",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 189,
+        "end": 192,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "서준",
+        "start": 284,
+        "end": 286,
+        "person_id": "P012",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 66,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 75,
+        "end": 78
+      },
+      {
+        "label": "person",
+        "start": 80,
+        "end": 83
+      },
+      {
+        "label": "person",
+        "start": 85,
+        "end": 88
+      },
+      {
+        "label": "person",
+        "start": 100,
+        "end": 103
+      },
+      {
+        "label": "person",
+        "start": 114,
+        "end": 118
+      },
+      {
+        "label": "person",
+        "start": 149,
+        "end": 152
+      },
+      {
+        "label": "person",
+        "start": 189,
+        "end": 192
+      },
+      {
+        "label": "person",
+        "start": 284,
+        "end": 286
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0036",
+    "doc_type": "공지",
+    "text": "[공지] 정기 시스템 점검 안내\n당사 IT운영팀 | 2026-01-28\n\n카드 승인 시스템 정기 점검으로 아래 시간 동안 일부 서비스 이용이 제한됩니다.\n- 점검 일시: 2026-01-03 02:00 ~ 05:00\n- 제한 서비스: 온라인 결제, 앱 카드 등록, 포인트 조회\n점검 중 문의는 고객센터 대표번호 1599-0000으로 해주시기 바랍니다.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0037",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202662016704\n접수일: 2026-10-28\n접수 경로: 금융감독원 이첩\n민원인: 노성호 (연락처 010-0564-6078)\n처리 담당: 고객보호팀 최지영 팀장\n검토자: 이소율 차장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026.12.21에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 010-0538-4572로 발송된 것으로 확인됨. 변경된 번호 010-0564-6078 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 이소율 차장의 승인 후 2026.07.08에 민원인에게 회신 완료.",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "노성호",
+        "start": 68,
+        "end": 71,
+        "person_id": "P050",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0564-6078",
+        "start": 77,
+        "end": 90,
+        "person_id": "P050"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 105,
+        "end": 108,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 117,
+        "end": 120,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0538-4572",
+        "start": 236,
+        "end": 249,
+        "person_id": "P050"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0564-6078",
+        "start": 271,
+        "end": 284,
+        "person_id": "P050"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 335,
+        "end": 338,
+        "person_id": "P004",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "phone_number",
+        "start": 77,
+        "end": 90
+      },
+      {
+        "label": "person",
+        "start": 105,
+        "end": 108
+      },
+      {
+        "label": "person",
+        "start": 117,
+        "end": 120
+      },
+      {
+        "label": "phone_number",
+        "start": 236,
+        "end": 249
+      },
+      {
+        "label": "phone_number",
+        "start": 271,
+        "end": 284
+      },
+      {
+        "label": "person",
+        "start": 335,
+        "end": 338
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0038",
+    "doc_type": "민원처리",
+    "text": "[고객 불만 접수] 자동이체 중복 출금\n접수번호 SB-2026-52151 / 2026년 1월 28일\n\n고객 전서윤님이 이번 달 카드 대금이 가람저축은행 계좌(917-282973-24)에서 두 번 출금되었다고 항의함. 담당 김 대리가 거래 내역을 확인한 결과 새봄카드 배치 오류로 중복 출금된 것이 맞음.\n중복 출금액 12,000원은 당일 환급 처리함. 전 서윤 고객은 재발 방지 대책을 요청하였고, IT운영팀 박예린 팀장에게 원인 분석을 의뢰함.\n회신 방법: 이메일(sy.jeon68@example.com)",
+    "hard_cases": [
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "전서윤",
+        "start": 60,
+        "end": 63,
+        "person_id": "P052",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "917-282973-24",
+        "start": 88,
+        "end": 101,
+        "person_id": "P052"
+      },
+      {
+        "label": "person",
+        "text": "전 서윤",
+        "start": 197,
+        "end": 201,
+        "person_id": "P052",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "박예린",
+        "start": 229,
+        "end": 232,
+        "person_id": "P030",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.jeon68@example.com",
+        "start": 261,
+        "end": 282,
+        "person_id": "P052"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 60,
+        "end": 63
+      },
+      {
+        "label": "account_number",
+        "start": 88,
+        "end": 101
+      },
+      {
+        "label": "person",
+        "start": 197,
+        "end": 201
+      },
+      {
+        "label": "person",
+        "start": 229,
+        "end": 232
+      },
+      {
+        "label": "email",
+        "start": 261,
+        "end": 282
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0039",
+    "doc_type": "회의록",
+    "text": "회의록\n회의명: 고객 개인정보 보호 강화 방안\n일시: 2026년 4월 10일 10:23\n장소: 본사 12층 회의실\n참석자: 이소율(차장), 강민서, 안소연, 오다은(데이터온시스템즈)\n작성자: 강민서\n\n논의 내용\n1. 이 소율 차장이 지난 분기 추진 현황을 공유함.\n2. 데이터온시스템즈 오다은 매니저는 시스템 이관 일정이 2주 지연될 수 있다고 보고함.\n3. 안소연은 고객 안내 문자 발송 시점을 이관 이후로 미루자고 제안함.\n\n결정 사항\n- 이관 일정 확정: 2026.10.15\n- 고객 안내 문구는 강 사원이 초안을 작성하고 소연 씨가 검토\n\n다음 회의: 2026년 4월 9일",
+    "hard_cases": [
+      "given_only",
+      "josa_attached",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 69,
+        "end": 72,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "강민서",
+        "start": 78,
+        "end": 81,
+        "person_id": "P017",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 83,
+        "end": 86,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "오다은",
+        "start": 88,
+        "end": 91,
+        "person_id": "P034",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "강민서",
+        "start": 107,
+        "end": 110,
+        "person_id": "P017",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이 소율",
+        "start": 121,
+        "end": 125,
+        "person_id": "P004",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "오다은",
+        "start": 160,
+        "end": 163,
+        "person_id": "P034",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 201,
+        "end": 204,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "소연",
+        "start": 296,
+        "end": 298,
+        "person_id": "P006",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 69,
+        "end": 72
+      },
+      {
+        "label": "person",
+        "start": 78,
+        "end": 81
+      },
+      {
+        "label": "person",
+        "start": 83,
+        "end": 86
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "person",
+        "start": 107,
+        "end": 110
+      },
+      {
+        "label": "person",
+        "start": 121,
+        "end": 125
+      },
+      {
+        "label": "person",
+        "start": 160,
+        "end": 163
+      },
+      {
+        "label": "person",
+        "start": 201,
+        "end": 204
+      },
+      {
+        "label": "person",
+        "start": 296,
+        "end": 298
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0040",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202687652255\n접수일: 2026년 9월 5일\n접수 경로: 금융감독원 이첩\n민원인: 이선우 (연락처 01008195062)\n처리 담당: 고객보호팀 김은정 부장\n검토자: 허수아 부장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026.01.17에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 01006605143으로 발송된 것으로 확인됨. 변경된 번호 01008195062 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 허수아 부장의 승인 후 2026년 1월 18일에 민원인에게 회신 완료.",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이선우",
+        "start": 69,
+        "end": 72,
+        "person_id": "P055",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01008195062",
+        "start": 78,
+        "end": 89,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "김은정",
+        "start": 104,
+        "end": 107,
+        "person_id": "P031",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 116,
+        "end": 119,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01006605143",
+        "start": 235,
+        "end": 246,
+        "person_id": "P055"
+      },
+      {
+        "label": "phone_number",
+        "text": "01008195062",
+        "start": 269,
+        "end": 280,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 331,
+        "end": 334,
+        "person_id": "P008",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 69,
+        "end": 72
+      },
+      {
+        "label": "phone_number",
+        "start": 78,
+        "end": 89
+      },
+      {
+        "label": "person",
+        "start": 104,
+        "end": 107
+      },
+      {
+        "label": "person",
+        "start": 116,
+        "end": 119
+      },
+      {
+        "label": "phone_number",
+        "start": 235,
+        "end": 246
+      },
+      {
+        "label": "phone_number",
+        "start": 269,
+        "end": 280
+      },
+      {
+        "label": "person",
+        "start": 331,
+        "end": 334
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0041",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202683487621\n접수일: 2026년 12월 21일\n접수 경로: 금융감독원 이첩\n민원인: 김민준 (연락처 010-0144-3268)\n처리 담당: 고객보호팀 최지영 팀장\n검토자: 이소율 차장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026.01.18에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 010-0356-1608로 발송된 것으로 확인됨. 변경된 번호 010-0144-3268 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 이소율 차장의 승인 후 2026-03-04에 민원인에게 회신 완료.",
+    "hard_cases": [
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0144-3268",
+        "start": 80,
+        "end": 93,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 108,
+        "end": 111,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 120,
+        "end": 123,
+        "person_id": "P004",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0356-1608",
+        "start": 239,
+        "end": 252,
+        "person_id": "P067"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0144-3268",
+        "start": 274,
+        "end": 287,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 338,
+        "end": 341,
+        "person_id": "P004",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "phone_number",
+        "start": 80,
+        "end": 93
+      },
+      {
+        "label": "person",
+        "start": 108,
+        "end": 111
+      },
+      {
+        "label": "person",
+        "start": 120,
+        "end": 123
+      },
+      {
+        "label": "phone_number",
+        "start": 239,
+        "end": 252
+      },
+      {
+        "label": "phone_number",
+        "start": 274,
+        "end": 287
+      },
+      {
+        "label": "person",
+        "start": 338,
+        "end": 341
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0042",
+    "doc_type": "회의록",
+    "text": "[주간 회의] 고객보호팀 주간 업무 점검\n2026년 5월 8일\n\n참석: 이상훈, 김민준, 정성호\n불참: 최혜진 (연차)\n\n- 이상훈: 신규 카드 발급 심사 자동화 진행률 70%\n- 김민준: 고객 문의 응대 스크립트 개정안 작성 중\n- 정성호: 연체 고객 안내 문자 문구 법무 검토 요청 완료\n\n공유 사항\n최혜진이 복귀하면 개인정보 처리방침 개정 내용을 팀 전체에 공유하기로 함.",
+    "hard_cases": [
+      "homonym",
+      "josa_attached"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 40,
+        "end": 43,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 45,
+        "end": 48,
+        "person_id": "P066",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 50,
+        "end": 53,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 58,
+        "end": 61,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 70,
+        "end": 73,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 101,
+        "end": 104,
+        "person_id": "P066",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 131,
+        "end": 134,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 170,
+        "end": 173,
+        "person_id": "P020",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 40,
+        "end": 43
+      },
+      {
+        "label": "person",
+        "start": 58,
+        "end": 61
+      },
+      {
+        "label": "person",
+        "start": 70,
+        "end": 73
+      },
+      {
+        "label": "person",
+        "start": 170,
+        "end": 173
+      },
+      {
+        "label": "person",
+        "start": 45,
+        "end": 48
+      },
+      {
+        "label": "person",
+        "start": 50,
+        "end": 53
+      },
+      {
+        "label": "person",
+        "start": 101,
+        "end": 104
+      },
+      {
+        "label": "person",
+        "start": 131,
+        "end": 134
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0043",
+    "doc_type": "용역계약서",
+    "text": "용역 계약서\n\n새봄카드(이하 \"갑\")과 다솜콜솔루션(이하 \"을\")은 다음과 같이 용역 계약을 체결한다.\n\n제1조(목적) 본 계약은 갑의 고객 상담 시스템 고도화에 관한 을의 용역 수행 조건을 정함을 목적으로 한다.\n제2조(계약 기간) 2026년 3월 10일부터 2026.03.27까지로 한다.\n제3조(계약 금액) 총 금 팔천오백만원(부가가치세 별도)으로 한다.\n제4조(개인정보 보호) 을은 용역 수행 중 알게 된 고객 개인정보를 계약 목적 외에 이용하거나 제3자에게 제공하여서는 아니 된다.\n제5조(담당자)\n  갑: IT운영팀 이준우 (0238806413, jw.lee66@saebomcard.example.com)\n  을: 신현준 매니저 (01006640224, hj.shin40@dasomcall.example.com)\n\n2026-07-08\n\n갑: 새봄카드 대표이사 김예준\n을: 다솜콜솔루션 대표이사 배현정",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 295,
+        "end": 298,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "0238806413",
+        "start": 300,
+        "end": 310,
+        "person_id": "P010"
+      },
+      {
+        "label": "email",
+        "text": "jw.lee66@saebomcard.example.com",
+        "start": 312,
+        "end": 343,
+        "person_id": "P010"
+      },
+      {
+        "label": "person",
+        "text": "신현준",
+        "start": 350,
+        "end": 353,
+        "person_id": "P043",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01006640224",
+        "start": 359,
+        "end": 370,
+        "person_id": "P043"
+      },
+      {
+        "label": "email",
+        "text": "hj.shin40@dasomcall.example.com",
+        "start": 372,
+        "end": 403,
+        "person_id": "P043"
+      },
+      {
+        "label": "person",
+        "text": "김예준",
+        "start": 431,
+        "end": 434,
+        "person_id": "P001",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "배현정",
+        "start": 450,
+        "end": 453,
+        "person_id": "P041",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 295,
+        "end": 298
+      },
+      {
+        "label": "phone_number",
+        "start": 300,
+        "end": 310
+      },
+      {
+        "label": "email",
+        "start": 312,
+        "end": 343
+      },
+      {
+        "label": "person",
+        "start": 350,
+        "end": 353
+      },
+      {
+        "label": "phone_number",
+        "start": 359,
+        "end": 370
+      },
+      {
+        "label": "email",
+        "start": 372,
+        "end": 403
+      },
+      {
+        "label": "person",
+        "start": 431,
+        "end": 434
+      },
+      {
+        "label": "person",
+        "start": 450,
+        "end": 453
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0044",
+    "doc_type": "민원처리",
+    "text": "[고객 불만 접수] 자동이체 중복 출금\n접수번호 SB-2026-34049 / 2026-02-23\n\n고객 오서연님이 이번 달 카드 대금이 하늘빛은행 계좌(567-678043-28)에서 두 번 출금되었다고 항의함. 담당 정 부장이 거래 내역을 확인한 결과 새봄카드 배치 오류로 중복 출금된 것이 맞음.\n중복 출금액 30000,000원은 당일 환급 처리함. 오 서연 고객은 재발 방지 대책을 요청하였고, IT운영팀 박도윤 대리에게 원인 분석을 의뢰함.\n회신 방법: 이메일(sy.oh93@example.net)",
+    "hard_cases": [
+      "homonym",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 58,
+        "end": 61,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "567-678043-28",
+        "start": 85,
+        "end": 98,
+        "person_id": "P044"
+      },
+      {
+        "label": "person",
+        "text": "오 서연",
+        "start": 197,
+        "end": 201,
+        "person_id": "P044",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 229,
+        "end": 232,
+        "person_id": "P071",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.oh93@example.net",
+        "start": 261,
+        "end": 280,
+        "person_id": "P044"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 58,
+        "end": 61
+      },
+      {
+        "label": "account_number",
+        "start": 85,
+        "end": 98
+      },
+      {
+        "label": "person",
+        "start": 197,
+        "end": 201
+      },
+      {
+        "label": "person",
+        "start": 229,
+        "end": 232
+      },
+      {
+        "label": "email",
+        "start": 261,
+        "end": 280
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0045",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026년 5월 5일\n상담 채널: 영업점 방문 (강남지점)\n담당자: 신승현 과장 / 내선 4876\n\n1. 고객 정보\n- 성명: 손하윤\n- 주민등록번호: 770210-2428238\n- 휴대전화: 01007942240\n- 주소: 광주광역시 북구 하늬로 34, 801호\n- 직업: 중소기업 사무직\n\n2. 상담 내용\n손하윤 고객은 새봄 사업자 운영자금 대출 상품으로 25,000원 대출을 문의함. 희망 기간은 24개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 고객센터 정성호 부장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 하늘빛은행 816-409571-12",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 54,
+        "end": 57,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 87,
+        "end": 90,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "770210-2428238",
+        "start": 101,
+        "end": 115,
+        "person_id": "P048"
+      },
+      {
+        "label": "phone_number",
+        "text": "01007942240",
+        "start": 124,
+        "end": 135,
+        "person_id": "P048"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 하늬로 34, 801호",
+        "start": 142,
+        "end": 163,
+        "person_id": "P048"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 189,
+        "end": 192,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 292,
+        "end": 295,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "816-409571-12",
+        "start": 367,
+        "end": 380,
+        "person_id": "P048"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 54,
+        "end": 57
+      },
+      {
+        "label": "person",
+        "start": 87,
+        "end": 90
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 101,
+        "end": 115
+      },
+      {
+        "label": "phone_number",
+        "start": 124,
+        "end": 135
+      },
+      {
+        "label": "address",
+        "start": 142,
+        "end": 163
+      },
+      {
+        "label": "person",
+        "start": 189,
+        "end": 192
+      },
+      {
+        "label": "person",
+        "start": 292,
+        "end": 295
+      },
+      {
+        "label": "account_number",
+        "start": 367,
+        "end": 380
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0046",
+    "doc_type": "상품안내",
+    "text": "신상품 출시 안내: 다온 트래블 카드\n출시일: 2026년 7월 1일\n\n다온 트래블 카드는 여행과 일상 소비를 함께 챙기는 카드입니다.\n주요 혜택\n- 해외 결제 수수료 면제\n- 대중교통 10% 할인\n- 연회비 1만 원\n\n봄날처럼 가벼운 소비 생활을 응원합니다. 자세한 내용은 고객센터 1599-0000으로 문의하세요.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0047",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202649189370\n접수일: 2026년 12월 22일\n접수 경로: 금융감독원 이첩\n민원인: 이선우 (연락처 010-0819-5062)\n처리 담당: 고객보호팀 최지영 팀장\n검토자: 이윤서 팀장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026-12-15에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 010-0748-9647로 발송된 것으로 확인됨. 변경된 번호 010-0819-5062 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 이윤서 팀장의 승인 후 2026.02.25에 민원인에게 회신 완료.",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이선우",
+        "start": 71,
+        "end": 74,
+        "person_id": "P055",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0819-5062",
+        "start": 80,
+        "end": 93,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 108,
+        "end": 111,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 120,
+        "end": 123,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0748-9647",
+        "start": 239,
+        "end": 252,
+        "person_id": "P055"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0819-5062",
+        "start": 274,
+        "end": 287,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 338,
+        "end": 341,
+        "person_id": "P022",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "phone_number",
+        "start": 80,
+        "end": 93
+      },
+      {
+        "label": "person",
+        "start": 108,
+        "end": 111
+      },
+      {
+        "label": "person",
+        "start": 120,
+        "end": 123
+      },
+      {
+        "label": "phone_number",
+        "start": 239,
+        "end": 252
+      },
+      {
+        "label": "phone_number",
+        "start": 274,
+        "end": 287
+      },
+      {
+        "label": "person",
+        "start": 338,
+        "end": 341
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0048",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-15236\n상담일시: 2026-10-04 11:20\n상담원: 김서준 (고객센터)\n\n고객명: 김수빈\n연락처: 010-0114-4332\n카드 상품: 한결 플러스 카드\n카드번호: 9410-2474-5171-2369\n\n상담 내용\n김수빈 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 880120-2735847 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(대전광역시 유성구 가람로 121, 108동 1203호)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 88,
+        "end": 91,
+        "person_id": "P049",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0114-4332",
+        "start": 97,
+        "end": 110,
+        "person_id": "P049"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-2474-5171-2369",
+        "start": 134,
+        "end": 153,
+        "person_id": "P049"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 161,
+        "end": 164,
+        "person_id": "P049",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "880120-2735847",
+        "start": 205,
+        "end": 219,
+        "person_id": "P049"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 가람로 121, 108동 1203호",
+        "start": 319,
+        "end": 348,
+        "person_id": "P049"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 97,
+        "end": 110
+      },
+      {
+        "label": "card_number",
+        "start": 134,
+        "end": 153
+      },
+      {
+        "label": "person",
+        "start": 161,
+        "end": 164
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 205,
+        "end": 219
+      },
+      {
+        "label": "address",
+        "start": 319,
+        "end": 348
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0049",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026-11-26 18:03\n상담원: 김은영\n\n김 수빈 고객(010-0114-4332)이 기존 새봄 직장인 신용대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 50,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 sb.kim12@example.net로 발송함.\n김수빈은 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "josa_attached",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 46,
+        "end": 49,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김 수빈",
+        "start": 51,
+        "end": 55,
+        "person_id": "P049",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0114-4332",
+        "start": 59,
+        "end": 72,
+        "person_id": "P049"
+      },
+      {
+        "label": "email",
+        "text": "sb.kim12@example.net",
+        "start": 218,
+        "end": 238,
+        "person_id": "P049"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 245,
+        "end": 248,
+        "person_id": "P049",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 55
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 218,
+        "end": 238
+      },
+      {
+        "label": "person",
+        "start": 245,
+        "end": 248
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0050",
+    "doc_type": "연체안내",
+    "text": "연체 안내 통화 기록\n통화일시: 2026-03-25 14:34\n담당: 채권관리팀 이상훈\n고객: 최채원 (010-0129-0753)\n\n연체 내역: 카드 대금 1500,000원, 연체 71일\n통화 내용: 최채원님은 이번 주 금요일까지 온누리은행 계좌(741-853629-72)에서 납부하겠다고 약속함. 약속일이 지나도 입금되지 않으면 등록 주소(인천광역시 연수구 온누리로 145, 302호)로 안내문을 발송할 예정임을 설명함.\n비고: 고객이 직장으로 연락하지 말 것을 요청함.",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 45,
+        "end": 48,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 53,
+        "end": 56,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0129-0753",
+        "start": 58,
+        "end": 71,
+        "person_id": "P046"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 112,
+        "end": 115,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "741-853629-72",
+        "start": 138,
+        "end": 151,
+        "person_id": "P046"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 온누리로 145, 302호",
+        "start": 191,
+        "end": 215,
+        "person_id": "P046"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 45,
+        "end": 48
+      },
+      {
+        "label": "person",
+        "start": 53,
+        "end": 56
+      },
+      {
+        "label": "phone_number",
+        "start": 58,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 112,
+        "end": 115
+      },
+      {
+        "label": "account_number",
+        "start": 138,
+        "end": 151
+      },
+      {
+        "label": "address",
+        "start": 191,
+        "end": 215
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0051",
+    "doc_type": "민원현황",
+    "text": "2026년 2분기 민원 현황 요약\n- 총 접수: 1489건 (전 분기 대비 12% 감소)\n- 유형별: 결제 오류 255건, 연회비 74건, 개인정보 38건\n- 평균 처리 기간: 5일\n- 금융감독원 이첩 민원: 25건\n- 대표 민원번호 예시: 202646948576\n주요 개선 과제: 자동이체 배치 점검 주기 단축, 연락처 변경 반영 지연 해소\n작성: 고객보호팀",
+    "hard_cases": [
+      "decoy_numbers",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0052",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202686863404\n접수일: 2026-06-15\n접수 경로: 금융감독원 이첩\n민원인: 이건우 (연락처 010 0552 5661)\n처리 담당: 고객보호팀 최지영 팀장\n검토자: 허수아 부장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026년 1월 5일에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 010-0943-0144로 발송된 것으로 확인됨. 변경된 번호 010 0552 5661 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 허수아 부장의 승인 후 2026.10.02에 민원인에게 회신 완료.",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이건우",
+        "start": 68,
+        "end": 71,
+        "person_id": "P047",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010 0552 5661",
+        "start": 77,
+        "end": 90,
+        "person_id": "P047"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 105,
+        "end": 108,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 117,
+        "end": 120,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0943-0144",
+        "start": 237,
+        "end": 250,
+        "person_id": "P047"
+      },
+      {
+        "label": "phone_number",
+        "text": "010 0552 5661",
+        "start": 272,
+        "end": 285,
+        "person_id": "P047"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 336,
+        "end": 339,
+        "person_id": "P008",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "phone_number",
+        "start": 77,
+        "end": 90
+      },
+      {
+        "label": "person",
+        "start": 105,
+        "end": 108
+      },
+      {
+        "label": "person",
+        "start": 117,
+        "end": 120
+      },
+      {
+        "label": "phone_number",
+        "start": 237,
+        "end": 250
+      },
+      {
+        "label": "phone_number",
+        "start": 272,
+        "end": 285
+      },
+      {
+        "label": "person",
+        "start": 336,
+        "end": 339
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0053",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026-05-07\n상담 채널: 영업점 방문 (해운대지점)\n담당자: 신승현 과장 / 내선 6865\n\n1. 고객 정보\n- 성명: 박민재\n- 주민등록번호: 700308-1134741\n- 휴대전화: 010-0863-5562\n- 주소: 경기도 고양시 일산동구 하늬로 166, 10층\n- 직업: 공무원\n\n2. 상담 내용\n박민재 고객은 새봄 중금리 대출 상품으로 5,000원 대출을 문의함. 희망 기간은 60개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 인사팀 전경희 팀장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 온누리은행 514-121869-51",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 54,
+        "end": 57,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박민재",
+        "start": 87,
+        "end": 90,
+        "person_id": "P058",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "700308-1134741",
+        "start": 101,
+        "end": 115,
+        "person_id": "P058"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0863-5562",
+        "start": 124,
+        "end": 137,
+        "person_id": "P058"
+      },
+      {
+        "label": "address",
+        "text": "경기도 고양시 일산동구 하늬로 166, 10층",
+        "start": 144,
+        "end": 169,
+        "person_id": "P058"
+      },
+      {
+        "label": "person",
+        "text": "박민재",
+        "start": 190,
+        "end": 193,
+        "person_id": "P058",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "전경희",
+        "start": 286,
+        "end": 289,
+        "person_id": "P026",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "514-121869-51",
+        "start": 361,
+        "end": 374,
+        "person_id": "P058"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 54,
+        "end": 57
+      },
+      {
+        "label": "person",
+        "start": 87,
+        "end": 90
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 101,
+        "end": 115
+      },
+      {
+        "label": "phone_number",
+        "start": 124,
+        "end": 137
+      },
+      {
+        "label": "address",
+        "start": 144,
+        "end": 169
+      },
+      {
+        "label": "person",
+        "start": 190,
+        "end": 193
+      },
+      {
+        "label": "person",
+        "start": 286,
+        "end": 289
+      },
+      {
+        "label": "account_number",
+        "start": 361,
+        "end": 374
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0054",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-49480\n상담일시: 2026년 1월 3일 15:23\n상담원: 정성호 (고객센터)\n\n고객명: 오서연\n연락처: 010.0957.9616\n카드 상품: 한결 플러스 카드\n카드번호: 9410-6398-2146-5847\n\n상담 내용\n오서연 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 830628-1247274 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(대전광역시 유성구 온누리로 117, 10층)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 72,
+        "end": 75,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 89,
+        "end": 92,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0957.9616",
+        "start": 98,
+        "end": 111,
+        "person_id": "P044"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-6398-2146-5847",
+        "start": 135,
+        "end": 154,
+        "person_id": "P044"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 162,
+        "end": 165,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "830628-1247274",
+        "start": 206,
+        "end": 220,
+        "person_id": "P044"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 117, 10층",
+        "start": 320,
+        "end": 343,
+        "person_id": "P044"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 72,
+        "end": 75
+      },
+      {
+        "label": "person",
+        "start": 89,
+        "end": 92
+      },
+      {
+        "label": "phone_number",
+        "start": 98,
+        "end": 111
+      },
+      {
+        "label": "card_number",
+        "start": 135,
+        "end": 154
+      },
+      {
+        "label": "person",
+        "start": 162,
+        "end": 165
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 206,
+        "end": 220
+      },
+      {
+        "label": "address",
+        "start": 320,
+        "end": 343
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0055",
+    "doc_type": "이상거래탐지",
+    "text": "[FDS] 이상거래 탐지 보고서\n보고일시: 2026-09-15 15:03\n보고자: 리스크관리팀 허수아\n\n탐지 내용\n김민준 고객 명의 카드(9410-2058-5277-2217)로 새벽 00:27에 해외 가맹점 결제가 연속 3회 시도됨. 고객의 평소 결제 패턴(국내 위주, 건당 10만 원 이하)과 달라 자동 차단됨.\n\n조치 사항\n1. 카드 일시 정지\n2. 고객 휴대전화(010.0144.3268)로 확인 전화 → 김민준 고객 본인이 결제하지 않았다고 답변\n3. 부정사용 접수 후 카드 재발급 진행\n\n검토 의견\n최근 유사 패턴이 늘고 있어 카드운영팀 이소율 차장에게 탐지 규칙 보완을 요청함.",
+    "hard_cases": [
+      "homonym",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 53,
+        "end": 56,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 64,
+        "end": 67,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-2058-5277-2217",
+        "start": 77,
+        "end": 96,
+        "person_id": "P067"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0144.3268",
+        "start": 206,
+        "end": 219,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 230,
+        "end": 233,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이소율",
+        "start": 306,
+        "end": 309,
+        "person_id": "P004",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 53,
+        "end": 56
+      },
+      {
+        "label": "person",
+        "start": 64,
+        "end": 67
+      },
+      {
+        "label": "card_number",
+        "start": 77,
+        "end": 96
+      },
+      {
+        "label": "phone_number",
+        "start": 206,
+        "end": 219
+      },
+      {
+        "label": "person",
+        "start": 230,
+        "end": 233
+      },
+      {
+        "label": "person",
+        "start": 306,
+        "end": 309
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0056",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-18019\n상담일시: 2026-04-02 16:06\n상담원: 김서준 (고객센터)\n\n고객명: 정우진\n연락처: 010.0675.9202\n카드 상품: 새봄 프리미엄 카드\n카드번호: 9410-4527-1111-6153\n\n상담 내용\n정우진 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 000219-3665075 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(인천광역시 연수구 누리길 91, 103호)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정우진",
+        "start": 88,
+        "end": 91,
+        "person_id": "P054",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0675.9202",
+        "start": 97,
+        "end": 110,
+        "person_id": "P054"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-4527-1111-6153",
+        "start": 135,
+        "end": 154,
+        "person_id": "P054"
+      },
+      {
+        "label": "person",
+        "text": "정우진",
+        "start": 162,
+        "end": 165,
+        "person_id": "P054",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "000219-3665075",
+        "start": 206,
+        "end": 220,
+        "person_id": "P054"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 누리길 91, 103호",
+        "start": 320,
+        "end": 342,
+        "person_id": "P054"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 97,
+        "end": 110
+      },
+      {
+        "label": "card_number",
+        "start": 135,
+        "end": 154
+      },
+      {
+        "label": "person",
+        "start": 162,
+        "end": 165
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 206,
+        "end": 220
+      },
+      {
+        "label": "address",
+        "start": 320,
+        "end": 342
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0057",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026-02-16 14:41\n상담원: 박도윤\n\n최 채원 고객(010-0129-0753)이 기존 카드론 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 3000,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 cw.choi89@example.net로 발송함.\n최채원은 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "homonym",
+      "josa_attached",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 46,
+        "end": 49,
+        "person_id": "P070",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최 채원",
+        "start": 51,
+        "end": 55,
+        "person_id": "P046",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0129-0753",
+        "start": 59,
+        "end": 72,
+        "person_id": "P046"
+      },
+      {
+        "label": "email",
+        "text": "cw.choi89@example.net",
+        "start": 212,
+        "end": 233,
+        "person_id": "P046"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 240,
+        "end": 243,
+        "person_id": "P046",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 55
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 212,
+        "end": 233
+      },
+      {
+        "label": "person",
+        "start": 240,
+        "end": 243
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0058",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026년 4월 10일\n상담 채널: 영업점 방문 (해운대지점)\n담당자: 신승현 과장 / 내선 3660\n\n1. 고객 정보\n- 성명: 정하은\n- 주민등록번호: 010621-4097209\n- 휴대전화: 01009229038\n- 주소: 경기도 성남시 분당구 다솜길 33, 13층\n- 직업: 공무원\n\n2. 상담 내용\n정하은 고객은 새봄 중금리 대출 상품으로 12,000원 대출을 문의함. 희망 기간은 60개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 리스크관리팀 허수아 부장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 가람저축은행 828-844031-99",
+    "hard_cases": [
+      "homonym",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 56,
+        "end": 59,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정하은",
+        "start": 89,
+        "end": 92,
+        "person_id": "P073",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "010621-4097209",
+        "start": 103,
+        "end": 117,
+        "person_id": "P073"
+      },
+      {
+        "label": "phone_number",
+        "text": "01009229038",
+        "start": 126,
+        "end": 137,
+        "person_id": "P073"
+      },
+      {
+        "label": "address",
+        "text": "경기도 성남시 분당구 다솜길 33, 13층",
+        "start": 144,
+        "end": 167,
+        "person_id": "P073"
+      },
+      {
+        "label": "person",
+        "text": "정하은",
+        "start": 188,
+        "end": 191,
+        "person_id": "P073",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 288,
+        "end": 291,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "828-844031-99",
+        "start": 364,
+        "end": 377,
+        "person_id": "P073"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 56,
+        "end": 59
+      },
+      {
+        "label": "person",
+        "start": 89,
+        "end": 92
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 103,
+        "end": 117
+      },
+      {
+        "label": "phone_number",
+        "start": 126,
+        "end": 137
+      },
+      {
+        "label": "address",
+        "start": 144,
+        "end": 167
+      },
+      {
+        "label": "person",
+        "start": 188,
+        "end": 191
+      },
+      {
+        "label": "person",
+        "start": 288,
+        "end": 291
+      },
+      {
+        "label": "account_number",
+        "start": 364,
+        "end": 377
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0059",
+    "doc_type": "회의록",
+    "text": "회의록\n회의명: 고객 개인정보 보호 강화 방안\n일시: 2026년 11월 27일 12:34\n장소: 본사 12층 회의실\n참석자: 최지영(팀장), 최혜진, 이준우, 이서연(미르보안)\n작성자: 최혜진\n\n논의 내용\n1. 최 지영 팀장이 지난 분기 추진 현황을 공유함.\n2. 미르보안 이서연 책임은 시스템 이관 일정이 2주 지연될 수 있다고 보고함.\n3. 이준우는 고객 안내 문자 발송 시점을 이관 이후로 미루자고 제안함.\n\n결정 사항\n- 이관 일정 확정: 2026.01.08\n- 고객 안내 문구는 최 차장이 초안을 작성하고 준우 씨가 검토\n\n다음 회의: 2026-06-11",
+    "hard_cases": [
+      "given_only",
+      "homonym",
+      "josa_attached",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 70,
+        "end": 73,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 79,
+        "end": 82,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 84,
+        "end": 87,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 89,
+        "end": 92,
+        "person_id": "P069",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 104,
+        "end": 107,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최 지영",
+        "start": 118,
+        "end": 122,
+        "person_id": "P011",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 153,
+        "end": 156,
+        "person_id": "P069",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 193,
+        "end": 196,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "준우",
+        "start": 288,
+        "end": 290,
+        "person_id": "P010",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 70,
+        "end": 73
+      },
+      {
+        "label": "person",
+        "start": 79,
+        "end": 82
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "person",
+        "start": 89,
+        "end": 92
+      },
+      {
+        "label": "person",
+        "start": 104,
+        "end": 107
+      },
+      {
+        "label": "person",
+        "start": 118,
+        "end": 122
+      },
+      {
+        "label": "person",
+        "start": 153,
+        "end": 156
+      },
+      {
+        "label": "person",
+        "start": 193,
+        "end": 196
+      },
+      {
+        "label": "person",
+        "start": 288,
+        "end": 290
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0060",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026-01-08 14:52\n상담원: 박도윤\n\n이 건우 고객(010.0552.5661)이 기존 새봄 사업자 운영자금 대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 3,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 gw.lee21@example.com로 발송함.\n이건우는 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "homonym",
+      "josa_attached",
+      "phone_format_variant",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 46,
+        "end": 49,
+        "person_id": "P070",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이 건우",
+        "start": 51,
+        "end": 55,
+        "person_id": "P047",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0552.5661",
+        "start": 59,
+        "end": 72,
+        "person_id": "P047"
+      },
+      {
+        "label": "email",
+        "text": "gw.lee21@example.com",
+        "start": 220,
+        "end": 240,
+        "person_id": "P047"
+      },
+      {
+        "label": "person",
+        "text": "이건우",
+        "start": 247,
+        "end": 250,
+        "person_id": "P047",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 55
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 220,
+        "end": 240
+      },
+      {
+        "label": "person",
+        "start": 247,
+        "end": 250
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0061",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-91267\n상담일시: 2026년 3월 21일 15:50\n상담원: 김서준 (고객센터)\n\n고객명: 박준우\n연락처: 010-0186-5072\n카드 상품: 봄날 체크카드\n카드번호: 9410-6449-2519-2541\n\n상담 내용\n박준우 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 730601-1475260 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(대전광역시 유성구 온누리로 131, 901호)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 73,
+        "end": 76,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박준우",
+        "start": 90,
+        "end": 93,
+        "person_id": "P061",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0186-5072",
+        "start": 99,
+        "end": 112,
+        "person_id": "P061"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-6449-2519-2541",
+        "start": 134,
+        "end": 153,
+        "person_id": "P061"
+      },
+      {
+        "label": "person",
+        "text": "박준우",
+        "start": 161,
+        "end": 164,
+        "person_id": "P061",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "730601-1475260",
+        "start": 205,
+        "end": 219,
+        "person_id": "P061"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 온누리로 131, 901호",
+        "start": 319,
+        "end": 343,
+        "person_id": "P061"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 73,
+        "end": 76
+      },
+      {
+        "label": "person",
+        "start": 90,
+        "end": 93
+      },
+      {
+        "label": "phone_number",
+        "start": 99,
+        "end": 112
+      },
+      {
+        "label": "card_number",
+        "start": 134,
+        "end": 153
+      },
+      {
+        "label": "person",
+        "start": 161,
+        "end": 164
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 205,
+        "end": 219
+      },
+      {
+        "label": "address",
+        "start": 319,
+        "end": 343
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0062",
+    "doc_type": "업무메일",
+    "text": "제목: 개인정보 처리 위탁 점검 결과 공유\n\n정보보호팀 이서연입니다.\n미르보안에 대한 상반기 개인정보 처리 위탁 점검 결과를 공유드립니다.\n\n1. 점검 일시: 2026년 7월 28일\n2. 점검자: 이서연, 정서현\n3. 수탁사 담당자: 이서연 책임 (010-0400-5262, sy.lee70@mirsec.example.com)\n4. 주요 지적 사항: 상담 녹취 파일 보관 기간 초과, 퇴사자 계정 미삭제 2건\n\n수탁사에는 2026.05.04까지 개선 계획 제출을 요청했습니다. 관련 문의는 정 서현 대리에게 해주세요.",
+    "hard_cases": [
+      "homonym",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 31,
+        "end": 34,
+        "person_id": "P068",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 110,
+        "end": 113,
+        "person_id": "P068",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 115,
+        "end": 118,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 131,
+        "end": 134,
+        "person_id": "P069",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0400-5262",
+        "start": 139,
+        "end": 152,
+        "person_id": "P069"
+      },
+      {
+        "label": "email",
+        "text": "sy.lee70@mirsec.example.com",
+        "start": 154,
+        "end": 181,
+        "person_id": "P069"
+      },
+      {
+        "label": "person",
+        "text": "정 서현",
+        "start": 274,
+        "end": 278,
+        "person_id": "P005",
+        "form": "spaced"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 31,
+        "end": 34
+      },
+      {
+        "label": "person",
+        "start": 110,
+        "end": 113
+      },
+      {
+        "label": "person",
+        "start": 115,
+        "end": 118
+      },
+      {
+        "label": "person",
+        "start": 131,
+        "end": 134
+      },
+      {
+        "label": "phone_number",
+        "start": 139,
+        "end": 152
+      },
+      {
+        "label": "email",
+        "start": 154,
+        "end": 181
+      },
+      {
+        "label": "person",
+        "start": 274,
+        "end": 278
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0063",
+    "doc_type": "회의록",
+    "text": "[주간 회의] 고객보호팀 주간 업무 점검\n2026년 8월 24일\n\n참석: 정현준, 정성호, 김서연\n불참: 정서현 (연차)\n\n- 정현준: 신규 카드 발급 심사 자동화 진행률 70%\n- 정성호: 고객 문의 응대 스크립트 개정안 작성 중\n- 김서연: 연체 고객 안내 문자 문구 법무 검토 요청 완료\n\n공유 사항\n정서현이 복귀하면 개인정보 처리방침 개정 내용을 팀 전체에 공유하기로 함.",
+    "hard_cases": [
+      "josa_attached"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정현준",
+        "start": 41,
+        "end": 44,
+        "person_id": "P014",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 46,
+        "end": 49,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 51,
+        "end": 54,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 59,
+        "end": 62,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정현준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P014",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 102,
+        "end": 105,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김서연",
+        "start": 132,
+        "end": 135,
+        "person_id": "P029",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 171,
+        "end": 174,
+        "person_id": "P005",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 41,
+        "end": 44
+      },
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 54
+      },
+      {
+        "label": "person",
+        "start": 59,
+        "end": 62
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 102,
+        "end": 105
+      },
+      {
+        "label": "person",
+        "start": 132,
+        "end": 135
+      },
+      {
+        "label": "person",
+        "start": 171,
+        "end": 174
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0064",
+    "doc_type": "고객정보변경",
+    "text": "고객 정보 변경 처리 내역\n처리일: 2026년 4월 7일\n처리자: 정성호 (고객센터)\n\n변경 요청 고객: 이재원\n본인 확인: 주민등록번호 730418-1313487 / 신분증 대조 완료\n\n변경 항목\n- 휴대전화: 010 0489 8331 → 010-0257-2658\n- 주소: 인천광역시 부평구 새봄로 11, 404호 → 경기도 수원시 영통구 누리길 115, 8층\n- 이메일: jw.lee77@example.net\n\n비고: 이전 연락처로 발송 예약된 안내 문자는 모두 취소함. 이재원은 결제일 변경도 원했으나 다음 달부터 적용 가능하다고 안내함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 37,
+        "end": 40,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이재원",
+        "start": 59,
+        "end": 62,
+        "person_id": "P062",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "730418-1313487",
+        "start": 77,
+        "end": 91,
+        "person_id": "P062"
+      },
+      {
+        "label": "phone_number",
+        "text": "010 0489 8331",
+        "start": 119,
+        "end": 132,
+        "person_id": "P062"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0257-2658",
+        "start": 135,
+        "end": 148,
+        "person_id": "P062"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 부평구 새봄로 11, 404호",
+        "start": 155,
+        "end": 177,
+        "person_id": "P062"
+      },
+      {
+        "label": "address",
+        "text": "경기도 수원시 영통구 누리길 115, 8층",
+        "start": 180,
+        "end": 203,
+        "person_id": "P062"
+      },
+      {
+        "label": "email",
+        "text": "jw.lee77@example.net",
+        "start": 211,
+        "end": 231,
+        "person_id": "P062"
+      },
+      {
+        "label": "person",
+        "text": "이재원",
+        "start": 267,
+        "end": 270,
+        "person_id": "P062",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 37,
+        "end": 40
+      },
+      {
+        "label": "person",
+        "start": 59,
+        "end": 62
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 77,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 119,
+        "end": 132
+      },
+      {
+        "label": "phone_number",
+        "start": 135,
+        "end": 148
+      },
+      {
+        "label": "address",
+        "start": 155,
+        "end": 177
+      },
+      {
+        "label": "address",
+        "start": 180,
+        "end": 203
+      },
+      {
+        "label": "email",
+        "start": 211,
+        "end": 231
+      },
+      {
+        "label": "person",
+        "start": 267,
+        "end": 270
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0065",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026-07-24 11:21\n상담원: 김은영\n\n이 승현 고객(010-0552-4961)이 기존 새봄 직장인 신용대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 50,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 sh.lee09@example.net로 발송함.\n이승현은 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "josa_attached",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 46,
+        "end": 49,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이 승현",
+        "start": 51,
+        "end": 55,
+        "person_id": "P059",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0552-4961",
+        "start": 59,
+        "end": 72,
+        "person_id": "P059"
+      },
+      {
+        "label": "email",
+        "text": "sh.lee09@example.net",
+        "start": 218,
+        "end": 238,
+        "person_id": "P059"
+      },
+      {
+        "label": "person",
+        "text": "이승현",
+        "start": 245,
+        "end": 248,
+        "person_id": "P059",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 51,
+        "end": 55
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 72
+      },
+      {
+        "label": "email",
+        "start": 218,
+        "end": 238
+      },
+      {
+        "label": "person",
+        "start": 245,
+        "end": 248
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0066",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-37722\n상담일시: 2026-05-23 17:59\n상담원: 김민준 (고객센터)\n\n고객명: 손하윤\n연락처: 010-0794-2240\n카드 상품: 다온 트래블 카드\n카드번호: 9410-6409-0974-3959\n\n상담 내용\n손하윤 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 770210-2428238 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(광주광역시 북구 하늬로 34, 801호)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 71,
+        "end": 74,
+        "person_id": "P066",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 88,
+        "end": 91,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0794-2240",
+        "start": 97,
+        "end": 110,
+        "person_id": "P048"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-6409-0974-3959",
+        "start": 134,
+        "end": 153,
+        "person_id": "P048"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 161,
+        "end": 164,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "770210-2428238",
+        "start": 205,
+        "end": 219,
+        "person_id": "P048"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 하늬로 34, 801호",
+        "start": 319,
+        "end": 340,
+        "person_id": "P048"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "person",
+        "start": 88,
+        "end": 91
+      },
+      {
+        "label": "phone_number",
+        "start": 97,
+        "end": 110
+      },
+      {
+        "label": "card_number",
+        "start": 134,
+        "end": 153
+      },
+      {
+        "label": "person",
+        "start": 161,
+        "end": 164
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 205,
+        "end": 219
+      },
+      {
+        "label": "address",
+        "start": 319,
+        "end": 340
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0067",
+    "doc_type": "업무메일",
+    "text": "제목: [새봄카드] 차세대 카드 시스템 테스트 일정 협의\n\n코드브릿지 손하은 책임님께,\n\n안녕하세요, 새봄카드 IT운영팀 최혜진입니다.\n지난 회의에서 말씀드린 통합 테스트 일정을 다음과 같이 제안드립니다.\n\n- 1차 테스트: 2026년 10월 24일\n- 2차 테스트: 2026-12-24\n\n테스트 계정은 보안 정책상 메일로 보내드릴 수 없어, 저희 정보보호팀 박하린 과장이 별도로 전달드릴 예정입니다.\n일정 확인 후 회신 부탁드리며, 급한 건은 제 휴대전화 010-0282-9512로 연락 주세요.\n\n최혜진 드림\nIT운영팀 | 02-3961-1452 | hj.choi34@saebomcard.example.com",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "손하은",
+        "start": 39,
+        "end": 42,
+        "person_id": "P036",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 68,
+        "end": 71,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박하린",
+        "start": 201,
+        "end": 204,
+        "person_id": "P025",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0282-9512",
+        "start": 256,
+        "end": 269,
+        "person_id": "P020"
+      },
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 280,
+        "end": 283,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "02-3961-1452",
+        "start": 295,
+        "end": 307,
+        "person_id": "P020"
+      },
+      {
+        "label": "email",
+        "text": "hj.choi34@saebomcard.example.com",
+        "start": 310,
+        "end": 342,
+        "person_id": "P020"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 39,
+        "end": 42
+      },
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 201,
+        "end": 204
+      },
+      {
+        "label": "phone_number",
+        "start": 256,
+        "end": 269
+      },
+      {
+        "label": "person",
+        "start": 280,
+        "end": 283
+      },
+      {
+        "label": "phone_number",
+        "start": 295,
+        "end": 307
+      },
+      {
+        "label": "email",
+        "start": 310,
+        "end": 342
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0068",
+    "doc_type": "용역계약서",
+    "text": "용역 계약서\n\n새봄카드(이하 \"갑\")과 코드브릿지(이하 \"을\")은 다음과 같이 용역 계약을 체결한다.\n\n제1조(목적) 본 계약은 갑의 개인정보 접속기록 점검에 관한 을의 용역 수행 조건을 정함을 목적으로 한다.\n제2조(계약 기간) 2026년 5월 7일부터 2026-02-04까지로 한다.\n제3조(계약 금액) 총 금 일억이천만원(부가가치세 별도)으로 한다.\n제4조(개인정보 보호) 을은 용역 수행 중 알게 된 고객 개인정보를 계약 목적 외에 이용하거나 제3자에게 제공하여서는 아니 된다.\n제5조(담당자)\n  갑: IT운영팀 최혜진 (02.3961.1452, hj.choi34@saebomcard.example.com)\n  을: 손하은 책임 (010-0288-0841, he.son44@codebridge.example.com)\n\n2026.11.24\n\n갑: 새봄카드 대표이사 김예준\n을: 코드브릿지 대표이사 허하은",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "최혜진",
+        "start": 292,
+        "end": 295,
+        "person_id": "P020",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "02.3961.1452",
+        "start": 297,
+        "end": 309,
+        "person_id": "P020"
+      },
+      {
+        "label": "email",
+        "text": "hj.choi34@saebomcard.example.com",
+        "start": 311,
+        "end": 343,
+        "person_id": "P020"
+      },
+      {
+        "label": "person",
+        "text": "손하은",
+        "start": 350,
+        "end": 353,
+        "person_id": "P036",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0288-0841",
+        "start": 358,
+        "end": 371,
+        "person_id": "P036"
+      },
+      {
+        "label": "email",
+        "text": "he.son44@codebridge.example.com",
+        "start": 373,
+        "end": 404,
+        "person_id": "P036"
+      },
+      {
+        "label": "person",
+        "text": "김예준",
+        "start": 432,
+        "end": 435,
+        "person_id": "P001",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허하은",
+        "start": 450,
+        "end": 453,
+        "person_id": "P035",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 292,
+        "end": 295
+      },
+      {
+        "label": "phone_number",
+        "start": 297,
+        "end": 309
+      },
+      {
+        "label": "email",
+        "start": 311,
+        "end": 343
+      },
+      {
+        "label": "person",
+        "start": 350,
+        "end": 353
+      },
+      {
+        "label": "phone_number",
+        "start": 358,
+        "end": 371
+      },
+      {
+        "label": "email",
+        "start": 373,
+        "end": 404
+      },
+      {
+        "label": "person",
+        "start": 432,
+        "end": 435
+      },
+      {
+        "label": "person",
+        "start": 450,
+        "end": 453
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0069",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n서준 씨, 안녕하세요.\n어제 접수된 민원 건(202679748476) 회신 초안 보내드립니다. 민원인 김수빈 고객 주소가 대전광역시 유성구 가람로 121, 108동 1203호로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 정성호 부장님께 바로 올려 주셔도 됩니다.\n\n최지영 드림",
+    "hard_cases": [
+      "given_only"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "서준",
+        "start": 27,
+        "end": 29,
+        "person_id": "P012",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "김수빈",
+        "start": 84,
+        "end": 87,
+        "person_id": "P049",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "대전광역시 유성구 가람로 121, 108동 1203호",
+        "start": 95,
+        "end": 124,
+        "person_id": "P049"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 171,
+        "end": 174,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 196,
+        "end": 199,
+        "person_id": "P011",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 124
+      },
+      {
+        "label": "person",
+        "start": 171,
+        "end": 174
+      },
+      {
+        "label": "person",
+        "start": 196,
+        "end": 199
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0070",
+    "doc_type": "회의록",
+    "text": "회의록\n회의명: 고객 개인정보 보호 강화 방안\n일시: 2026-12-10 15:33\n장소: 본사 12층 회의실\n참석자: 이윤서(팀장), 안소연, 정서현, 이수아(다솜콜솔루션)\n작성자: 안소연\n\n논의 내용\n1. 이 윤서 팀장이 지난 분기 추진 현황을 공유함.\n2. 다솜콜솔루션 이수아 책임은 시스템 이관 일정이 2주 지연될 수 있다고 보고함.\n3. 정서현은 고객 안내 문자 발송 시점을 이관 이후로 미루자고 제안함.\n\n결정 사항\n- 이관 일정 확정: 2026년 3월 27일\n- 고객 안내 문구는 안 대리가 초안을 작성하고 서현 씨가 검토\n\n다음 회의: 2026-01-04",
+    "hard_cases": [
+      "given_only",
+      "josa_attached",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 67,
+        "end": 70,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 76,
+        "end": 79,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 81,
+        "end": 84,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이수아",
+        "start": 86,
+        "end": 89,
+        "person_id": "P042",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 103,
+        "end": 106,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이 윤서",
+        "start": 117,
+        "end": 121,
+        "person_id": "P022",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "이수아",
+        "start": 154,
+        "end": 157,
+        "person_id": "P042",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 194,
+        "end": 197,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "서현",
+        "start": 291,
+        "end": 293,
+        "person_id": "P005",
+        "form": "given"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 67,
+        "end": 70
+      },
+      {
+        "label": "person",
+        "start": 76,
+        "end": 79
+      },
+      {
+        "label": "person",
+        "start": 81,
+        "end": 84
+      },
+      {
+        "label": "person",
+        "start": 86,
+        "end": 89
+      },
+      {
+        "label": "person",
+        "start": 103,
+        "end": 106
+      },
+      {
+        "label": "person",
+        "start": 117,
+        "end": 121
+      },
+      {
+        "label": "person",
+        "start": 154,
+        "end": 157
+      },
+      {
+        "label": "person",
+        "start": 194,
+        "end": 197
+      },
+      {
+        "label": "person",
+        "start": 291,
+        "end": 293
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0071",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n은영 씨, 안녕하세요.\n어제 접수된 민원 건(202688874216) 회신 초안 보내드립니다. 민원인 정지호 고객 주소가 광주광역시 북구 하늬로 148, 102동 1301호로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 최지영 팀장님께 바로 올려 주셔도 됩니다.\n\n김은정 드림",
+    "hard_cases": [
+      "given_only"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "은영",
+        "start": 27,
+        "end": 29,
+        "person_id": "P003",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "정지호",
+        "start": 84,
+        "end": 87,
+        "person_id": "P057",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 하늬로 148, 102동 1301호",
+        "start": 95,
+        "end": 123,
+        "person_id": "P057"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 170,
+        "end": 173,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김은정",
+        "start": 195,
+        "end": 198,
+        "person_id": "P031",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 123
+      },
+      {
+        "label": "person",
+        "start": 170,
+        "end": 173
+      },
+      {
+        "label": "person",
+        "start": 195,
+        "end": 198
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0072",
+    "doc_type": "용역계약서",
+    "text": "용역 계약서\n\n새봄카드(이하 \"갑\")과 코드브릿지(이하 \"을\")은 다음과 같이 용역 계약을 체결한다.\n\n제1조(목적) 본 계약은 갑의 고객 상담 시스템 고도화에 관한 을의 용역 수행 조건을 정함을 목적으로 한다.\n제2조(계약 기간) 2026년 9월 23일부터 2026-11-18까지로 한다.\n제3조(계약 금액) 총 금 일억이천만원(부가가치세 별도)으로 한다.\n제4조(개인정보 보호) 을은 용역 수행 중 알게 된 고객 개인정보를 계약 목적 외에 이용하거나 제3자에게 제공하여서는 아니 된다.\n제5조(담당자)\n  갑: IT운영팀 이준우 (02-3880-6413, jw.lee66@saebomcard.example.com)\n  을: 손하은 책임 (010.0288.0841, he.son44@codebridge.example.com)\n\n2026-01-27\n\n갑: 새봄카드 대표이사 김예준\n을: 코드브릿지 대표이사 허하은",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 294,
+        "end": 297,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "02-3880-6413",
+        "start": 299,
+        "end": 311,
+        "person_id": "P010"
+      },
+      {
+        "label": "email",
+        "text": "jw.lee66@saebomcard.example.com",
+        "start": 313,
+        "end": 344,
+        "person_id": "P010"
+      },
+      {
+        "label": "person",
+        "text": "손하은",
+        "start": 351,
+        "end": 354,
+        "person_id": "P036",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0288.0841",
+        "start": 359,
+        "end": 372,
+        "person_id": "P036"
+      },
+      {
+        "label": "email",
+        "text": "he.son44@codebridge.example.com",
+        "start": 374,
+        "end": 405,
+        "person_id": "P036"
+      },
+      {
+        "label": "person",
+        "text": "김예준",
+        "start": 433,
+        "end": 436,
+        "person_id": "P001",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허하은",
+        "start": 451,
+        "end": 454,
+        "person_id": "P035",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 294,
+        "end": 297
+      },
+      {
+        "label": "phone_number",
+        "start": 299,
+        "end": 311
+      },
+      {
+        "label": "email",
+        "start": 313,
+        "end": 344
+      },
+      {
+        "label": "person",
+        "start": 351,
+        "end": 354
+      },
+      {
+        "label": "phone_number",
+        "start": 359,
+        "end": 372
+      },
+      {
+        "label": "email",
+        "start": 374,
+        "end": 405
+      },
+      {
+        "label": "person",
+        "start": 433,
+        "end": 436
+      },
+      {
+        "label": "person",
+        "start": 451,
+        "end": 454
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0073",
+    "doc_type": "대출상담",
+    "text": "전화 상담 요약 - 대출 한도 조회\n일시: 2026년 10월 7일 11:02\n상담원: 김진우\n\n윤 선영 고객(010.0349.2063)이 기존 새봄 직장인 신용대출 이용 중 추가 한도를 문의함. 본인 확인 후 조회한 결과 추가 가능 한도는 25,000원으로 안내함.\n고객이 금리 인하 요구권도 함께 문의하여, 최근 소득이 늘었다면 증빙 제출 후 신청할 수 있다고 설명함. 신청서는 고객 이메일 sy.yoon07@example.net로 발송함.\n윤선영은 서류를 준비한 뒤 다시 연락하겠다고 함.",
+    "hard_cases": [
+      "josa_attached",
+      "phone_format_variant",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김진우",
+        "start": 48,
+        "end": 51,
+        "person_id": "P023",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "윤 선영",
+        "start": 53,
+        "end": 57,
+        "person_id": "P051",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010.0349.2063",
+        "start": 61,
+        "end": 74,
+        "person_id": "P051"
+      },
+      {
+        "label": "email",
+        "text": "sy.yoon07@example.net",
+        "start": 220,
+        "end": 241,
+        "person_id": "P051"
+      },
+      {
+        "label": "person",
+        "text": "윤선영",
+        "start": 248,
+        "end": 251,
+        "person_id": "P051",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 48,
+        "end": 51
+      },
+      {
+        "label": "person",
+        "start": 53,
+        "end": 57
+      },
+      {
+        "label": "phone_number",
+        "start": 61,
+        "end": 74
+      },
+      {
+        "label": "email",
+        "start": 220,
+        "end": 241
+      },
+      {
+        "label": "person",
+        "start": 248,
+        "end": 251
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0074",
+    "doc_type": "공지",
+    "text": "[공지] 정기 시스템 점검 안내\n당사 IT운영팀 | 2026년 3월 13일\n\n카드 승인 시스템 정기 점검으로 아래 시간 동안 일부 서비스 이용이 제한됩니다.\n- 점검 일시: 2026-12-08 02:00 ~ 05:00\n- 제한 서비스: 온라인 결제, 앱 카드 등록, 포인트 조회\n점검 중 문의는 고객센터 대표번호 1599-0000으로 해주시기 바랍니다.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0075",
+    "doc_type": "연체안내",
+    "text": "연체 안내 통화 기록\n통화일시: 2026-08-05 09:51\n담당: 채권관리팀 이상훈\n고객: 김수연 (01006434831)\n\n연체 내역: 카드 대금 5,000원, 연체 65일\n통화 내용: 김수연님은 이번 주 금요일까지 하늘빛은행 계좌(967-521126-64)에서 납부하겠다고 약속함. 약속일이 지나도 입금되지 않으면 등록 주소(부산광역시 수영구 별빛길 59, 15층)로 안내문을 발송할 예정임을 설명함.\n비고: 고객이 직장으로 연락하지 말 것을 요청함.",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 45,
+        "end": 48,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김수연",
+        "start": 53,
+        "end": 56,
+        "person_id": "P053",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01006434831",
+        "start": 58,
+        "end": 69,
+        "person_id": "P053"
+      },
+      {
+        "label": "person",
+        "text": "김수연",
+        "start": 107,
+        "end": 110,
+        "person_id": "P053",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "967-521126-64",
+        "start": 133,
+        "end": 146,
+        "person_id": "P053"
+      },
+      {
+        "label": "address",
+        "text": "부산광역시 수영구 별빛길 59, 15층",
+        "start": 186,
+        "end": 207,
+        "person_id": "P053"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 45,
+        "end": 48
+      },
+      {
+        "label": "person",
+        "start": 53,
+        "end": 56
+      },
+      {
+        "label": "phone_number",
+        "start": 58,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 107,
+        "end": 110
+      },
+      {
+        "label": "account_number",
+        "start": 133,
+        "end": 146
+      },
+      {
+        "label": "address",
+        "start": 186,
+        "end": 207
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0076",
+    "doc_type": "이상거래탐지",
+    "text": "[FDS] 이상거래 탐지 보고서\n보고일시: 2026년 6월 10일 18:32\n보고자: 리스크관리팀 허수아\n\n탐지 내용\n이승현 고객 명의 카드(9410-1277-9979-9555)로 새벽 03:54에 해외 가맹점 결제가 연속 3회 시도됨. 고객의 평소 결제 패턴(국내 위주, 건당 10만 원 이하)과 달라 자동 차단됨.\n\n조치 사항\n1. 카드 일시 정지\n2. 고객 휴대전화(010-0552-4961)로 확인 전화 → 이승현 고객 본인이 결제하지 않았다고 답변\n3. 부정사용 접수 후 카드 재발급 진행\n\n검토 의견\n최근 유사 패턴이 늘고 있어 고객센터 정성호 부장에게 탐지 규칙 보완을 요청함.",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 55,
+        "end": 58,
+        "person_id": "P008",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이승현",
+        "start": 66,
+        "end": 69,
+        "person_id": "P059",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-1277-9979-9555",
+        "start": 79,
+        "end": 98,
+        "person_id": "P059"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0552-4961",
+        "start": 208,
+        "end": 221,
+        "person_id": "P059"
+      },
+      {
+        "label": "person",
+        "text": "이승현",
+        "start": 232,
+        "end": 235,
+        "person_id": "P059",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 307,
+        "end": 310,
+        "person_id": "P002",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 55,
+        "end": 58
+      },
+      {
+        "label": "person",
+        "start": 66,
+        "end": 69
+      },
+      {
+        "label": "card_number",
+        "start": 79,
+        "end": 98
+      },
+      {
+        "label": "phone_number",
+        "start": 208,
+        "end": 221
+      },
+      {
+        "label": "person",
+        "start": 232,
+        "end": 235
+      },
+      {
+        "label": "person",
+        "start": 307,
+        "end": 310
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0077",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026년 9월 27일)\n\n담당: 고객센터 정 부장\n고객: 손 유진 님 / 010-0638-7486\n\n손유진님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-0576-6270-2894 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 서울특별시 성동구 온누리로 167, 3층으로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "손 유진",
+        "start": 47,
+        "end": 51,
+        "person_id": "P045",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0638-7486",
+        "start": 56,
+        "end": 69,
+        "person_id": "P045"
+      },
+      {
+        "label": "person",
+        "text": "손유진",
+        "start": 71,
+        "end": 74,
+        "person_id": "P045",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-0576-6270-2894",
+        "start": 173,
+        "end": 192,
+        "person_id": "P045"
+      },
+      {
+        "label": "address",
+        "text": "서울특별시 성동구 온누리로 167, 3층",
+        "start": 220,
+        "end": 242,
+        "person_id": "P045"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 47,
+        "end": 51
+      },
+      {
+        "label": "phone_number",
+        "start": 56,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "card_number",
+        "start": 173,
+        "end": 192
+      },
+      {
+        "label": "address",
+        "start": 220,
+        "end": 242
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0078",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n진우 씨, 안녕하세요.\n어제 접수된 민원 건(202666045988) 회신 초안 보내드립니다. 민원인 이선우 고객 주소가 인천광역시 부평구 새봄로 24, 101동 602호로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 정성호 부장님께 바로 올려 주셔도 됩니다.\n\n최지영 드림",
+    "hard_cases": [
+      "given_only"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "진우",
+        "start": 27,
+        "end": 29,
+        "person_id": "P023",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "이선우",
+        "start": 84,
+        "end": 87,
+        "person_id": "P055",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 부평구 새봄로 24, 101동 602호",
+        "start": 95,
+        "end": 122,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 169,
+        "end": 172,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 194,
+        "end": 197,
+        "person_id": "P011",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 122
+      },
+      {
+        "label": "person",
+        "start": 169,
+        "end": 172
+      },
+      {
+        "label": "person",
+        "start": 194,
+        "end": 197
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0079",
+    "doc_type": "공지",
+    "text": "모바일 앱 보안 업데이트 안내 (2026-12-02)\n\n모바일 앱 보안 모듈이 2026년 12월 12일에 업데이트됩니다. 업데이트 이후에는 이전 버전 앱에서 로그인이 제한되니 최신 버전으로 업데이트해 주세요.\n한결같이 안전한 서비스를 위해 노력하겠습니다. 점검 후 이상 없음이 확인되면 별도 안내는 드리지 않습니다.",
+    "hard_cases": [
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0080",
+    "doc_type": "인사발령",
+    "text": "인사 발령 공지\n새봄카드 인사팀 | 2026-04-03\n\n다음과 같이 인사 발령을 공지합니다.\n\n1. 승진\n- IT운영팀 이준우\n- 카드운영팀 강성호\n\n2. 전보\n- 전경희 팀장: 인사팀 → 리스크관리팀\n- 이상훈 과장: 채권관리팀 → 디지털전략팀\n\n발령일: 2026년 12월 24일\n문의: 인사팀 안소연 (내선 7480, sy.ahn20@saebomcard.example.com)",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 68,
+        "end": 71,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "강성호",
+        "start": 80,
+        "end": 83,
+        "person_id": "P024",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "전경희",
+        "start": 93,
+        "end": 96,
+        "person_id": "P026",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 116,
+        "end": 119,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "안소연",
+        "start": 167,
+        "end": 170,
+        "person_id": "P006",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sy.ahn20@saebomcard.example.com",
+        "start": 181,
+        "end": 212,
+        "person_id": "P006"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 80,
+        "end": 83
+      },
+      {
+        "label": "person",
+        "start": 93,
+        "end": 96
+      },
+      {
+        "label": "person",
+        "start": 116,
+        "end": 119
+      },
+      {
+        "label": "person",
+        "start": 167,
+        "end": 170
+      },
+      {
+        "label": "email",
+        "start": 181,
+        "end": 212
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0081",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026년 10월 20일)\n\n담당: 고객센터 정 부장\n고객: 김 수연 님 / 010-0643-4831\n\n김수연님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-1771-1592-1249 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 부산광역시 수영구 별빛길 59, 15층으로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김 수연",
+        "start": 48,
+        "end": 52,
+        "person_id": "P053",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0643-4831",
+        "start": 57,
+        "end": 70,
+        "person_id": "P053"
+      },
+      {
+        "label": "person",
+        "text": "김수연",
+        "start": 72,
+        "end": 75,
+        "person_id": "P053",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-1771-1592-1249",
+        "start": 174,
+        "end": 193,
+        "person_id": "P053"
+      },
+      {
+        "label": "address",
+        "text": "부산광역시 수영구 별빛길 59, 15층",
+        "start": 221,
+        "end": 242,
+        "person_id": "P053"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 48,
+        "end": 52
+      },
+      {
+        "label": "phone_number",
+        "start": 57,
+        "end": 70
+      },
+      {
+        "label": "person",
+        "start": 72,
+        "end": 75
+      },
+      {
+        "label": "card_number",
+        "start": 174,
+        "end": 193
+      },
+      {
+        "label": "address",
+        "start": 221,
+        "end": 242
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0082",
+    "doc_type": "업무메일",
+    "text": "제목: [새봄카드] 차세대 카드 시스템 테스트 일정 협의\n\n미르보안 권선영 매니저님께,\n\n안녕하세요, 새봄카드 IT운영팀 이준우입니다.\n지난 회의에서 말씀드린 통합 테스트 일정을 다음과 같이 제안드립니다.\n\n- 1차 테스트: 2026-08-04\n- 2차 테스트: 2026.06.16\n\n테스트 계정은 보안 정책상 메일로 보내드릴 수 없어, 저희 정보보호팀 정서현 대리가 별도로 전달드릴 예정입니다.\n일정 확인 후 회신 부탁드리며, 급한 건은 제 휴대전화 010-0343-4562로 연락 주세요.\n\n이준우 드림\nIT운영팀 | 02-3880-6413 | jw.lee66@saebomcard.example.com",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "권선영",
+        "start": 38,
+        "end": 41,
+        "person_id": "P040",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 68,
+        "end": 71,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 198,
+        "end": 201,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0343-4562",
+        "start": 253,
+        "end": 266,
+        "person_id": "P010"
+      },
+      {
+        "label": "person",
+        "text": "이준우",
+        "start": 277,
+        "end": 280,
+        "person_id": "P010",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "02-3880-6413",
+        "start": 292,
+        "end": 304,
+        "person_id": "P010"
+      },
+      {
+        "label": "email",
+        "text": "jw.lee66@saebomcard.example.com",
+        "start": 307,
+        "end": 338,
+        "person_id": "P010"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 38,
+        "end": 41
+      },
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "person",
+        "start": 198,
+        "end": 201
+      },
+      {
+        "label": "phone_number",
+        "start": 253,
+        "end": 266
+      },
+      {
+        "label": "person",
+        "start": 277,
+        "end": 280
+      },
+      {
+        "label": "phone_number",
+        "start": 292,
+        "end": 304
+      },
+      {
+        "label": "email",
+        "start": 307,
+        "end": 338
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0083",
+    "doc_type": "상품안내",
+    "text": "신상품 출시 안내: 한결 플러스 카드\n출시일: 2026-05-26\n\n한결 플러스 카드는 여행과 일상 소비를 함께 챙기는 카드입니다.\n주요 혜택\n- 해외 결제 수수료 면제\n- 대중교통 10% 할인\n- 연회비 없음\n\n봄날처럼 가벼운 소비 생활을 응원합니다. 자세한 내용은 고객센터 1599-0000으로 문의하세요.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "decoy_words",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0084",
+    "doc_type": "이상거래탐지",
+    "text": "[FDS] 이상거래 탐지 보고서\n보고일시: 2026년 10월 8일 10:47\n보고자: 리스크관리팀 김하준\n\n탐지 내용\n남궁다은 고객 명의 카드(9410-6853-6153-0511)로 새벽 01:51에 해외 가맹점 결제가 연속 3회 시도됨. 고객의 평소 결제 패턴(국내 위주, 건당 10만 원 이하)과 달라 자동 차단됨.\n\n조치 사항\n1. 카드 일시 정지\n2. 고객 휴대전화(01003937740)로 확인 전화 → 남궁다은 고객 본인이 결제하지 않았다고 답변\n3. 부정사용 접수 후 카드 재발급 진행\n\n검토 의견\n최근 유사 패턴이 늘고 있어 리스크관리팀 허수아 부장에게 탐지 규칙 보완을 요청함.",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김하준",
+        "start": 55,
+        "end": 58,
+        "person_id": "P018",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "남궁다은",
+        "start": 66,
+        "end": 70,
+        "person_id": "P064",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-6853-6153-0511",
+        "start": 80,
+        "end": 99,
+        "person_id": "P064"
+      },
+      {
+        "label": "phone_number",
+        "text": "01003937740",
+        "start": 209,
+        "end": 220,
+        "person_id": "P064"
+      },
+      {
+        "label": "person",
+        "text": "남궁다은",
+        "start": 231,
+        "end": 235,
+        "person_id": "P064",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "허수아",
+        "start": 309,
+        "end": 312,
+        "person_id": "P008",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 55,
+        "end": 58
+      },
+      {
+        "label": "person",
+        "start": 66,
+        "end": 70
+      },
+      {
+        "label": "card_number",
+        "start": 80,
+        "end": 99
+      },
+      {
+        "label": "phone_number",
+        "start": 209,
+        "end": 220
+      },
+      {
+        "label": "person",
+        "start": 231,
+        "end": 235
+      },
+      {
+        "label": "person",
+        "start": 309,
+        "end": 312
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0085",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026년 12월 3일)\n\n담당: 고객센터 김 대리\n고객: 정 우진 님 / 010-0675-9202\n\n정우진님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-4527-1111-6153 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 인천광역시 연수구 누리길 91, 103호로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정 우진",
+        "start": 47,
+        "end": 51,
+        "person_id": "P054",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0675-9202",
+        "start": 56,
+        "end": 69,
+        "person_id": "P054"
+      },
+      {
+        "label": "person",
+        "text": "정우진",
+        "start": 71,
+        "end": 74,
+        "person_id": "P054",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-4527-1111-6153",
+        "start": 173,
+        "end": 192,
+        "person_id": "P054"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 누리길 91, 103호",
+        "start": 220,
+        "end": 242,
+        "person_id": "P054"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 47,
+        "end": 51
+      },
+      {
+        "label": "phone_number",
+        "start": 56,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "card_number",
+        "start": 173,
+        "end": 192
+      },
+      {
+        "label": "address",
+        "start": 220,
+        "end": 242
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0086",
+    "doc_type": "업무메일",
+    "text": "제목: [새봄카드] 차세대 카드 시스템 테스트 일정 협의\n\n미르보안 강민재 책임님께,\n\n안녕하세요, 새봄카드 IT운영팀 박도윤입니다.\n지난 회의에서 말씀드린 통합 테스트 일정을 다음과 같이 제안드립니다.\n\n- 1차 테스트: 2026-05-20\n- 2차 테스트: 2026.06.02\n\n테스트 계정은 보안 정책상 메일로 보내드릴 수 없어, 저희 정보보호팀 박준서 사원이 별도로 전달드릴 예정입니다.\n일정 확인 후 회신 부탁드리며, 급한 건은 제 휴대전화 010-0719-2513으로 연락 주세요.\n\n박도윤 드림\nIT운영팀 | 0244837272 | dy.park05@saebomcard.example.com",
+    "hard_cases": [
+      "homonym",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "강민재",
+        "start": 38,
+        "end": 41,
+        "person_id": "P039",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 67,
+        "end": 70,
+        "person_id": "P071",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "박준서",
+        "start": 197,
+        "end": 200,
+        "person_id": "P015",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0719-2513",
+        "start": 252,
+        "end": 265,
+        "person_id": "P071"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 277,
+        "end": 280,
+        "person_id": "P071",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "0244837272",
+        "start": 292,
+        "end": 302,
+        "person_id": "P071"
+      },
+      {
+        "label": "email",
+        "text": "dy.park05@saebomcard.example.com",
+        "start": 305,
+        "end": 337,
+        "person_id": "P071"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 38,
+        "end": 41
+      },
+      {
+        "label": "person",
+        "start": 67,
+        "end": 70
+      },
+      {
+        "label": "person",
+        "start": 197,
+        "end": 200
+      },
+      {
+        "label": "phone_number",
+        "start": 252,
+        "end": 265
+      },
+      {
+        "label": "person",
+        "start": 277,
+        "end": 280
+      },
+      {
+        "label": "email",
+        "start": 305,
+        "end": 337
+      },
+      {
+        "label": "phone_number",
+        "start": 292,
+        "end": 302
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0087",
+    "doc_type": "민원현황",
+    "text": "2026년 3분기 민원 현황 요약\n- 총 접수: 1384건 (전 분기 대비 4% 감소)\n- 유형별: 결제 오류 309건, 연회비 55건, 개인정보 30건\n- 평균 처리 기간: 7일\n- 금융감독원 이첩 민원: 12건\n- 대표 민원번호 예시: 202672279909\n주요 개선 과제: 자동이체 배치 점검 주기 단축, 연락처 변경 반영 지연 해소\n작성: 고객보호팀",
+    "hard_cases": [
+      "decoy_numbers",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0088",
+    "doc_type": "연체안내",
+    "text": "연체 안내 통화 기록\n통화일시: 2026년 4월 9일 11:27\n담당: 채권관리팀 이상훈\n고객: 김수연 (01006434831)\n\n연체 내역: 카드 대금 3,000원, 연체 74일\n통화 내용: 김수연님은 이번 주 금요일까지 온누리은행 계좌(967-521126-64)에서 납부하겠다고 약속함. 약속일이 지나도 입금되지 않으면 등록 주소(부산광역시 수영구 별빛길 59, 15층)로 안내문을 발송할 예정임을 설명함.\n비고: 고객이 직장으로 연락하지 말 것을 요청함.",
+    "hard_cases": [
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "이상훈",
+        "start": 46,
+        "end": 49,
+        "person_id": "P009",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김수연",
+        "start": 54,
+        "end": 57,
+        "person_id": "P053",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01006434831",
+        "start": 59,
+        "end": 70,
+        "person_id": "P053"
+      },
+      {
+        "label": "person",
+        "text": "김수연",
+        "start": 108,
+        "end": 111,
+        "person_id": "P053",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "967-521126-64",
+        "start": 134,
+        "end": 147,
+        "person_id": "P053"
+      },
+      {
+        "label": "address",
+        "text": "부산광역시 수영구 별빛길 59, 15층",
+        "start": 187,
+        "end": 208,
+        "person_id": "P053"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 46,
+        "end": 49
+      },
+      {
+        "label": "person",
+        "start": 54,
+        "end": 57
+      },
+      {
+        "label": "phone_number",
+        "start": 59,
+        "end": 70
+      },
+      {
+        "label": "person",
+        "start": 108,
+        "end": 111
+      },
+      {
+        "label": "account_number",
+        "start": 134,
+        "end": 147
+      },
+      {
+        "label": "address",
+        "start": 187,
+        "end": 208
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0089",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026-06-09\n상담 채널: 영업점 방문 (강남지점)\n담당자: 김은영 대리 / 내선 5954\n\n1. 고객 정보\n- 성명: 손하윤\n- 주민등록번호: 770210-2428238\n- 휴대전화: 010-0794-2240\n- 주소: 광주광역시 북구 하늬로 34, 801호\n- 직업: 중소기업 사무직\n\n2. 상담 내용\n손하윤 고객은 새봄 사업자 운영자금 대출 상품으로 30,000원 대출을 문의함. 희망 기간은 24개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 고객센터 이윤서 팀장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 가람저축은행 816-409571-12",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김은영",
+        "start": 53,
+        "end": 56,
+        "person_id": "P003",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 86,
+        "end": 89,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "770210-2428238",
+        "start": 100,
+        "end": 114,
+        "person_id": "P048"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0794-2240",
+        "start": 123,
+        "end": 136,
+        "person_id": "P048"
+      },
+      {
+        "label": "address",
+        "text": "광주광역시 북구 하늬로 34, 801호",
+        "start": 143,
+        "end": 164,
+        "person_id": "P048"
+      },
+      {
+        "label": "person",
+        "text": "손하윤",
+        "start": 190,
+        "end": 193,
+        "person_id": "P048",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 293,
+        "end": 296,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "816-409571-12",
+        "start": 369,
+        "end": 382,
+        "person_id": "P048"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 53,
+        "end": 56
+      },
+      {
+        "label": "person",
+        "start": 86,
+        "end": 89
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 100,
+        "end": 114
+      },
+      {
+        "label": "phone_number",
+        "start": 123,
+        "end": 136
+      },
+      {
+        "label": "address",
+        "start": 143,
+        "end": 164
+      },
+      {
+        "label": "person",
+        "start": 190,
+        "end": 193
+      },
+      {
+        "label": "person",
+        "start": 293,
+        "end": 296
+      },
+      {
+        "label": "account_number",
+        "start": 369,
+        "end": 382
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0090",
+    "doc_type": "민원처리",
+    "text": "민원 처리 결과 보고\n민원번호: 202638556255\n접수일: 2026-04-09\n접수 경로: 금융감독원 이첩\n민원인: 김민준 (연락처 01001443268)\n처리 담당: 고객보호팀 최지영 팀장\n검토자: 전경희 팀장\n\n[민원 요지]\n민원인은 연회비가 사전 안내 없이 청구되었다고 주장하며 환불을 요구함.\n\n[사실 관계]\n연회비 청구 안내 문자는 2026-12-03에 발송되었으나, 민원인이 번호를 바꾸기 전의 연락처 010-0243-7310으로 발송된 것으로 확인됨. 변경된 번호 01001443268 반영이 시스템에서 지연된 사실이 있음.\n\n[처리 결과]\n연회비 전액 환불 및 사과 안내. 전경희 팀장의 승인 후 2026-09-21에 민원인에게 회신 완료.",
+    "hard_cases": [
+      "homonym",
+      "phone_format_variant"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 68,
+        "end": 71,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "01001443268",
+        "start": 77,
+        "end": 88,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 103,
+        "end": 106,
+        "person_id": "P011",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "전경희",
+        "start": 115,
+        "end": 118,
+        "person_id": "P026",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0243-7310",
+        "start": 234,
+        "end": 247,
+        "person_id": "P067"
+      },
+      {
+        "label": "phone_number",
+        "text": "01001443268",
+        "start": 270,
+        "end": 281,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "전경희",
+        "start": 332,
+        "end": 335,
+        "person_id": "P026",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 68,
+        "end": 71
+      },
+      {
+        "label": "phone_number",
+        "start": 77,
+        "end": 88
+      },
+      {
+        "label": "person",
+        "start": 103,
+        "end": 106
+      },
+      {
+        "label": "person",
+        "start": 115,
+        "end": 118
+      },
+      {
+        "label": "phone_number",
+        "start": 234,
+        "end": 247
+      },
+      {
+        "label": "phone_number",
+        "start": 270,
+        "end": 281
+      },
+      {
+        "label": "person",
+        "start": 332,
+        "end": 335
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0091",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026-09-21)\n\n담당: 고객센터 김 대리\n고객: 최 채원 님 / 010-0129-0753\n\n최채원님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-8091-3431-6113 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 인천광역시 연수구 온누리로 145, 302호로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "최 채원",
+        "start": 45,
+        "end": 49,
+        "person_id": "P046",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0129-0753",
+        "start": 54,
+        "end": 67,
+        "person_id": "P046"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 69,
+        "end": 72,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-8091-3431-6113",
+        "start": 171,
+        "end": 190,
+        "person_id": "P046"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 온누리로 145, 302호",
+        "start": 218,
+        "end": 242,
+        "person_id": "P046"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 45,
+        "end": 49
+      },
+      {
+        "label": "phone_number",
+        "start": 54,
+        "end": 67
+      },
+      {
+        "label": "person",
+        "start": 69,
+        "end": 72
+      },
+      {
+        "label": "card_number",
+        "start": 171,
+        "end": 190
+      },
+      {
+        "label": "address",
+        "start": 218,
+        "end": 242
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0092",
+    "doc_type": "민원현황",
+    "text": "2026년 3분기 민원 현황 요약\n- 총 접수: 1320건 (전 분기 대비 7% 감소)\n- 유형별: 결제 오류 364건, 연회비 153건, 개인정보 40건\n- 평균 처리 기간: 7일\n- 금융감독원 이첩 민원: 10건\n- 대표 민원번호 예시: 202649578072\n주요 개선 과제: 자동이체 배치 점검 주기 단축, 연락처 변경 반영 지연 해소\n작성: 고객보호팀",
+    "hard_cases": [
+      "decoy_numbers",
+      "no_pii"
+    ],
+    "gold": [],
+    "pred": [],
+    "errors": []
+  },
+  {
+    "id": "D0093",
+    "doc_type": "민원처리",
+    "text": "[고객 불만 접수] 자동이체 중복 출금\n접수번호 SB-2026-15337 / 2026-07-19\n\n고객 노성호님이 이번 달 카드 대금이 온누리은행 계좌(763-166287-91)에서 두 번 출금되었다고 항의함. 담당 정 부장이 거래 내역을 확인한 결과 새봄카드 배치 오류로 중복 출금된 것이 맞음.\n중복 출금액 30000,000원은 당일 환급 처리함. 노 성호 고객은 재발 방지 대책을 요청하였고, IT운영팀 박도윤 대리에게 원인 분석을 의뢰함.\n회신 방법: 이메일(sh.noh18@example.net)",
+    "hard_cases": [
+      "homonym",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "노성호",
+        "start": 58,
+        "end": 61,
+        "person_id": "P050",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "763-166287-91",
+        "start": 85,
+        "end": 98,
+        "person_id": "P050"
+      },
+      {
+        "label": "person",
+        "text": "노 성호",
+        "start": 197,
+        "end": 201,
+        "person_id": "P050",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "박도윤",
+        "start": 229,
+        "end": 232,
+        "person_id": "P071",
+        "form": "full"
+      },
+      {
+        "label": "email",
+        "text": "sh.noh18@example.net",
+        "start": 261,
+        "end": 281,
+        "person_id": "P050"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 58,
+        "end": 61
+      },
+      {
+        "label": "account_number",
+        "start": 85,
+        "end": 98
+      },
+      {
+        "label": "person",
+        "start": 197,
+        "end": 201
+      },
+      {
+        "label": "person",
+        "start": 229,
+        "end": 232
+      },
+      {
+        "label": "email",
+        "start": 261,
+        "end": 281
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0094",
+    "doc_type": "이상거래탐지",
+    "text": "이상거래 확인 통화 기록 - 2026-10-22\n담당: 허 수아\n대상: 오서연 / 010-0957-9616\n\n새벽 시간대 온새미 온라인몰에서 소액 결제가 반복되어 확인 전화를 드림. 오서연님은 해당 결제가 자녀의 게임 결제라고 답변하여 정상 거래로 처리함.\n고객 요청으로 온라인 결제 한도를 5,000원으로 낮춤.",
+    "hard_cases": [
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "허 수아",
+        "start": 31,
+        "end": 35,
+        "person_id": "P008",
+        "form": "spaced"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 40,
+        "end": 43,
+        "person_id": "P044",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0957-9616",
+        "start": 46,
+        "end": 59,
+        "person_id": "P044"
+      },
+      {
+        "label": "person",
+        "text": "오서연",
+        "start": 102,
+        "end": 105,
+        "person_id": "P044",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 31,
+        "end": 35
+      },
+      {
+        "label": "person",
+        "start": 40,
+        "end": 43
+      },
+      {
+        "label": "phone_number",
+        "start": 46,
+        "end": 59
+      },
+      {
+        "label": "person",
+        "start": 102,
+        "end": 105
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0095",
+    "doc_type": "카드분실상담",
+    "text": "[상담 기록] 카드 분실 신고 및 재발급\n접수번호: SB-2026-52856\n상담일시: 2026년 11월 22일 13:46\n상담원: 김서준 (고객센터)\n\n고객명: 김민준\n연락처: 010-0144-3268\n카드 상품: 다온 트래블 카드\n카드번호: 9410-2058-5277-2217\n\n상담 내용\n김민준 고객이 오늘 오전 지갑을 잃어버렸다며 카드 분실을 신고함. 주민등록번호 670410-1467898 및 등록 연락처로 본인 확인을 완료함. 분실 이후 승인 내역은 없는 것으로 확인됨.\n고객 요청에 따라 기존 카드는 즉시 사용 정지하고 재발급을 접수함. 재발급 카드는 등록 주소(서울특별시 강서구 새봄로 166, 15층)로 영업일 기준 5일 이내 배송 예정임을 안내함.\n\n처리 결과: 사용 정지 및 재발급 접수 완료\n특이사항: 없음",
+    "hard_cases": [
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "김서준",
+        "start": 74,
+        "end": 77,
+        "person_id": "P012",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 91,
+        "end": 94,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0144-3268",
+        "start": 100,
+        "end": 113,
+        "person_id": "P067"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-2058-5277-2217",
+        "start": 137,
+        "end": 156,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 164,
+        "end": 167,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "670410-1467898",
+        "start": 208,
+        "end": 222,
+        "person_id": "P067"
+      },
+      {
+        "label": "address",
+        "text": "서울특별시 강서구 새봄로 166, 15층",
+        "start": 322,
+        "end": 344,
+        "person_id": "P067"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 74,
+        "end": 77
+      },
+      {
+        "label": "person",
+        "start": 91,
+        "end": 94
+      },
+      {
+        "label": "phone_number",
+        "start": 100,
+        "end": 113
+      },
+      {
+        "label": "card_number",
+        "start": 137,
+        "end": 156
+      },
+      {
+        "label": "person",
+        "start": 164,
+        "end": 167
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 208,
+        "end": 222
+      },
+      {
+        "label": "address",
+        "start": 322,
+        "end": 344
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0096",
+    "doc_type": "업무메일",
+    "text": "제목: 개인정보 처리 위탁 점검 결과 공유\n\n정보보호팀 정서현입니다.\n데이터온시스템즈에 대한 상반기 개인정보 처리 위탁 점검 결과를 공유드립니다.\n\n1. 점검 일시: 2026-04-01\n2. 점검자: 정서현, 이서연\n3. 수탁사 담당자: 김영호 책임 (010-0668-3937, yh.kim63@dataon.example.com)\n4. 주요 지적 사항: 상담 녹취 파일 보관 기간 초과, 퇴사자 계정 미삭제 2건\n\n수탁사에는 2026년 12월 8일까지 개선 계획 제출을 요청했습니다. 관련 문의는 이 서연 과장에게 해주세요.",
+    "hard_cases": [
+      "homonym",
+      "spaced_name"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 31,
+        "end": 34,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "정서현",
+        "start": 112,
+        "end": 115,
+        "person_id": "P005",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이서연",
+        "start": 117,
+        "end": 120,
+        "person_id": "P068",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "김영호",
+        "start": 133,
+        "end": 136,
+        "person_id": "P033",
+        "form": "full"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0668-3937",
+        "start": 141,
+        "end": 154,
+        "person_id": "P033"
+      },
+      {
+        "label": "email",
+        "text": "yh.kim63@dataon.example.com",
+        "start": 156,
+        "end": 183,
+        "person_id": "P033"
+      },
+      {
+        "label": "person",
+        "text": "이 서연",
+        "start": 278,
+        "end": 282,
+        "person_id": "P068",
+        "form": "spaced"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 31,
+        "end": 34
+      },
+      {
+        "label": "person",
+        "start": 112,
+        "end": 115
+      },
+      {
+        "label": "person",
+        "start": 117,
+        "end": 120
+      },
+      {
+        "label": "person",
+        "start": 133,
+        "end": 136
+      },
+      {
+        "label": "phone_number",
+        "start": 141,
+        "end": 154
+      },
+      {
+        "label": "email",
+        "start": 156,
+        "end": 183
+      },
+      {
+        "label": "person",
+        "start": 278,
+        "end": 282
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0097",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n수아 씨, 안녕하세요.\n어제 접수된 민원 건(202616834659) 회신 초안 보내드립니다. 민원인 김민준 고객 주소가 서울특별시 강서구 새봄로 166, 15층으로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 정성호 부장님께 바로 올려 주셔도 됩니다.\n\n최지영 드림",
+    "hard_cases": [
+      "given_only",
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "수아",
+        "start": 27,
+        "end": 29,
+        "person_id": "P008",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "김민준",
+        "start": 84,
+        "end": 87,
+        "person_id": "P067",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "서울특별시 강서구 새봄로 166, 15층",
+        "start": 95,
+        "end": 117,
+        "person_id": "P067"
+      },
+      {
+        "label": "person",
+        "text": "정성호",
+        "start": 165,
+        "end": 168,
+        "person_id": "P002",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "최지영",
+        "start": 190,
+        "end": 193,
+        "person_id": "P011",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 117
+      },
+      {
+        "label": "person",
+        "start": 165,
+        "end": 168
+      },
+      {
+        "label": "person",
+        "start": 190,
+        "end": 193
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0098",
+    "doc_type": "대출상담",
+    "text": "[여신 상담 기록]\n상담일: 2026-06-04\n상담 채널: 영업점 방문 (여의도지점)\n담당자: 신승현 과장 / 내선 3415\n\n1. 고객 정보\n- 성명: 손유진\n- 주민등록번호: 710228-2430656\n- 휴대전화: 010-0638-7486\n- 주소: 서울특별시 성동구 온누리로 167, 3층\n- 직업: 중소기업 사무직\n\n2. 상담 내용\n손유진 고객은 카드론 상품으로 120,000원 대출을 문의함. 희망 기간은 60개월이며, 현재 다른 금융기관 대출은 없다고 진술함. 소득 증빙 서류 제출 후 고객센터 이윤서 팀장에게 심사를 요청하기로 함.\n\n3. 후속 조치\n- 서류 접수 후 심사 결과를 문자로 안내\n- 대출금 입금 계좌: 온누리은행 339-997594-62",
+    "hard_cases": [],
+    "gold": [
+      {
+        "label": "person",
+        "text": "신승현",
+        "start": 54,
+        "end": 57,
+        "person_id": "P013",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "손유진",
+        "start": 87,
+        "end": 90,
+        "person_id": "P045",
+        "form": "full"
+      },
+      {
+        "label": "resident_registration_number",
+        "text": "710228-2430656",
+        "start": 101,
+        "end": 115,
+        "person_id": "P045"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0638-7486",
+        "start": 124,
+        "end": 137,
+        "person_id": "P045"
+      },
+      {
+        "label": "address",
+        "text": "서울특별시 성동구 온누리로 167, 3층",
+        "start": 144,
+        "end": 166,
+        "person_id": "P045"
+      },
+      {
+        "label": "person",
+        "text": "손유진",
+        "start": 192,
+        "end": 195,
+        "person_id": "P045",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "이윤서",
+        "start": 285,
+        "end": 288,
+        "person_id": "P022",
+        "form": "full"
+      },
+      {
+        "label": "account_number",
+        "text": "339-997594-62",
+        "start": 360,
+        "end": 373,
+        "person_id": "P045"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 54,
+        "end": 57
+      },
+      {
+        "label": "person",
+        "start": 87,
+        "end": 90
+      },
+      {
+        "label": "resident_registration_number",
+        "start": 101,
+        "end": 115
+      },
+      {
+        "label": "phone_number",
+        "start": 124,
+        "end": 137
+      },
+      {
+        "label": "address",
+        "start": 144,
+        "end": 166
+      },
+      {
+        "label": "person",
+        "start": 192,
+        "end": 195
+      },
+      {
+        "label": "person",
+        "start": 285,
+        "end": 288
+      },
+      {
+        "label": "account_number",
+        "start": 360,
+        "end": 373
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0099",
+    "doc_type": "카드분실상담",
+    "text": "카드 재발급 상담 메모 (2026년 6월 27일)\n\n담당: 고객센터 김 대리\n고객: 최 채원 님 / 010-0129-0753\n\n최채원님께서 해외 출장 중 카드를 분실했다고 연락 주심. 현지에서 결제 시도 2건이 있었으나 모두 승인 거절된 상태로 확인. 본인 확인은 생년월일과 휴대전화 인증으로 진행.\n카드번호 9410-8091-3431-6113 분실 등록 후 정지 처리했고, 귀국 일정에 맞춰 인천광역시 연수구 온누리로 145, 302호로 재발급 카드를 보내기로 함.\n추가 문의는 고객센터 대표번호 1599-0000으로 안내함.",
+    "hard_cases": [
+      "decoy_company_phone",
+      "spaced_name",
+      "surname_title_unlabeled"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "최 채원",
+        "start": 47,
+        "end": 51,
+        "person_id": "P046",
+        "form": "spaced"
+      },
+      {
+        "label": "phone_number",
+        "text": "010-0129-0753",
+        "start": 56,
+        "end": 69,
+        "person_id": "P046"
+      },
+      {
+        "label": "person",
+        "text": "최채원",
+        "start": 71,
+        "end": 74,
+        "person_id": "P046",
+        "form": "full"
+      },
+      {
+        "label": "card_number",
+        "text": "9410-8091-3431-6113",
+        "start": 173,
+        "end": 192,
+        "person_id": "P046"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 연수구 온누리로 145, 302호",
+        "start": 220,
+        "end": 244,
+        "person_id": "P046"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 47,
+        "end": 51
+      },
+      {
+        "label": "phone_number",
+        "start": 56,
+        "end": 69
+      },
+      {
+        "label": "person",
+        "start": 71,
+        "end": 74
+      },
+      {
+        "label": "card_number",
+        "start": 173,
+        "end": 192
+      },
+      {
+        "label": "address",
+        "start": 220,
+        "end": 244
+      }
+    ],
+    "errors": []
+  },
+  {
+    "id": "D0100",
+    "doc_type": "업무메일",
+    "text": "제목: 고객 민원 회신 초안 검토 부탁드립니다\n\n민준 씨, 안녕하세요.\n어제 접수된 민원 건(202622109438) 회신 초안 보내드립니다. 민원인 이선우 고객 주소가 인천광역시 부평구 새봄로 24, 101동 602호로 되어 있는데, 지난달 변경 신청 내역과 다른 것 같아 확인 부탁드려요.\n검토 후 남성호 부장님께 바로 올려 주셔도 됩니다.\n\n조민준 드림",
+    "hard_cases": [
+      "given_only",
+      "homonym"
+    ],
+    "gold": [
+      {
+        "label": "person",
+        "text": "민준",
+        "start": 27,
+        "end": 29,
+        "person_id": "P066",
+        "form": "given"
+      },
+      {
+        "label": "person",
+        "text": "이선우",
+        "start": 84,
+        "end": 87,
+        "person_id": "P055",
+        "form": "full"
+      },
+      {
+        "label": "address",
+        "text": "인천광역시 부평구 새봄로 24, 101동 602호",
+        "start": 95,
+        "end": 122,
+        "person_id": "P055"
+      },
+      {
+        "label": "person",
+        "text": "남성호",
+        "start": 169,
+        "end": 172,
+        "person_id": "P027",
+        "form": "full"
+      },
+      {
+        "label": "person",
+        "text": "조민준",
+        "start": 194,
+        "end": 197,
+        "person_id": "P021",
+        "form": "full"
+      }
+    ],
+    "pred": [
+      {
+        "label": "person",
+        "start": 27,
+        "end": 29
+      },
+      {
+        "label": "person",
+        "start": 84,
+        "end": 87
+      },
+      {
+        "label": "address",
+        "start": 95,
+        "end": 122
+      },
+      {
+        "label": "person",
+        "start": 169,
+        "end": 172
+      },
+      {
+        "label": "person",
+        "start": 194,
+        "end": 197
+      }
+    ],
+    "errors": []
+  }
+]

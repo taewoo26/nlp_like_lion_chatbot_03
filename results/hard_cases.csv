@@ -1,0 +1,13 @@
+﻿item,n,hf_koelectra_dev
+josa_attached (person),121,0.9917355371900827
+spaced_name (person),111,1.0
+given_only (person),85,0.9882352941176471
+phone_format_variant (phone_number),37,1.0
+homonym (person),108,1.0
+[추가] person form=full,298,1.0
+[추가] person form=spaced,27,1.0
+[추가] person form=given,15,0.9333333333333333
+[추가] decoy_company_phone 오탐수,13,0
+[추가] decoy_words 오탐수,10,0
+[추가] decoy_numbers 오탐수,5,0
+[추가] no_pii 오탐수,18,0
