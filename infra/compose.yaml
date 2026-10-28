@@ -1,17 +1,17 @@
 services:
   db:
     image: pgvector/pgvector:0.8.7-pg16
-    environment:
-      POSTGRES_USER: chatbot
-      POSTGRES_PASSWORD: localdev
-      POSTGRES_DB: rag
+    container_name: rag_db
+    restart: unless-stopped
+    env_file:
+      - ../.env
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5433:5432"        # 포트는 직접 고정
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatbot -d rag"]
+      test: ["CMD-SHELL", "pg_isready -U chatbot -d rag"]   # 값 직접 입력
       interval: 5s
       timeout: 3s
       retries: 10
