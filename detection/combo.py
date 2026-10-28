@@ -146,4 +146,6 @@ class ComboDetector(BaseDetector):
         merged = [v2.tidy_name(text, s) for s in merged]                   # ⑤ '시우 드림', '박별이' 정리
         merged = v2.drop_name_words(merged)                                # ⑥ 조모상·배송지·채무자, 가려진 값
         merged = v2.propagate_names(text, merged)                          # ⑥-2 확정된 짧은 이름을 문서 전체에
-        return clean(text, merged)                                         # ⑦ 고객사 기준 (성+직함·대표번호·지점)
+        merged = v2.trim_address_zip(text, merged)                         # ⑦ 우편번호는 주소 span에서 제외
+        merged = v2.drop_non_account_identifiers(text, merged)             # ⑧ 사건·접수번호의 계좌 오탐 제외
+        return clean(text, merged)                                         # ⑨ 고객사 기준 (성+직함·대표번호·지점)

@@ -4,6 +4,7 @@
   - 번호류 미탐: 주민 30·계좌 32·카드 17·전화 25 (holdout) / 계좌 15·전화 12·카드 11·주민 6 (F)
     → 팀 정규식이 하이픈 정형 한 가지만 알고, split은 모델 번호를 버리기 때문
   - 주소: 약칭(서울·부산)·지번·쉼표 없는 동/호·아파트명·우편번호·(법정동) 미지원 → 경계·라벨 오류 46
+    새 기준 AD-05에서는 우편번호를 주소 span에서 제외한다.
   - 이름: '시우 드림'·'박별이 입원' 경계, '대상 고객: 전 찬' 미탐, 외국인 이름('마이클 존슨') 잘림
 
 원칙: 특정 값·문서에 맞춘 규칙이 아니라 '형식' 규칙만 쓴다.
@@ -11,8 +12,9 @@
 import re
 
 from detection.base import Span
+from detection.filters import PRODUCT_AFTER
 from detection.rule.kiwi_filter import _get_kiwi
-from detection.rule.names import NOT_GIVEN, SURNAME_PAT, TITLES, has_strong_cue
+from detection.rule.names import JOSA, NOT_GIVEN, SURNAME_PAT, TITLES, has_strong_cue
 
 D = r"(?<![\d])"           # 앞에 숫자 없음
 E = r"(?![\d])"            # 뒤에 숫자 없음
@@ -38,6 +40,11 @@ PHONE_PATTERNS = [
     re.compile(rf"(?<![\d+]){'01'}[016789]{SEP}?\d{{3,4}}{SEP}?\d{{4}}{E}"),
     re.compile(rf"(?<![\d+])0(?:2|[3-6][1-5]|70){SEP}?\d{{3,4}}{SEP}?\d{{4}}{E}"),
 ]
+# 하나의 전화번호가 줄바꿈으로 이어진 경우. 줄바꿈 앞의 구분자도 허용한다.
+SPLIT_MOBILE = re.compile(
+    r"(?<![\d+])01[016789](?:[-. ]?\r?\n[ \t]*|[-. ]?)\d{3,4}"
+    r"(?:[-. ]?\r?\n[ \t]*|[-. ]?)\d{4}(?!\d)"
+)
 
 # 계좌: 숫자 묶음 2~4개(하이픈·공백), 숫자 합계 10~14자리
 ACCOUNT_GROUPED = re.compile(r"(?<![\d+\-.:/])\d{2,7}(?:[-\s]\d{1,7}){1,3}(?![\d\-:/]|\.\d)")
@@ -47,6 +54,11 @@ ACCOUNT_PLAIN = re.compile(rf"(?<![\d+\-.])\d{{10,14}}(?![\d\-]|\.\d)")   # 문�
 ACCOUNT_CUE = re.compile(r"(?:계좌|은행|입금|출금|환불|예금|account|Account|ACCOUNT|송금|이체)[^\n]{0,15}$")
 BIZ_NO = re.compile(r"^\d{3}-\d{2}-\d{5}$")          # 사업자등록번호 (비대상)
 ID_CUE = re.compile(r"(?:주문|접수|승인|문서|민원|결재|관리|송장|운송장|회원|사원|식별|증권|계약|신청|가맹점)\s?(?:번호|No\.?|ID)\s*[:：]?\s*$")
+NON_ACCOUNT_ID = re.compile(
+    r"(?:사건|접수|민원|주문|승인|문서|결재|관리|송장|운송장|회원|사원|식별|계약|신청|가맹점)"
+    r"\s*(?:번호|No\.?|ID)\s*[:：]?", re.IGNORECASE
+)
+ACCOUNT_FIELD = re.compile(r"(?:계좌|은행|입금|출금|환불|예금|송금|이체|account)", re.IGNORECASE)
 
 # ---------------------------------------------------------------- 주소
 SIDO = (r"(?:서울특별시|서울시|서울|부산광역시|부산시|부산|대구광역시|대구시|대구|인천광역시|인천시|인천|"
@@ -73,13 +85,19 @@ NAME_CUE = re.compile(
     r"담당자|작성자|접수자|대상 고객|Full Name|Name)(?:\([^)\n]{1,6}\))?\s*[:：]\s*"
 )
 CUE_VALUE = re.compile(rf"(?:{SURNAME_PAT})(?:\s[가-힣]{{1,2}}|[가-힣]{{1,3}})(?![가-힣])")
+EXPLICIT_NAME_FIELD = re.compile(r"(?:고객명|고객 성명|성명|이름|성함)(?:\([^)\n]{1,6}\))?\s*[:：]\s*$")
+FIELD_GIVEN = re.compile(r"[가-힣]{2,3}(?![가-힣])")
+GIVEN_SSI_PARTICLE = re.compile(rf"(?<![가-힣])([가-힣]{{2}})(?=\s?씨{JOSA}(?![가-힣]))")
+EMPTY_NAME_VALUES = {"전체", "미상", "미정", "없음", "불명", "비공개"}
 KIN_EVENTS = {"조모상", "조부상", "부친상", "모친상", "장인상", "장모상", "빙부상", "빙모상",
               "시부상", "시모상", "본인상", "배우자상", "형제상", "자매상", "자녀상", "외조모상", "외조부상"}
 FORM_LABELS = {"고객명", "성명", "이름", "성함", "성함이", "배송지", "수령지", "청구지", "소명자", "신청인", "수취인",
                "예금주", "보정자", "담당자", "대상", "직통", "사번", "동호수", "반송일자", "정산월", "신청건"}
 ROLE_WORDS = {"채무자", "채권자", "피보험자", "계약자", "보증인", "주회원", "가족회원", "본인회원", "가맹점",
-              "대리인", "신청인", "민원인", "수취인", "예금주", "고객", "회원"}
+              "대리인", "신청인", "민원인", "수취인", "예금주", "고객", "회원", "임직원"}
 NAME_CUE_END = re.compile(NAME_CUE.pattern + "$")
+PERSON_BEFORE = re.compile(r"(?:고객|신청인|담당자|민원인|예금주)\s*[:：]?\s*$")
+ROUTE_FIELD = re.compile(r"(?m)^[ \t]*접수[ \t]*경로[ \t]*[:：]")
 HONOR_TAIL = re.compile(r"(?:\s?(?:드림|올림|고객님|님|씨))+$")
 
 
@@ -106,6 +124,9 @@ def extra_spans(text):
     for pat in (CARD15, CARD16):
         for m in pat.finditer(text):
             _add(spans, m.start(), m.end(), "card_number", text)
+    for m in SPLIT_MOBILE.finditer(text):
+        if "\n" in m.group() and 10 <= _digits(m.group()) <= 11:
+            _add(spans, m.start(), m.end(), "phone_number", text)
     for pat in PHONE_PATTERNS:
         for m in pat.finditer(text):
             if 9 <= _digits(m.group()) <= 15:
@@ -125,9 +146,13 @@ def extra_spans(text):
         _add(spans, m.start(), m.end(), "address", text)
     for cue in NAME_CUE.finditer(text):
         m = CUE_VALUE.match(text, cue.end())
+        if not m and EXPLICIT_NAME_FIELD.fullmatch(cue.group()):
+            m = FIELD_GIVEN.match(text, cue.end())
         if not m:
             continue
         val = m.group()
+        if val in EMPTY_NAME_VALUES or val in FORM_LABELS or val in ROLE_WORDS:
+            continue
         given = val[1:].strip() if not val.startswith(("남궁", "황보", "제갈", "선우", "독고", "사공", "서문")) else val[2:].strip()
         if given in NOT_GIVEN or re.fullmatch(TITLES, given) or len(val.replace(" ", "")) < 2:
             continue
@@ -136,7 +161,22 @@ def extra_spans(text):
             if toks:
                 continue
         _add(spans, m.start(), m.end(), "person", text)
+    for m in GIVEN_SSI_PARTICLE.finditer(text):
+        _add(spans, m.start(1), m.end(1), "person", text)
     return spans
+
+
+def trim_address_zip(text, spans):
+    """주소 앞 우편번호는 가명 대상 span에서 제외한다 (AD-05)."""
+    out = []
+    for s in spans:
+        if s.label == "address":
+            prefix = re.match(r"\(\d{5}\)[ \t]*", s.text)
+            if prefix and prefix.end() < len(s.text):
+                s = Span(s.start + prefix.end(), s.end, s.label,
+                         text[s.start + prefix.end():s.end])
+        out.append(s)
+    return out
 
 
 def merge_extra(rule_spans, extra):
@@ -149,6 +189,31 @@ def merge_extra(rule_spans, extra):
         elif all(e.start <= o.start and o.end <= e.end for o in over) and (e.end - e.start) > max(o.end - o.start for o in over):
             spans = [o for o in spans if o not in over] + [e]
     return sorted(spans, key=lambda s: (s.start, s.end))
+
+
+def is_non_account_identifier(text, span):
+    """같은 줄에서 번호 바로 앞의 가장 최근 필드가 계좌인지 다른 식별번호인지 구분한다."""
+    line_start = text.rfind("\n", 0, span.start) + 1
+    prefix = text[line_start:span.start]
+    ids = list(NON_ACCOUNT_ID.finditer(prefix))
+    if not ids:
+        return False
+    accounts = list(ACCOUNT_FIELD.finditer(prefix))
+    return ids[-1].start() > (accounts[-1].start() if accounts else -1)
+
+
+def drop_non_account_identifiers(text, spans):
+    return [s for s in spans if s.label != "account_number" or not is_non_account_identifier(text, s)]
+
+
+def _name_context_non_person(text, span):
+    before = text[max(0, span.start - 30):span.start]
+    if has_strong_cue(text, span) or NAME_CUE_END.search(before) or PERSON_BEFORE.search(before):
+        return False
+    if PRODUCT_AFTER.match(text, span.end):
+        return True
+    line_start = text.rfind("\n", 0, span.start) + 1
+    return ROUTE_FIELD.match(text, line_start) is not None
 
 
 # ---------------------------------------------------------------- 모델 결과 거르기 (가볍게)
@@ -167,6 +232,15 @@ def _doc_view(text, s):
     return [t for t in _get_kiwi().tokenize(text) if t.start < s.end and s.start < t.start + t.len]
 
 
+def _ends_inside_token(text, s):
+    next_char = text[s.end:s.end + 1]
+    if next_char and next_char in "이가은는을를와과도에의랑아야":
+        return False                                  # 이름 뒤 조사·호격은 Kiwi가 한 명사로 합칠 수 있음
+    line_start = text.rfind("\n", 0, s.start) + 1
+    end = s.end - line_start
+    return any(t.start < end < t.start + t.len for t in _line_view(text, s))
+
+
 def filter_model_v2(text, spans):
     """모델 결과 중 모양이 확실히 틀린 것만 뺀다 (재현율 우선 — split_clean보다 훨씬 느슨)."""
     out = []
@@ -180,6 +254,8 @@ def filter_model_v2(text, spans):
                 continue
             if s.label == "account_number" and BIZ_NO.match(s.text):
                 continue
+            if s.label == "account_number" and is_non_account_identifier(text, s):
+                continue
             if s.label == "resident_registration_number" and not RRN.fullmatch(s.text):
                 continue                                        # 1234567890123 (날짜 아님) → 주민번호 아님
         elif s.label == "address":
@@ -188,6 +264,10 @@ def filter_model_v2(text, spans):
         elif s.label == "person":
             s = tidy_name(text, s)                              # '시우 드림'·'승현아'·'로운이' → 이름만 남기고 판단
             plain = s.text.replace(" ", "")
+            if _name_context_non_person(text, s):
+                continue                                        # 상품명·접수 경로의 일반어
+            if _ends_inside_token(text, s):
+                continue                                        # 미수신의 '미수'처럼 한 형태소 내부에서 끝남
             if s.start > 0 and re.match(r"[가-힣]", text[s.start - 1]):
                 continue                                        # 미르보안 → '보안'
             cue = has_strong_cue(text, s) or re.match(r"\s?(?:님|씨)", text[s.end:s.end + 2])
@@ -284,7 +364,11 @@ def tidy_name(text, s):
         particle = ((last in "은이을과아" and _batchim(prev)) or (last in "는가를와야" and not _batchim(prev))
                     or last in "에의")                    # 아·야 = 부르는 말 (지영아, 윤서야)
         if particle and re.match(rf"\s*(?:고객|님|씨|{TITLES})", text[end:end + 6]):
-            break                                       # '이은아 고객'·'박별이 대리' → 이름의 일부로 둠
+            view = _line_view(text, Span(start, end, "person", core))
+            separate_josa = any(t.start + t.len == end - (text.rfind("\n", 0, start) + 1)
+                                and t.tag.startswith("J") and t.form == last for t in view)
+            if not separate_josa:
+                break                                   # '이은아 고객'·'박별이 대리' → 이름의 일부로 둠
         if particle and (not re.match(r"[가-힣]", nxt) or (last == "에" and nxt == "게")
                          or (last == "이" and nxt in JOSA_START + "고며다라지었")):   # 서현이가·안이고요
             end -= 1

@@ -1,6 +1,9 @@
 # 조합 탐지기 사용 안내
 
-**목적:** 규칙(rule_kiwi)과 토큰 분류 모델을 결합한 탐지기의 설치·사용·평가 방법만 관리합니다. 판정 기준·dev/test 결과는 [평가 보고서](탐지%20모델%20코드%20최종%20보고서.md), holdout 결과는 [holdout 평가 보고서](holdout%20평가%20보고서.md)를 봅니다. 모델 파일과 평가 데이터는 별도로 준비합니다.
+**현재 사용 후보 (2026-10-28):** 팀원 개선 코드 기반 `koelectra_post_kiwi_split_v2`가 유력 후보다. KJH 통합 기준 커밋은 `95a2cb9`이며 현재 v2에는 사용자 임시 기준을 반영한 로컬 변경이 있다. 실행 시 `--detector koelectra_post_kiwi_split_v2`를 명시한다. 아래 기존 `koelectra_post_kiwi_split` 예제는 정하 기존 기준선 실행이며 v2를 자동 적용하지 않는다. `split_clean`은 팀원 강한 필터 비교안이다. 정책별 결과·정답 버전·미결정 항목은 [평가 보고서](탐지%20모델%20코드%20최종%20보고서.md#new-standard)를 따른다.
+
+
+**목적:** 규칙(rule_kiwi)과 토큰 분류 모델을 결합한 탐지기의 설치·사용·평가 방법만 관리합니다. 판정 기준·dev/test 결과는 [평가 보고서](탐지%20모델%20코드%20최종%20보고서.md), holdout 결과는 [평가 보고서의 기존 holdout 분석](%ED%83%90%EC%A7%80%20%EB%AA%A8%EB%8D%B8%20%EC%BD%94%EB%93%9C%20%EC%B5%9C%EC%A2%85%20%EB%B3%B4%EA%B3%A0%EC%84%9C.md#holdout-history)를 봅니다. 모델 파일과 평가 데이터는 별도로 준비합니다.
 
 ## 설치와 실행
 
@@ -63,4 +66,4 @@ python -m eval.show_summary --dir results/team_dev_v1
 | `tests/` | 조합 정책·모델 어댑터 단위 테스트 |
 | `requirements.txt`, `requirements-dev.txt` | 실행 의존성·테스트 의존성 |
 
-모델별 설정은 [토큰 분류 모델 안내](../detection/token_cls/README.md), 초기 후보 비교는 [조합 비교표](detector_comparison.md)를 참고합니다. 예측·채점 결과는 `results/`, 모델은 `models/`, 평가 데이터는 `data/`에 저장됩니다. 이 폴더들은 Git에 포함되지 않으므로 새 환경에서는 별도로 준비하거나 생성합니다.
+모델별 설정은 [토큰 분류 모델 안내](../detection/token_cls/README.md), 초기 후보 비교는 [조합 비교표](%ED%83%90%EC%A7%80%20%EB%AA%A8%EB%8D%B8%20%EC%BD%94%EB%93%9C%20%EC%B5%9C%EC%A2%85%20%EB%B3%B4%EA%B3%A0%EC%84%9C.md#initial-comparison)를 참고합니다. 예측·채점 결과는 `results/`, 모델은 `models/`, 평가 데이터는 `data/`에 저장됩니다. 이 폴더들은 Git에 포함되지 않으므로 새 환경에서는 별도로 준비하거나 생성합니다.
