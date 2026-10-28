@@ -14,7 +14,9 @@ import time
 from pathlib import Path
 
 COMBO_MODELS = ("koelectra", "koelectra_post", "veil", "moai")
-COMBO_NAMES = [f"{m}_kiwi{suffix}" for m in COMBO_MODELS for suffix in ("", "_split", "_split_clean", "_split_v2")]
+COMBO_NAMES = [f"{m}_kiwi{suffix}" for m in COMBO_MODELS for suffix in ("", "_split", "_split_clean", "_split_v2", "_split_v3")]
+
+
 def detect_with_retry(det, text):
     """LLM의 속도 제한만 최대 3회 재시도한다. 대기 시간도 ms에 포함된다."""
     if det.name != "llm":

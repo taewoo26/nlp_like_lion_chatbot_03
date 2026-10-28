@@ -10,11 +10,18 @@
 원칙: 특정 값·문서에 맞춘 규칙이 아니라 '형식' 규칙만 쓴다.
 """
 import re
+from functools import lru_cache
 
 from detection.base import Span
 from detection.filters import PRODUCT_AFTER
 from detection.rule.kiwi_filter import _get_kiwi
 from detection.rule.names import JOSA, NOT_GIVEN, SURNAME_PAT, TITLES, has_strong_cue
+
+@lru_cache(maxsize=512)
+def _tokenize(text):
+    """Kiwi 분석 결과를 같은 글(문서·줄)마다 한 번만 계산해서 재사용 (속도 개선, 결과는 동일)."""
+    return tuple(_get_kiwi().tokenize(text))
+
 
 D = r"(?<![\d])"           # 앞에 숫자 없음
 E = r"(?![\d])"            # 뒤에 숫자 없음
@@ -66,8 +73,7 @@ SIDO = (r"(?:서울특별시|서울시|서울|부산광역시|부산시|부산|�
         r"경기도|경기|강원특별자치도|강원도|강원|충청북도|충북|충청남도|충남|전북특별자치도|전라북도|전북|"
         r"전라남도|전남|경상북도|경북|경상남도|경남|제주특별자치도|제주도|제주)")
 ADDRESS = re.compile(
-    r"(?:\(\d{5}\)\s?)?"                                         # (05299) 우편번호
-    rf"(?<![가-힣]){SIDO}"
+    rf"(?<![가-힣]){SIDO}"                                         # 우편번호는 span에서 제외 (AD-05)
     r"(?:\s[가-힣]+(?:시|군|구)){1,3}"                            # 성남시 분당구
     r"(?:"
     r"(?:\s[가-힣]+(?:읍|면))?\s[가-힣0-9]+(?:로|길)(?:\s?\d+번?길)?\s\d+(?:-\d+)?"   # 도로명 + 건물번호
@@ -116,22 +122,73 @@ def _add(spans, s, e, label, text):
     spans.append(new)
 
 
+# ---------------------------------------------------------------- 정규화 (COM-04·COM-07·PH-09·PH-10)
+FULLWIDTH = {chr(0xFF10 + i): str(i) for i in range(10)}
+FULLWIDTH.update({"－": "-", "．": ".", "（": "(", "）": ")", "＋": "+", "　": " ", "＠": "@",
+                  "–": "-", "—": "-", "‐": "-", "‑": "-", "ㅡ": "-"})
+KOR_DIGIT = {"공": "0", "영": "0", "일": "1", "이": "2", "삼": "3", "사": "4", "오": "5", "육": "6", "칠": "7", "팔": "8", "구": "9"}
+KOR_DIGIT_RUN = re.compile(r"[공영일이삼사오육칠팔구](?:[\s\-]?[공영일이삼사오육칠팔구]){8,}")
+OCR_TOKEN = re.compile(r"[0-9OolI][0-9OolI\-.]*[0-9OolI]")
+
+
+def normalize(text):
+    """규칙 탐지용 정규화. 글자 수를 바꾸지 않아서 위치가 원문과 그대로 맞는다.
+    - 전각 숫자·기호, 여러 종류의 하이픈 → 반각
+    - 한글 숫자 9자리 이상 연속(공일공 일이삼사 오육칠팔) → 숫자
+    - 숫자 덩어리 안에 섞인 OCR 혼동 글자(O·o → 0, l·I → 1) → 숫자 (숫자 6개 이상, 글자가 숫자의 절반 이하)"""
+    chars = [FULLWIDTH.get(c, c) for c in text]
+    t = "".join(chars)
+    for m in KOR_DIGIT_RUN.finditer(t):
+        for i in range(m.start(), m.end()):
+            chars[i] = KOR_DIGIT.get(chars[i], chars[i])
+    t = "".join(chars)
+    for m in OCR_TOKEN.finditer(t):                     # 공백 없이 붙은 한 덩어리 안에서만 (O1O-0l23-4567)
+        seg = m.group()
+        n_dig = sum(c.isdigit() for c in seg)
+        n_let = sum(c in "OolI" for c in seg)
+        if n_let and n_dig >= 6 and n_let * 2 <= n_dig:
+            for i in range(m.start(), m.end()):
+                chars[i] = {"O": "0", "o": "0", "l": "1", "I": "1"}.get(chars[i], chars[i])
+    return "".join(chars)
+
+
+# 상세주소만 (AD-06): 110동 905호 / 푸른마을아파트 905호 / 해든빌라 3동 201호
+ADDRESS_DETAIL = re.compile(
+    r"(?<![가-힣0-9])(?:[가-힣A-Za-z0-9]+(?:아파트|빌라|오피스텔|맨션|타워)\s?)?(?:[A-Za-z0-9]{1,4}동\s?\d{1,4}호"
+    r"|(?<=아파트)\s?\d{1,4}호|(?<=빌라)\s?\d{1,4}호|(?<=오피스텔)\s?\d{1,4}호)")
+ADDRESS_DETAIL2 = re.compile(r"(?<![가-힣0-9])[가-힣A-Za-z0-9]+(?:아파트|빌라|오피스텔|맨션)\s?(?:\d{1,4}동\s?)?\d{1,4}호")
+# 회피 표기 이메일 (EM-07): hong(at)example.com / hong at example dot com / hong 골뱅이 example 닷컴
+EMAIL_AT = re.compile(
+    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+\s?(?:\(at\)|\[at\]|\sat\s|\s?골뱅이\s?)\s?[A-Za-z0-9-]+"
+    r"(?:\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?닷\s?)\s?(?:[A-Za-z0-9-]+|컴|넷))*"
+    r"\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?닷\s?)\s?(?:com|net|org|kr|co|컴|넷)\b")
+# 운전면허번호 (처리: 삭제) — 12-34-567890-12 / 서울 12-345678-90. 7개 라벨 밖이라 채점(P/R)에는 들어가지 않음
+DRIVER = re.compile(r"(?<![\d-])(?:\d{2}-\d{2}-\d{6}-\d{2}"
+                    r"|(?:서울|부산|경기|강원|충북|충남|전북|전남|경북|경남|제주|대구|인천|광주|대전|울산)\s?\d{2}-\d{6}-\d{2})(?![\d-])")
+DRIVER_CUE = re.compile(r"(?:운전\s?면허|면허)[^\n]{0,10}$")   # 지역명 없는 12-34-567890-12 형식은 '면허' 문맥이 있을 때만
+
+
 def extra_spans(text):
-    """보강 규칙으로 찾은 구간 (순서: 주민 → 카드 → 전화 → 계좌 → 주소 → 항목명 뒤 이름)."""
+    """보강 규칙으로 찾은 구간 (순서: 운전면허 → 주민 → 카드 → 전화 → 계좌 → 주소 → 이메일 회피 표기 → 항목명 뒤 이름).
+    번호 규칙은 정규화한 글(norm)에서 찾고, 결과 글자는 원문(text)에서 가져온다."""
     spans = []
-    for m in RRN.finditer(text):
+    norm = normalize(text)
+    for m in DRIVER.finditer(norm):
+        if not m.group()[0].isdigit() or DRIVER_CUE.search(norm[max(0, m.start() - 15):m.start()]):
+            _add(spans, m.start(), m.end(), "driver_license", text)
+    for m in RRN.finditer(norm):
         _add(spans, m.start(), m.end(), "resident_registration_number", text)
     for pat in (CARD15, CARD16):
-        for m in pat.finditer(text):
+        for m in pat.finditer(norm):
             _add(spans, m.start(), m.end(), "card_number", text)
     for m in SPLIT_MOBILE.finditer(text):
         if "\n" in m.group() and 10 <= _digits(m.group()) <= 11:
             _add(spans, m.start(), m.end(), "phone_number", text)
     for pat in PHONE_PATTERNS:
-        for m in pat.finditer(text):
+        for m in pat.finditer(norm):
             if 9 <= _digits(m.group()) <= 15:
                 _add(spans, m.start(), m.end(), "phone_number", text)
-    for m in ACCOUNT_GROUPED.finditer(text):
+    for m in ACCOUNT_GROUPED.finditer(norm):
         g = m.group().strip()
         if not 10 <= _digits(g) <= 14 or BIZ_NO.match(g) or DATE_START.match(g) \
                 or ID_CUE.search(text[max(0, m.start() - 12):m.start()]):
@@ -139,11 +196,16 @@ def extra_spans(text):
         if (" " in g or len(re.split(r"[-\s]", g)) == 2) and not ACCOUNT_CUE.search(text[max(0, m.start() - 25):m.start()]):
             continue                                     # 공백 구분·2덩어리(2026-999147)는 계좌 문맥이 있을 때만
         _add(spans, m.start(), m.start() + len(g), "account_number", text)
-    for m in ACCOUNT_PLAIN.finditer(text):
+    for m in ACCOUNT_PLAIN.finditer(norm):
         if ACCOUNT_CUE.search(text[max(0, m.start() - 25):m.start()]):
             _add(spans, m.start(), m.end(), "account_number", text)
-    for m in ADDRESS.finditer(text):
+    for m in ADDRESS.finditer(norm):
         _add(spans, m.start(), m.end(), "address", text)
+    for pat in (ADDRESS_DETAIL2, ADDRESS_DETAIL):                 # 상세주소만 (AD-06)
+        for m in pat.finditer(norm):
+            _add(spans, m.start(), m.end(), "address", text)
+    for m in EMAIL_AT.finditer(norm):                             # hong(at)example.com (EM-07)
+        _add(spans, m.start(), m.end(), "email", text)
     for cue in NAME_CUE.finditer(text):
         m = CUE_VALUE.match(text, cue.end())
         if not m and EXPLICIT_NAME_FIELD.fullmatch(cue.group()):
@@ -157,7 +219,7 @@ def extra_spans(text):
         if given in NOT_GIVEN or re.fullmatch(TITLES, given) or len(val.replace(" ", "")) < 2:
             continue
         if " " in val:   # '전 직원'처럼 띄운 뒤가 일반명사면 제외 ('전 찬'은 통과)
-            toks = [t for t in _get_kiwi().tokenize(given) if t.tag == "NNG" and t.len >= 2]
+            toks = [t for t in _tokenize(given) if t.tag == "NNG" and t.len >= 2]
             if toks:
                 continue
         _add(spans, m.start(), m.end(), "person", text)
@@ -225,11 +287,11 @@ def _line_view(text, s):
     ls = text.rfind("\n", 0, s.start) + 1
     le = text.find("\n", s.end)
     le = len(text) if le == -1 else le
-    return [t for t in _get_kiwi().tokenize(text[ls:le]) if ls + t.start < s.end and s.start < ls + t.start + t.len]
+    return [t for t in _tokenize(text[ls:le]) if ls + t.start < s.end and s.start < ls + t.start + t.len]
 
 
 def _doc_view(text, s):
-    return [t for t in _get_kiwi().tokenize(text) if t.start < s.end and s.start < t.start + t.len]
+    return [t for t in _tokenize(text) if t.start < s.end and s.start < t.start + t.len]
 
 
 def _ends_inside_token(text, s):
@@ -280,6 +342,102 @@ def filter_model_v2(text, spans):
                 continue                                        # 달래
             if len(plain) >= 3 and " " not in s.text and not re.match(SURNAME_PAT, plain) and not cue:
                 continue                                        # 미수신, 미르보안 (띄어 쓴 외국인 이름 '응우옌 반 안'은 통과)
+        out.append(s)
+    return out
+
+
+# ---------------------------------------------------------------- split_v3: 두 모델(KoELECTRA + Veil) 합치기
+def _name_evidence(text, s):
+    """모델 판단 말고 문맥 근거가 있는가: 뒤 호칭·직함, 앞 항목명(성명: 등), 표 칸."""
+    cue = has_strong_cue(text, s) or re.match(r"\s?(?:님|씨)", text[s.end:s.end + 2])
+    label_before = NAME_CUE_END.search(text[max(0, s.start - 15):s.start])
+    table_cell = re.search(r"\|\s*$", text[max(0, s.start - 3):s.start]) and re.match(r"\s*\|", text[s.end:s.end + 3])
+    return bool(cue or label_before or table_cell)
+
+
+# 라벨별 담당 (dev·test·holdout 단독 측정 근거, 2026-10-27)
+#   이름: KoELECTRA 재현율↑(.995~.999) · Veil 정밀도↑(.93~.96) → KoELECTRA 후보 + 애매하면 Veil 동의
+#   주소: 둘 다 재현율 1.000, 정밀도 KoELECTRA↑(.93~1.00 vs .85~.89) → KoELECTRA만
+#   전화·계좌·카드·주민: Veil 재현율·정밀도↑ (holdout 계좌 R .951/P 1.00 vs .854/.70) → Veil만 (+규칙)
+#   이메일: 둘 다 1.000 → 규칙 + KoELECTRA
+K_LABELS = {"person", "address", "email"}
+V_LABELS = {"phone_number", "account_number", "card_number", "resident_registration_number"}
+
+
+def combine_models(text, k_raw, v_raw):
+    """KoELECTRA(k)와 Veil(v) 결과를 합친다.
+    - 번호·주소: 두 모델 모두 모양 검사(filter_model_v2) 통과분을 합집합
+    - 이름: KoELECTRA 통과분은 그대로 / 모양 검사에서 떨어진 KoELECTRA 이름은 Veil도 이름이라고 하면 살림
+            Veil 이름은 KoELECTRA도 이름이라고 하거나(동의) 문맥 근거가 있을 때만 추가
+    """
+    k_ok = [x for x in filter_model_v2(text, k_raw) if x.label in K_LABELS]
+    v_ok = [x for x in filter_model_v2(text, v_raw) if x.label in V_LABELS or x.label == "person"]
+    v_person_raw = [x for x in v_raw if x.label == "person"]
+    k_person_raw = [x for x in k_raw if x.label == "person"]
+
+    out = list(k_ok)
+    ok_keys = {(x.start, x.end) for x in k_ok if x.label == "person"}
+    for k in k_person_raw:                                     # ① 모양 검사에서 떨어졌지만 Veil이 동의 → 살림
+        t = tidy_name(text, k)
+        if (t.start, t.end) in ok_keys or "*" in t.text:
+            continue
+        if any(_overlaps(t, v) for v in v_person_raw) and not any(_overlaps(t, o) for o in out):
+            out.append(t)
+    for v in v_ok:                                             # ② Veil 결과 추가
+        if any(_overlaps(v, o) for o in out):
+            continue
+        if v.label != "person":
+            out.append(v)                                      # 번호·주소는 모양 검사 통과분
+        elif any(_overlaps(v, k) for k in k_person_raw) or _name_evidence(text, v):
+            out.append(v)                                      # 이름은 동의 또는 문맥 근거
+    return sorted(out, key=lambda x: (x.start, x.end))
+
+
+DIGIT_RUN = re.compile(r"\d[\d\-.\s()+]{6,}\d")
+
+
+def veil_chunks(text, k_raw):
+    """Veil이 필요한 줄만 골라 [시작, 끝) 구간 목록으로 돌려준다 (속도 개선).
+    Veil이 쓰이는 곳: 번호(전화·계좌·카드·주민) + 애매한 이름 확인 + 항목명 뒤 이름.
+      - 숫자가 9자리 이상 이어지는 줄
+      - KoELECTRA 이름 중 모양 검사에서 떨어진 이름이 있는 줄 (Veil 동의로 살릴 후보)
+      - '성명:'·'수취인:' 같은 항목명이 있는 줄
+    연속한 줄은 하나로 묶어 Veil 호출 횟수를 줄인다."""
+    ok = {(x.start, x.end) for x in filter_model_v2(text, [k for k in k_raw if k.label == "person"])}
+    dropped = [k for k in k_raw if k.label == "person" and (tidy_name(text, k).start, tidy_name(text, k).end) not in ok]
+    lines, pos = [], 0
+    for line in text.split("\n"):
+        lines.append((pos, pos + len(line)))
+        pos += len(line) + 1
+    need = []
+    for ls, le in lines:
+        seg = text[ls:le]
+        hit = any(sum(c.isdigit() for c in m.group()) >= 9 for m in DIGIT_RUN.finditer(seg)) \
+            or NAME_CUE.search(seg) or any(ls <= k.start < le for k in dropped)
+        need.append(bool(hit and seg.strip()))
+    chunks, i = [], 0
+    while i < len(lines):
+        if not need[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(lines) and need[j + 1]:
+            j += 1
+        chunks.append((lines[i][0], lines[j][1]))
+        i = j + 1
+    return chunks
+
+
+def widen_addresses(spans, model_spans):
+    """합친 결과의 주소를 모델이 완전히 감싸며 더 길게 잡았으면 모델 구간으로."""
+    out = []
+    for s in spans:
+        if s.label == "address":
+            for m in model_spans:
+                if (m.label == "address" and m.start <= s.start and s.end <= m.end and (m.end - m.start) > (s.end - s.start)
+                        and not any(_overlaps(m, o) for o in spans if o is not s)):
+                    s = m
+                    break
         out.append(s)
     return out
 
@@ -394,3 +552,34 @@ def drop_name_words(spans):
     """경조사 용어·서식 항목명은 이름이 아님 (규칙·모델 어느 쪽에서 왔든)."""
     bad = KIN_EVENTS | FORM_LABELS | ROLE_WORDS
     return [s for s in spans if not (s.label == "person" and s.text.replace(" ", "") in bad) and "*" not in s.text]
+
+
+# ---------------------------------------------------------------- 제외규칙 (규칙 정의서 ver0.2)
+SHARED_MAIL = re.compile(r"^(?:privacy|help|helpdesk|support|info|admin|contact|cs|hr|noreply|no-reply|webmaster|"
+                         r"service|customer|marketing|sales|team|office|recruit|notice|master|biz)(?:[._-][A-Za-z0-9._-]*)?@", re.I)
+CORP_RRN_CUE = re.compile(r"(?:법인\s?등록\s?번호|법인\s?번호)\s*[:：]?\s*$")
+CORP_ACCOUNT_CUE = re.compile(r"(?:수납\s?계좌|모\s?계좌|납부\s?계좌|법인\s?계좌)[^\n]{0,15}$")
+ZIP_HEAD = re.compile(r"^\(?\d{5}\)?\s?")
+MASK_CHARS = re.compile(r"[*xX＊]")
+
+
+def apply_exclusions(text, spans):
+    """규칙 정의서의 제외규칙을 마지막에 한 번 더 적용한다.
+    COM-05 가려진 값(*, x, X) / EM-09 공용 메일 / RRN-13 법인등록번호 / AC-11 법인 수납계좌 / AD-05 우편번호 제외."""
+    out = []
+    for s in spans:
+        before = text[max(0, s.start - 20):s.start]
+        if s.label in NUMBER_DIGITS and MASK_CHARS.search(s.text):
+            continue                                            # COM-05: 900101-5XXXXXX, 010-****-4567
+        if s.label == "email" and SHARED_MAIL.match(s.text.replace(" ", "")):
+            continue                                            # EM-09: privacy@, help@
+        if s.label == "resident_registration_number" and CORP_RRN_CUE.search(before):
+            continue                                            # RRN-13
+        if s.label == "account_number" and CORP_ACCOUNT_CUE.search(before):
+            continue                                            # AC-11
+        if s.label == "address":
+            m = ZIP_HEAD.match(s.text)
+            if m and m.end() < len(s.text):                     # AD-05: (05299) 는 빼고 주소만
+                s = Span(s.start + m.end(), s.end, "address", text[s.start + m.end():s.end])
+        out.append(s)
+    return out
