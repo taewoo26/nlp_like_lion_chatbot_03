@@ -1,19 +1,27 @@
+# pgvector가 설치된 PostgreSQL을 띄웁니다.
+# 처음 실행할 때 init/ 의 스크립트가 rag(검색용)·vault(매핑용) 스키마와 계정을 따로 만듭니다.
+# 비밀번호와 임베딩 차원은 .env 에서 읽습니다 (.env.example 참고).
 services:
   db:
-    image: pgvector/pgvector:0.8.7-pg16
-    container_name: rag_db
-    restart: unless-stopped
+    image: pgvector/pgvector:pg16
+    container_name: pii_rag_db
     env_file:
       - ../.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-pii_rag}
+      RAG_PASSWORD: ${RAG_PASSWORD:?set RAG_PASSWORD in .env}
+      VAULT_PASSWORD: ${VAULT_PASSWORD:?set VAULT_PASSWORD in .env}
+      EMBED_DIM: ${EMBED_DIM:-1536}
     ports:
-      - "127.0.0.1:5433:5432"        # 포트는 직접 고정
+      - "5432:5432"
     volumes:
+      - ./init:/docker-entrypoint-initdb.d:ro
       - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatbot -d rag"]   # 값 직접 입력
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-pii_rag}"]
       interval: 5s
-      timeout: 3s
       retries: 10
 
 volumes:
