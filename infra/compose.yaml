@@ -15,7 +15,7 @@ services:
       VAULT_PASSWORD: ${VAULT_PASSWORD:?set VAULT_PASSWORD in .env}
       EMBED_DIM: ${EMBED_DIM:-1536}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./init:/docker-entrypoint-initdb.d:ro
       - pgdata:/var/lib/postgresql/data

@@ -20,6 +20,9 @@ def answer(query, k=3):
     masked_q, q_tokens, docs = search(query, k)
     context = "\n\n".join(f"[{d['doc_id']}]\n{d['masked_text']}" for d in docs)
     result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None}
+    if not docs:
+        result['answer'] = '일치하는 문서를 찾지 못했습니다.'
+        return result
     if not config.LLM_API_KEY:
         return result
     r = requests.post(

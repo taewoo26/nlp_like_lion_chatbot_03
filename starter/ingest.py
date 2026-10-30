@@ -35,6 +35,31 @@ def chunk(text, max_chars=600):
     return parts or [text]
 
 
+def collect_mapping(mapping, record):
+    current = mapping.setdefault(record['token'], {
+        'label': record['label'], 'normalized': record['normalized'], 'originals': set(),
+    })
+    if (current['label'], current['normalized']) != (record['label'], record['normalized']):
+        raise ValueError('서로 다른 개인정보 값의 문서 간 토큰 충돌')
+    current['originals'].add(record['original'])
+
+
+def save_mappings(cur, mapping):
+    for token, value in mapping.items():
+        cur.execute(
+            """INSERT INTO vault.token_map (token, label, normalized, originals)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (token) DO UPDATE SET originals =
+                   ARRAY(SELECT DISTINCT unnest(vault.token_map.originals || EXCLUDED.originals))
+               WHERE vault.token_map.label = EXCLUDED.label
+                 AND vault.token_map.normalized = EXCLUDED.normalized
+               RETURNING token""",
+            (token, value['label'], value['normalized'], sorted(value['originals'])),
+        )
+        if cur.fetchone() is None:
+            raise ValueError('기존 Vault 매핑과 토큰 충돌')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(config.DATA_DIR / "holdout_labeled.jsonl"))
@@ -52,17 +77,14 @@ def main():
     pseudo_path = config.OUT_DIR / f"pseudo_{Path(a.data).stem}.jsonl"
 
     t0 = time.perf_counter()
-    rows, mapping, pseudo, collisions = [], {}, [], set()
+    rows, mapping, pseudo = [], {}, []
     for d in docs:
         spans = pii_pipeline.detect(d["text"])
         masked, records = pii_pipeline.pseudonymize(d["text"], spans)
         pseudo.append({"id": d["id"], "entities": [
             {k: r[k] for k in ("label", "start", "end", "token")} for r in records]})
         for r in records:
-            m = mapping.setdefault(r["token"], {"label": r["label"], "normalized": r["normalized"], "originals": set()})
-            m["originals"].add(r["original"])
-            if m["normalized"] != r["normalized"]:
-                collisions.add(r["token"])
+            collect_mapping(mapping, r)
         for i, c in enumerate(chunk(masked, a.max_chars)):
             rows.append({"chunk_id": f"{d['id']}#{i}", "doc_id": d["id"], "chunk_idx": i,
                          "doc_type": d.get("doc_type"), "masked_text": c,
@@ -83,23 +105,17 @@ def main():
                    tokens = EXCLUDED.tokens, embedding = EXCLUDED.embedding, doc_type = EXCLUDED.doc_type""",
             [r | {"embedding": v} for r, v in zip(rows, vecs)])
 
-    with db.vault_conn() as conn, conn.cursor() as cur:
-        if a.reset:
-            cur.execute("TRUNCATE vault.token_map")
-        cur.executemany(
-            """INSERT INTO vault.token_map (token, label, normalized, originals)
-               VALUES (%s, %s, %s, %s)
-               ON CONFLICT (token) DO UPDATE SET originals =
-                   ARRAY(SELECT DISTINCT unnest(vault.token_map.originals || EXCLUDED.originals))""",
-            [(t, m["label"], m["normalized"], sorted(m["originals"])) for t, m in mapping.items()])
+        # Vault의 오류가 RAG 커밋 전에 전파되도록 한다. 두 DB 연결의 완전한 원자성은 별도 과제다.
+        with db.vault_conn() as vault, vault.cursor() as vault_cur:
+            if a.reset:
+                vault_cur.execute("TRUNCATE vault.token_map")
+            save_mappings(vault_cur, mapping)
 
     with open(pseudo_path, "w", encoding="utf-8") as f:
         for p in pseudo:
             f.write(json.dumps(p, ensure_ascii=False) + "\n")
 
     n = len(docs)
-    if collisions:
-        print(f"⚠ 토큰 충돌 {len(collisions)}종: 서로 다른 값이 같은 토큰을 씀 (예: {sorted(collisions)[:3]})")
     print(f"문서 {n}건 → 청크 {len(rows)}개, 토큰 {len(mapping)}종 적재")
     print(f"탐지+가명처리 {t_mask * 1000 / n:.1f} ms/문서, 임베딩 {t_embed * 1000 / n:.1f} ms/문서 ({config.EMBED_PROVIDER})")
     print(f"가명처리 결과: {pseudo_path}")
