@@ -1,0 +1,29 @@
+# 이 파일을 .env 로 복사한 뒤 값을 채우세요. .env 는 절대 커밋하지 마세요.
+
+# --- DB (docker-compose 와 파이썬 코드가 함께 사용) ---
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=change-me-admin
+POSTGRES_DB=pii_rag
+RAG_PASSWORD=change-me-rag
+VAULT_PASSWORD=change-me-vault
+DB_HOST=localhost
+DB_PORT=5432
+
+# --- 임베딩 (OpenAI 호환 API) ---
+# EMBED_PROVIDER=api   : 제공된 임베딩 API 키 사용 (마스킹된 텍스트만 전송됨)
+# EMBED_PROVIDER=local : API 없이 동작만 확인하는 해시 임베딩 (검색 품질 낮음, 테스트 전용)
+EMBED_PROVIDER=local
+EMBED_API_BASE=https://api.example.com/v1
+EMBED_API_KEY=
+EMBED_MODEL=text-embedding-3-small
+# DB 테이블 차원과 반드시 같아야 함. 바꾸면 docker compose down -v 후 다시 up
+EMBED_DIM=1536
+
+# --- LLM (OpenAI 호환 API, chat.py 에서 사용) ---
+LLM_API_BASE=https://api.example.com/v1
+LLM_API_KEY=
+LLM_MODEL=gpt-4o-mini
+
+# --- 가명처리 ---
+# HMAC 비밀키. 팀에서 임의의 긴 문자열로 정하고 절대 커밋하지 마세요.
+HMAC_KEY=

@@ -3,7 +3,11 @@
 라벨별 모드: 'union' 둘 다 사용(겹치면 규칙 우선) / 'rule' 규칙만 / 'model' 모델만
 정책은 dev에서 정하고, test는 확인에만 써요.
 """
+import re
+
 from detection.base import BaseDetector
+from detection.rule.kiwi_filter import _get_kiwi
+from detection.rule.names import SURNAMES, has_strong_cue
 from detection.validation import check_spans
 from detection.filters import clean, filter_model_names
 from detection import extra_rules as v2
@@ -17,6 +21,62 @@ POLICIES = {
     'split_v2': {},   # 번호 보강 규칙 + 모양 검사 통과한 모델 번호도 사용 (detection/extra_rules.py)
     'split_v3': {},   # split_v2 + Veil (두 모델 동의로 애매한 이름 판단)
 }
+
+JOB_TITLE = (r"(?:팀장|부장|차장|과장|대리|사원|주임|책임|선임|수석|이사|상무|전무|대표|"
+             r"실장|본부장|센터장|매니저)")
+SURNAME_TITLE = re.compile(
+    rf"\s+{JOB_TITLE}(?:님)?(?:께서|에게|으로|부터|까지|은|는|이|가|을|를|도|과|와|로|께)?(?![가-힣])"
+)
+SURNAME_TITLE_SPAN = re.compile(rf"^[{SURNAMES}]\s+{JOB_TITLE}(?:님)?$")
+
+
+def drop_surname_title(text, spans):
+    """성 한 글자 또는 성+직함만 이름으로 탐지한 결과를 제거한다."""
+    return [s for s in spans if not (
+        s.label == 'person' and (
+            (len(s.text) == 1 and s.text in SURNAMES and SURNAME_TITLE.match(text, s.end))
+            or SURNAME_TITLE_SPAN.fullmatch(s.text)
+        )
+    )]
+
+
+def drop_contextual_non_names(text, model_spans, rule_spans=()):
+    """규칙이 확인하지 못한 모델 이름을 형태·필드 문맥으로 검토한다."""
+    extensions = list(re.finditer(r"내선", text))
+    route_fields = []
+    for match in re.finditer(r"(?m)^[ \t]*접수[ \t]*경로[ \t]*[:：]", text):
+        end = text.find('\n', match.end())
+        route_fields.append((match.end(), len(text) if end == -1 else end))
+    tokens = None
+    kept = []
+    for span in model_spans:
+        if span.label != 'person' or any(_overlap(span, rule) for rule in rule_spans):
+            kept.append(span)
+            continue
+        if any(m.start() <= span.start and span.end <= m.end() for m in extensions):
+            continue
+        if not has_strong_cue(text, span):
+            if tokens is None:
+                tokens = _get_kiwi().tokenize(text)
+            is_verb = any(t.tag.startswith('V') and t.start == span.start and
+                          t.start + t.len <= span.end for t in tokens)
+            in_route = any(start <= span.start and span.end <= end
+                           for start, end in route_fields)
+            is_route_noun = in_route and any(
+                t.tag == 'NNG' and t.start < span.end and span.start < t.start + t.len
+                for t in tokens
+            )
+            line_start = text.rfind('\n', 0, span.start) + 1
+            is_field_key = (
+                not text[line_start:span.start].strip()
+                and re.match(r"[ \t]*[:：]", text[span.end:]) is not None
+                and any(t.start == span.start and t.start + t.len == span.end
+                        and t.tag in {'NNG', 'JKO', 'JX'} for t in tokens)
+            )
+            if is_verb or is_route_noun or is_field_key:
+                continue
+        kept.append(span)
+    return kept
 
 
 def _overlap(a, b):
@@ -71,6 +131,10 @@ class ComboDetector(BaseDetector):
         model_spans = self.model.detect(text)
         if self.policy == 'split_v2':
             return check_spans(text, self._detect_v2(text, rule_spans, model_spans))
+        if self.policy in ('union', 'split'):
+            model_spans = drop_contextual_non_names(text, model_spans, rule_spans)
+            merged = merge_spans(rule_spans, model_spans, self.modes)
+            return check_spans(text, drop_surname_title(text, merged))
         if self.policy == 'split_v3':
             return check_spans(text, self._detect_v3(text, rule_spans, model_spans, self._veil(text, model_spans)))
         if self.modes is POLICIES['split_clean']:
@@ -89,7 +153,9 @@ class ComboDetector(BaseDetector):
         merged = [v2.tidy_name(text, s) for s in merged]                   # ⑤ '시우 드림', '박별이' 정리
         merged = v2.drop_name_words(merged)                                # ⑥ 조모상·배송지·채무자, 가려진 값
         merged = v2.propagate_names(text, merged)                          # ⑥-2 확정된 짧은 이름을 문서 전체에
-        return clean(text, merged)                                         # ⑦ 고객사 기준 (성+직함·대표번호·지점)
+        merged = v2.trim_address_zip(text, merged)                         # ⑦ 우편번호는 주소 span에서 제외
+        merged = v2.drop_non_account_identifiers(text, merged)             # ⑧ 사건·접수번호의 계좌 오탐 제외
+        return clean(text, merged)                                         # ⑨ 고객사 기준 (성+직함·대표번호·지점)
 
     def _detect_v3(self, text, rule_spans, k_raw, v_raw):
         rule_spans = v2.merge_extra(rule_spans, v2.extra_spans(text))     # ① 보강 규칙 (v2와 동일)
