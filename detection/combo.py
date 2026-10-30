@@ -131,15 +131,12 @@ class ComboDetector(BaseDetector):
         model_spans = self.model.detect(text)
         if self.policy == 'split_v2':
             return check_spans(text, self._detect_v2(text, rule_spans, model_spans))
-<<<<<<< HEAD
         if self.policy in ('union', 'split'):
             model_spans = drop_contextual_non_names(text, model_spans, rule_spans)
             merged = merge_spans(rule_spans, model_spans, self.modes)
             return check_spans(text, drop_surname_title(text, merged))
-=======
         if self.policy == 'split_v3':
             return check_spans(text, self._detect_v3(text, rule_spans, model_spans, self._veil(text, model_spans)))
->>>>>>> origin/develop
         if self.modes is POLICIES['split_clean']:
             model_spans = filter_model_names(text, model_spans, rule_spans)
         merged = merge_spans(rule_spans, model_spans, self.modes)
@@ -156,12 +153,9 @@ class ComboDetector(BaseDetector):
         merged = [v2.tidy_name(text, s) for s in merged]                   # ⑤ '시우 드림', '박별이' 정리
         merged = v2.drop_name_words(merged)                                # ⑥ 조모상·배송지·채무자, 가려진 값
         merged = v2.propagate_names(text, merged)                          # ⑥-2 확정된 짧은 이름을 문서 전체에
-<<<<<<< HEAD
         merged = v2.trim_address_zip(text, merged)                         # ⑦ 우편번호는 주소 span에서 제외
         merged = v2.drop_non_account_identifiers(text, merged)             # ⑧ 사건·접수번호의 계좌 오탐 제외
         return clean(text, merged)                                         # ⑨ 고객사 기준 (성+직함·대표번호·지점)
-=======
-        return clean(text, merged)                                         # ⑦ 고객사 기준 (성+직함·대표번호·지점)
 
     def _detect_v3(self, text, rule_spans, k_raw, v_raw):
         rule_spans = v2.merge_extra(rule_spans, v2.extra_spans(text))     # ① 보강 규칙 (v2와 동일)
@@ -186,4 +180,3 @@ class ComboDetector(BaseDetector):
             for sp in self.model2.detect(text[s:e]):
                 out.append(Span(sp.start + s, sp.end + s, sp.label, text[sp.start + s:sp.end + s]))
         return out
->>>>>>> origin/develop

@@ -13,6 +13,7 @@ import re
 from functools import lru_cache
 
 from detection.base import Span
+from detection.iban import iban_spans
 from detection.filters import PRODUCT_AFTER
 from detection.rule.kiwi_filter import _get_kiwi
 from detection.rule.names import JOSA, NOT_GIVEN, SURNAME_PAT, TITLES, has_strong_cue
@@ -83,6 +84,16 @@ ADDRESS = re.compile(
     r"(?:,?\s(?:[가-힣A-Za-z]+(?:아파트|빌라|오피스텔|타워|맨션|빌딩|하우스)\s)?"      # 아파트 이름
     r"(?:[A-Za-z0-9]+동\s?)?(?:지하\s?|B)?\d+(?:호|층))?"            # 104동 1101호 / B동 5층 / B동 지하1층 / 302호
     r"(?:\s?\([가-힣0-9]+(?:동|가|리|읍|면)\))?"                   # (범어동)
+)
+# 검증된 지원 형식: 영문 도로명 + 도시 + 주/지역 약자 + 5자리 우편번호.
+# 국가·도시를 추정해 표시하지 않고 일치한 주소 전체를 치환한다.
+FOREIGN_ADDRESS = re.compile(
+    r"(?<![A-Za-z0-9])\d{1,6}(?:[ \t]+[A-Za-z0-9][A-Za-z0-9.'\-]*){1,8}"
+    r"[ \t]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct)\.?"
+    r"(?:[ \t]+(?:Apt|Suite|Ste|Unit|#)\.?[ \t]*[A-Za-z0-9\-]+)?"
+    r",[ \t]*[A-Za-z][A-Za-z .'\-]{0,59},[ \t]*[A-Za-z]{2}[ \t]+[0-9]{5}(?:-[0-9]{4})?"
+    r"(?:,[ \t]*(?:United States(?: of America)?|USA))?(?![A-Za-z0-9])",
+    re.IGNORECASE,
 )
 
 # ---------------------------------------------------------------- 이름
@@ -159,9 +170,14 @@ ADDRESS_DETAIL = re.compile(
 ADDRESS_DETAIL2 = re.compile(r"(?<![가-힣0-9])[가-힣A-Za-z0-9]+(?:아파트|빌라|오피스텔|맨션)\s?(?:\d{1,4}동\s?)?\d{1,4}호")
 # 회피 표기 이메일 (EM-07): hong(at)example.com / hong at example dot com / hong 골뱅이 example 닷컴
 EMAIL_AT = re.compile(
-    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+\s?(?:\(at\)|\[at\]|\sat\s|\s?골뱅이\s?)\s?[A-Za-z0-9-]+"
-    r"(?:\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?닷\s?)\s?(?:[A-Za-z0-9-]+|컴|넷))*"
-    r"\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?닷\s?)\s?(?:com|net|org|kr|co|컴|넷)\b")
+    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+\s?(?:@|\(at\)|\[at\]|\sat\s|\s?골뱅이\s?)\s?[A-Za-z0-9-]+"
+    r"(?:\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?[닷점]\s?)\s?(?:[A-Za-z0-9-]+|컴|넷))*"
+    r"\s?(?:\.|\(dot\)|\[dot\]|\sdot\s|\s?[닷점]\s?)\s?(?:com|net|org|kr|co|컴|넷)\b")
+# 후단 이메일 정규화와 같은 전각 ASCII 변환을 탐지용 사본에만 적용한다.
+EMAIL_WIDTH = {code: chr(code - 0xFEE0) for code in range(0xFF01, 0xFF5F)}
+EMAIL_ASCII = re.compile(
+    r"(?<![A-Za-z0-9._%+*\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![A-Za-z0-9_\-])"
+)
 # 운전면허번호 (처리: 삭제) — 12-34-567890-12 / 서울 12-345678-90. 7개 라벨 밖이라 채점(P/R)에는 들어가지 않음
 DRIVER = re.compile(r"(?<![\d-])(?:\d{2}-\d{2}-\d{6}-\d{2}"
                     r"|(?:서울|부산|경기|강원|충북|충남|전북|전남|경북|경남|제주|대구|인천|광주|대전|울산)\s?\d{2}-\d{6}-\d{2})(?![\d-])")
@@ -176,6 +192,9 @@ def extra_spans(text):
     for m in DRIVER.finditer(norm):
         if not m.group()[0].isdigit() or DRIVER_CUE.search(norm[max(0, m.start() - 15):m.start()]):
             _add(spans, m.start(), m.end(), "driver_license", text)
+    # IBAN의 영문자는 숫자 OCR 보정 전 원문에서 읽는다. 내부 숫자보다 전체 계좌가 우선이다.
+    for span in iban_spans(text):
+        _add(spans, span.start, span.end, span.label, text)
     for m in RRN.finditer(norm):
         _add(spans, m.start(), m.end(), "resident_registration_number", text)
     for pat in (CARD15, CARD16):
@@ -201,10 +220,14 @@ def extra_spans(text):
             _add(spans, m.start(), m.end(), "account_number", text)
     for m in ADDRESS.finditer(norm):
         _add(spans, m.start(), m.end(), "address", text)
+    for m in FOREIGN_ADDRESS.finditer(text):
+        _add(spans, m.start(), m.end(), "address", text)
     for pat in (ADDRESS_DETAIL2, ADDRESS_DETAIL):                 # 상세주소만 (AD-06)
         for m in pat.finditer(norm):
             _add(spans, m.start(), m.end(), "address", text)
     for m in EMAIL_AT.finditer(norm):                             # hong(at)example.com (EM-07)
+        _add(spans, m.start(), m.end(), "email", text)
+    for m in EMAIL_ASCII.finditer(text.translate(EMAIL_WIDTH)):
         _add(spans, m.start(), m.end(), "email", text)
     for cue in NAME_CUE.finditer(text):
         m = CUE_VALUE.match(text, cue.end())
@@ -242,13 +265,16 @@ def trim_address_zip(text, spans):
 
 
 def merge_extra(rule_spans, extra):
-    """보강 구간을 규칙 결과에 합친다. 겹치는 규칙 구간을 완전히 감싸면(더 길면) 보강 구간으로 교체."""
+    """더 긴 보강 구간으로 교체한다. 확인된 운전면허는 같은 범위의 번호 라벨보다 우선한다."""
     spans = list(rule_spans)
     for e in extra:
         over = [o for o in spans if _overlaps(e, o)]
         if not over:
             spans.append(e)
-        elif all(e.start <= o.start and o.end <= e.end for o in over) and (e.end - e.start) > max(o.end - o.start for o in over):
+        elif all(e.start <= o.start and o.end <= e.end for o in over) and (
+            (e.end - e.start) > max(o.end - o.start for o in over)
+            or (e.label == 'driver_license' and all(o.label in NUMBER_DIGITS for o in over))
+        ):
             spans = [o for o in spans if o not in over] + [e]
     return sorted(spans, key=lambda s: (s.start, s.end))
 
@@ -561,6 +587,8 @@ CORP_RRN_CUE = re.compile(r"(?:법인\s?등록\s?번호|법인\s?번호)\s*[:：
 CORP_ACCOUNT_CUE = re.compile(r"(?:수납\s?계좌|모\s?계좌|납부\s?계좌|법인\s?계좌)[^\n]{0,15}$")
 ZIP_HEAD = re.compile(r"^\(?\d{5}\)?\s?")
 MASK_CHARS = re.compile(r"[*xX＊]")
+# 명시된 제외형만 판정한다. John D. Smith, G D Hong 등 미정 혼합형은 건드리지 않는다.
+INITIAL_NAME = re.compile(r"(?:[A-Za-z]\.\s*){2,}(?:[A-Za-z][A-Za-z'\-]*)?")
 
 
 def apply_exclusions(text, spans):
@@ -569,9 +597,11 @@ def apply_exclusions(text, spans):
     out = []
     for s in spans:
         before = text[max(0, s.start - 20):s.start]
+        if s.label == "person" and INITIAL_NAME.fullmatch(s.text.strip()):
+            continue
         if s.label in NUMBER_DIGITS and MASK_CHARS.search(s.text):
             continue                                            # COM-05: 900101-5XXXXXX, 010-****-4567
-        if s.label == "email" and SHARED_MAIL.match(s.text.replace(" ", "")):
+        if s.label == "email" and SHARED_MAIL.match(s.text.translate(EMAIL_WIDTH).replace(" ", "")):
             continue                                            # EM-09: privacy@, help@
         if s.label == "resident_registration_number" and CORP_RRN_CUE.search(before):
             continue                                            # RRN-13
