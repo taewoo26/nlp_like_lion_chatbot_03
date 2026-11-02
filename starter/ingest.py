@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import config, db, pii_pipeline
 from .embed import embed
+from .person_role_mapping import map_person_roles
 
 
 def load_docs(path, limit=None):
@@ -60,6 +61,17 @@ def save_mappings(cur, mapping):
             raise ValueError('기존 Vault 매핑과 토큰 충돌')
 
 
+def save_person_roles(cur, roles, doc_ids):
+    """재적재한 문서의 등장 기록을 교체한다. 같은 토큰의 반복도 보존한다."""
+    cur.execute("DELETE FROM rag.person_roles WHERE doc_id = ANY(%s::text[])", (doc_ids,))
+    cur.executemany(
+        """INSERT INTO rag.person_roles
+           (chunk_id, mention_index, doc_id, person_token, role)
+           VALUES (%(chunk_id)s, %(mention_index)s, %(doc_id)s, %(person_token)s, %(role)s)""",
+        roles,
+    )
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(config.DATA_DIR / "holdout_labeled.jsonl"))
@@ -77,7 +89,7 @@ def main():
     pseudo_path = config.OUT_DIR / f"pseudo_{Path(a.data).stem}.jsonl"
 
     t0 = time.perf_counter()
-    rows, mapping, pseudo = [], {}, []
+    rows, mapping, pseudo, person_roles = [], {}, [], []
     for d in docs:
         spans = pii_pipeline.detect(d["text"])
         masked, records = pii_pipeline.pseudonymize(d["text"], spans)
@@ -85,7 +97,9 @@ def main():
             {k: r[k] for k in ("label", "start", "end", "token")} for r in records]})
         for r in records:
             collect_mapping(mapping, r)
-        for i, c in enumerate(chunk(masked, a.max_chars)):
+        chunks = chunk(masked, a.max_chars)
+        person_roles.extend(map_person_roles(d["id"], d["text"], masked, records, chunks))
+        for i, c in enumerate(chunks):
             rows.append({"chunk_id": f"{d['id']}#{i}", "doc_id": d["id"], "chunk_idx": i,
                          "doc_type": d.get("doc_type"), "masked_text": c,
                          "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)))})
@@ -96,14 +110,18 @@ def main():
     t_embed = time.perf_counter() - t1
 
     with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('rag.person_roles')")
+        if cur.fetchone()[0] is None:
+            raise RuntimeError("rag.person_roles 테이블이 없습니다. 02_person_roles.sql 마이그레이션이 필요합니다.")
         if a.reset:
-            cur.execute("TRUNCATE rag.chunks")
+            cur.execute("TRUNCATE rag.person_roles, rag.chunks")
         cur.executemany(
             """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, masked_text, tokens, embedding)
                VALUES (%(chunk_id)s, %(doc_id)s, %(chunk_idx)s, %(doc_type)s, %(masked_text)s, %(tokens)s, %(embedding)s)
                ON CONFLICT (chunk_id) DO UPDATE SET masked_text = EXCLUDED.masked_text,
                    tokens = EXCLUDED.tokens, embedding = EXCLUDED.embedding, doc_type = EXCLUDED.doc_type""",
             [r | {"embedding": v} for r, v in zip(rows, vecs)])
+        save_person_roles(cur, person_roles, [d["id"] for d in docs])
 
         # Vault의 오류가 RAG 커밋 전에 전파되도록 한다. 두 DB 연결의 완전한 원자성은 별도 과제다.
         with db.vault_conn() as vault, vault.cursor() as vault_cur:

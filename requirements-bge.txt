@@ -1,0 +1,2 @@
+# Optional local dense BGE-M3 backend. Install after requirements.txt.
+sentence-transformers==6.2.0
