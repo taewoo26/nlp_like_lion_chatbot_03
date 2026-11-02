@@ -52,6 +52,11 @@ _ADMIN_DATA = json.loads(Path(__file__).with_name('admin_regions.json').read_tex
 _ADMIN_PATTERNS = {sido: _admin_pattern(names, r'[\s,]+')
                    for sido, names in _ADMIN_DATA['regions'].items()}
 _LOCAL_ADMIN = _admin_pattern({name for names in _ADMIN_DATA['regions'].values() for name in names})
+# 이름 오탐 판정용 단어 목록: 시도 별칭 + 시군구 ('천안시 서북구'는 '천안시', '서북구'로도 등록)
+REGION_WORDS = frozenset(
+    set(SIDO)
+    | {part for names in _ADMIN_DATA['regions'].values() for name in names for part in [name, *name.split()]}
+)
 
 
 def region_bounds(address):

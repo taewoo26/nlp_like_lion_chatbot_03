@@ -69,7 +69,7 @@ def test_original_offsets_surrounding_text_and_repeated_tokens():
         {"label": "person", "start": 3, "end": 7},
     ])
     token = records[0]["token"]
-    assert re.fullmatch(r"<PERSON_[0-9a-f]{64}>", token)
+    assert re.fullmatch(r"<PERSON_[0-9a-f]{12}>", token)
     assert masked == f"고객 {token}님, {token} 고객에게 연락했다."
     assert records[1]["token"] == token
     assert [(r["start"], r["end"], r["original"]) for r in records] == [
