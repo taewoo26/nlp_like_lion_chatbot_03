@@ -144,9 +144,9 @@ def test_ingest_and_query_send_only_masked_text_to_bge(bge, monkeypatch, tmp_pat
     try:
         ingest.main()
         masked_query, tokens = search.mask_query("김민준 전화 내역")
-        embeddings.embed([masked_query])
+        embeddings.embed([pii_pipeline.embedding_text(masked_query)]) 
     finally:
         pii_pipeline._key.cache_clear()
     assert len(bge.inputs) == 2
     assert all("김민준" not in text and "010-1234-5678" not in text for text in bge.inputs)
-    assert tokens and all("<PERSON_" in text for text in bge.inputs)
+    assert tokens and all("<PERSON>" in text for text in bge.inputs)  

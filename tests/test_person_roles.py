@@ -49,7 +49,7 @@ def test_roles_are_per_mention(text, names, roles):
 def test_chunk_assignment_uses_masked_positions_not_original_offsets():
     text = "직원 김민준이 회의했다.\n고객 김민준이 문의했다."
     masked, records = records_for_names(text, ["김민준", "김민준"])
-    parts = chunk(masked, max_chars=80)
+    parts = chunk(masked, max_chars=40)
     assert len(parts) == 2
     rows = map_person_roles("D2", text, masked, records, parts)
     assert [(r["chunk_id"], r["mention_index"], r["role"]) for r in rows] == [

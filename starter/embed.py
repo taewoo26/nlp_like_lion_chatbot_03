@@ -14,12 +14,15 @@ import hashlib
 import json
 import re
 import time
+from functools import lru_cache
 
 import numpy as np
 import requests
 
 from . import config
 
+_BGE_DIM = 1024
+_BGE_MAX_TOKENS = 8192
 _RETRY_STATUS = {429, 500, 502, 503, 504}   # 속도 제한·일시 오류만 재시도
 _MAX_RETRY = 8
 _MAX_WAIT = 60.0
@@ -201,4 +204,10 @@ def _bge(texts):
 
 
 def embed(texts):
-    return _api(texts) if config.EMBED_PROVIDER == "api" else _local(texts)
+    if config.EMBED_PROVIDER == "local":
+        return _local(texts)
+    if config.EMBED_PROVIDER == "bge-m3":
+        return _bge(texts)
+    if config.EMBED_PROVIDER == "api":
+        return _api(texts)
+    raise ValueError("지원하지 않는 EMBED_PROVIDER")
