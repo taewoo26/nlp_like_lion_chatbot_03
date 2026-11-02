@@ -2,15 +2,15 @@
 python-dotenv==1.0.1
 pandas
 kiwipiepy==0.24.1
-psycopg[binary]==3.1.18
-pgvector==0.2.5
+psycopg[binary]>=3.2.10
+pgvector>=0.2.5
+numpy==2.5.4
 openai
 fastapi
 uvicorn
 requests==2.31.0
 
 # CPU 탐지: 현재 로컬 검증 버전
-numpy==1.26.4
 onnxruntime==1.28.0
 transformers==5.20.2
 huggingface-hub==2.2.0

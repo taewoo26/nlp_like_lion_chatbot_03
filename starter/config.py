@@ -33,5 +33,5 @@ LLM_MODEL = env("LLM_MODEL", "gpt-4o-mini")
 
 HMAC_KEY = env("HMAC_KEY", "")
 
-DATA_DIR = ROOT / "data"
+DATA_DIR = ROOT / "data" / "holdout"
 OUT_DIR = ROOT / "outputs"

@@ -15,7 +15,7 @@
   1. detect(text) -> [{"label", "start", "end"}, ...]          원문 기준 [start, end)
   2. pseudonymize(text, spans) -> (masked_text, records)
        records: [{"label", "start", "end", "original", "normalized", "token"}, ...]  원문 기준 위치
-  3. 토큰은 TOKEN_PATTERN 모양이며 HMAC 전체 64자리 hex를 사용한다.
+  3. 토큰은 TOKEN_PATTERN 모양이며 HMAC 앞 TOKEN_HEX(12)자리 hex를 사용한다.
   4. 같은 값은 문서·질의를 가리지 않고 항상 같은 토큰 (HMAC-SHA256, 키는 .env 의 HMAC_KEY)
 
 v1 처리 방식
@@ -28,6 +28,22 @@ v2 추가 (규칙 정의서 ver0.2 AD 공통 처리 방식)
       '대구광역시 수성구 한빛로 174, 502호' → '대구광역시 수성구 <ADDRESS_…>'
   - 토큰은 주소 전체를 정규화한 값으로 만든다 (시도명·확인 가능한 요소만 통일)
   - 상세주소만 있으면(110동 905호) 전체 토큰화 (AD-06)
+
+v4 추가 (holdout 검색 재현 실험 근거, 2026-10-30)
+  - 토큰 길이 64 → 12자리 hex. 64자리는 local 임베딩에서 질의 내용보다 토큰 글자가 벡터를
+    좌우했고(같은 인물 질의는 내용이 달라도 순위가 거의 같음), 청크도 187 → 257개로 늘었다.
+    12자리(16^12 ≈ 281조)도 충돌 검사는 그대로 유지한다.
+  - 지역명 이름 오탐 제거: '충남 천안시 서북구 쪽'에서 천안시·서북구가 person으로 잡혀
+    모든 토큰 필터에서 결과가 0건이 되던 문제 (Q049). 행정구역 목록과 앞뒤 단어로만 판단한다.
+  - embedding_text(): 임베딩에 넣을 때만 토큰을 라벨 이름(<PERSON>)으로 바꾼다.
+    토큰의 '누구인지'는 토큰 필터가 맡고, 임베딩은 업무 내용에 집중하게 한다.
+
+v5 추가
+  - NAME_LINK=doc (선택, 기본 off): 같은 문서 안의 '이름만' 표기(도윤)를 하나뿐인 전체 이름(신도윤)
+    토큰으로 바꾼다. 원래 '도윤' 토큰은 alias_token 으로 남겨 청크 토큰 목록에 넣으므로
+    '도윤 님' 같은 질의도 계속 찾을 수 있다. holdout 시뮬레이션: 쪼개짐 13 → 6명, 새 합쳐짐 0.
+  - pseudonymize(strict=False): 질의에서 정규화할 수 없는 표기가 나와도 오류로 멈추지 않고
+    [개인정보] 로 가린 뒤 계속한다 (원문·토큰·매핑 없음). 문서 적재는 기존대로 strict.
 """
 import hashlib
 import hmac
@@ -36,18 +52,18 @@ import unicodedata
 from functools import lru_cache
 
 from . import config
-from .address import normalize_address, region_bounds
+from .address import REGION_WORDS, SIDO, normalize_address, region_bounds
 from .email_normalization import normalize_email
 
 TOKEN_PATTERN = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
-TOKEN_HEX = 64                       # 전체 HMAC을 본문·검색·매핑에 동일하게 사용
+TOKEN_HEX = 12                       # HMAC 앞 12자리. 본문·검색·매핑에 동일하게 사용
 DELETED_TOKEN = "[운전면허번호 비공개]"  # 공통 삭제 표시는 검색용 토큰에 포함하지 않음
 DELETE_LABELS = {"driver_license"}   # 규칙 정의서: 운전면허번호는 가명화 대신 삭제
 SUPPORTED_LABELS = {
     "person", "phone_number", "email", "address",
     "resident_registration_number", "account_number", "card_number",
 } | DELETE_LABELS
-POLICY_VERSION = "pii-basic-v3-review"
+POLICY_VERSION = "pii-basic-v4"
 _WIDTH_MAP = {code: chr(code - 0xFEE0) for code in range(0xFF01, 0xFF5F)}
 _WIDTH_MAP[0x3000] = " "
 
@@ -61,7 +77,51 @@ def _detector():
 
 
 def detect(text):
-    return [{"label": s.label, "start": s.start, "end": s.end} for s in _detector().detect(text)]
+    spans = [{"label": s.label, "start": s.start, "end": s.end} for s in _detector().detect(text)]
+    return drop_region_names(text, spans)
+
+
+def drop_region_names(text, spans):
+    """행정구역 이름이 person으로 잡힌 경우를 뺀다 ('충남 천안시 서북구 쪽' → 천안시·서북구).
+
+    둘 다 만족할 때만 뺀다 → '김민구', '서울 박성구 고객' 같은 실제 이름은 유지.
+      1. 이름 구간 전체가 행정구역 목록(시도 별칭·시군구)에 있는 단어
+      2. 바로 앞이나 뒤 단어도 시도명·시군구명 (지역을 나열하는 문맥)
+    """
+    kept = []
+    for s in spans:
+        if s["label"] == "person":
+            word = text[s["start"]:s["end"]].strip()
+            before = text[:s["start"]].split()
+            after = text[s["end"]:].split()
+            prev = before[-1] if before else ""
+            nxt = after[0] if after else ""
+            if word in REGION_WORDS and (_is_region(prev) or _is_region(nxt)):
+                continue
+        kept.append(s)
+    return kept
+
+
+def _is_region(word):
+    word = word.strip(" ,")
+    return word in SIDO or word in REGION_WORDS
+
+
+TOKEN_LABEL = re.compile(r"<([A-Z_]+)_[0-9A-Za-z]+>")
+
+
+def embedding_text(masked_text):
+    """임베딩 입력용 사본: 토큰을 라벨 이름만 남긴다 (<PERSON_1a2b…> → <PERSON>).
+
+    문서와 질의 모두 같은 함수를 거쳐야 한다. DB의 masked_text·tokens는 그대로 저장한다.
+    비교 실험: .env 의 EMBED_TOKENS=keep 이면 토큰을 그대로 둔다 (바꾸면 재적재 필요).
+    """
+    mode = (config.env("EMBED_TOKENS", "label") or "label").strip().lower()
+    if mode == "keep":
+        return masked_text
+    if mode != "label":
+        raise ValueError(f"EMBED_TOKENS 는 label 또는 keep 이어야 합니다: {mode}")
+    return TOKEN_LABEL.sub(r"<\1>", masked_text)
 
 
 # ---------------------------------------------------------------- 정규화
@@ -134,10 +194,52 @@ def make_token(label, normalized):
     return f"<{label.upper()}_{digest[:TOKEN_HEX]}>"
 
 
-def pseudonymize(text, spans):
+UNSUPPORTED_MARK = "[개인정보]"   # strict=False 에서 정규화할 수 없는 값을 가리는 고정 표시 (토큰·매핑 없음)
+_SURNAME2 = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문")
+
+
+def _name_link_on():
+    mode = (config.env("NAME_LINK", "off") or "off").strip().lower()
+    if mode not in ("off", "doc"):
+        raise ValueError(f"NAME_LINK 는 off 또는 doc 이어야 합니다: {mode}")
+    return mode == "doc"
+
+
+def _link_given_names(text, ordered):
+    """같은 문서 안에서 '이름만' 쓴 표기를 전체 이름과 잇는다 (설계서 1.2.1 연결안).
+
+    잇는 조건 (모두 만족):
+      - 둘 다 person, 한글 이름
+      - 전체 이름 = 성(1글자 또는 복성) + 짧은 표기   예) 신도윤 ← 도윤
+      - 같은 문서에 그런 전체 이름 후보가 정확히 하나 (후보가 둘 이상이면 원래 표기 유지)
+    반환: {span 위치: 전체 이름 정규화 값}
+    """
+    values = {}
+    for i, s in enumerate(ordered):
+        if s["label"] == "person":
+            try:
+                values[i] = normalize_value("person", text[s["start"]:s["end"]])
+            except ValueError:
+                continue
+    links = {}
+    for i, short in values.items():
+        if not re.fullmatch(r"[가-힣]+", short):
+            continue
+        cands = {full for full in values.values()
+                 if full != short and full.endswith(short)
+                 and (len(full) - len(short) == 1 or (full[:2] in _SURNAME2 and len(full) - len(short) == 2))}
+        if len(cands) == 1:
+            links[i] = cands.pop()
+    return links
+
+
+def pseudonymize(text, spans, strict=True):
+    """strict=False(질의용): 정규화할 수 없는 값은 오류 대신 고정 표시로 가리고 계속한다.
+    적재(문서)는 strict=True 로 두어 처리할 수 없는 값을 조용히 넘기지 않는다."""
     ordered = _validate_spans(text, spans)
+    links = _link_given_names(text, ordered) if _name_link_on() else {}
     out, records, last, seen = [], [], 0, {}
-    for s in ordered:
+    for i, s in enumerate(ordered):
         original = text[s["start"]:s["end"]]
         out.append(text[last:s["start"]])
         last = s["end"]
@@ -148,7 +250,17 @@ def pseudonymize(text, spans):
         if bounds and not original[bounds[1]:].strip(" ,"):
             out.append(original[bounds[0]:bounds[1]])  # 지역만 있으면 토큰·매핑 생성 안 함
             continue
-        normalized = normalize_value(s["label"], original)
+        try:
+            normalized = normalize_value(s["label"], original)
+        except ValueError:
+            if strict:
+                raise
+            out.append(UNSUPPORTED_MARK)                  # 원문은 내보내지 않고, 검색 토큰도 만들지 않음
+            continue
+        alias = None
+        if i in links:                                    # '도윤' → '신도윤' 토큰, '도윤' 토큰은 검색용 별칭으로
+            alias = make_token("person", normalized)
+            normalized = links[i]
         token = make_token(s["label"], normalized)       # 토큰은 주소 '전체' 기준 (같은 주소 = 같은 토큰)
         identity = (s["label"], normalized)
         if token in seen and seen[token] != identity:
@@ -157,8 +269,11 @@ def pseudonymize(text, spans):
         if bounds:
             out.append(original[bounds[0]:bounds[1]] + " ")
         out.append(token)
-        records.append({"label": s["label"], "start": s["start"], "end": s["end"],
-                        "original": original, "normalized": normalized, "token": token})
+        record = {"label": s["label"], "start": s["start"], "end": s["end"],
+                  "original": original, "normalized": normalized, "token": token}
+        if alias:
+            record["alias_token"] = alias
+        records.append(record)
     out.append(text[last:])
     return "".join(out), records
 
