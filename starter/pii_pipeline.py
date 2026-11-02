@@ -33,6 +33,13 @@ v4 추가 (holdout 검색 재현 실험 근거, 2026-10-30)
   - 토큰 길이 64 → 12자리 hex. 64자리는 local 임베딩에서 질의 내용보다 토큰 글자가 벡터를
     좌우했고(같은 인물 질의는 내용이 달라도 순위가 거의 같음), 청크도 187 → 257개로 늘었다.
     12자리(16^12 ≈ 281조)도 충돌 검사는 그대로 유지한다.
+
+v5 추가 (팀 결정 2026-11-02: 주소 전체 가명처리, 지역 정보는 종합 단계에서 메타데이터로)
+  - ADDRESS_MODE=full (기본): 주소 전체를 토큰 하나로 바꾼다. 시도·시군구도 본문에 남기지 않는다.
+      '대구광역시 수성구 한빛로 174, 502호' → '<ADDRESS_…>'
+  - ADDRESS_MODE=region : v2 방식 (시도·시군구 유지). 비교 실험용.
+  - 두 모드 모두 토큰 값은 같다 (주소 전체 정규화 값 기준). 바꾸면 다시 적재해야 한다.
+  - 지역만 단독으로 나온 표기('대구 수성구')는 사람을 특정하지 않으므로 두 모드 모두 그대로 둔다.
   - 지역명 이름 오탐 제거: '충남 천안시 서북구 쪽'에서 천안시·서북구가 person으로 잡혀
     모든 토큰 필터에서 결과가 0건이 되던 문제 (Q049). 행정구역 목록과 앞뒤 단어로만 판단한다.
   - embedding_text(): 임베딩에 넣을 때만 토큰을 라벨 이름(<PERSON>)으로 바꾼다.
@@ -63,7 +70,7 @@ SUPPORTED_LABELS = {
     "person", "phone_number", "email", "address",
     "resident_registration_number", "account_number", "card_number",
 } | DELETE_LABELS
-POLICY_VERSION = "pii-basic-v4"
+POLICY_VERSION = "pii-basic-v5"
 _WIDTH_MAP = {code: chr(code - 0xFEE0) for code in range(0xFF01, 0xFF5F)}
 _WIDTH_MAP[0x3000] = " "
 
@@ -198,6 +205,13 @@ UNSUPPORTED_MARK = "[개인정보]"   # strict=False 에서 정규화할 수 없
 _SURNAME2 = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문")
 
 
+def _address_keep_region():
+    mode = (config.env("ADDRESS_MODE", "full") or "full").strip().lower()
+    if mode not in ("full", "region"):
+        raise ValueError(f"ADDRESS_MODE 는 full 또는 region 이어야 합니다: {mode}")
+    return mode == "region"
+
+
 def _name_link_on():
     mode = (config.env("NAME_LINK", "off") or "off").strip().lower()
     if mode not in ("off", "doc"):
@@ -238,6 +252,7 @@ def pseudonymize(text, spans, strict=True):
     적재(문서)는 strict=True 로 두어 처리할 수 없는 값을 조용히 넘기지 않는다."""
     ordered = _validate_spans(text, spans)
     links = _link_given_names(text, ordered) if _name_link_on() else {}
+    keep_region = _address_keep_region()
     out, records, last, seen = [], [], 0, {}
     for i, s in enumerate(ordered):
         original = text[s["start"]:s["end"]]
@@ -266,7 +281,7 @@ def pseudonymize(text, spans, strict=True):
         if token in seen and seen[token] != identity:
             raise ValueError("서로 다른 개인정보 값의 토큰 충돌")
         seen[token] = identity
-        if bounds:
+        if bounds and keep_region:                        # region 모드만 시도·시군구를 앞에 남긴다
             out.append(original[bounds[0]:bounds[1]] + " ")
         out.append(token)
         record = {"label": s["label"], "start": s["start"], "end": s["end"],

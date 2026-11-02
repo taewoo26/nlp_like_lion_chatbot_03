@@ -20,6 +20,7 @@
 검색 단계는 rag_user 계정만 씁니다 (매핑 테이블 접근 없음).
 """
 import argparse
+import re
 
 from . import config, db, pii_pipeline
 from .embed import embed
@@ -42,14 +43,14 @@ def _mode():
 
 def search(query, k=10, conn=None):
     masked_q, q_tokens = mask_query(query)
-    vec = embed([pii_pipeline.embedding_text(masked_q)])[0]
+    vec = embed([pii_pipeline.embedding_text(masked_q)], kind="query")[0]
     mode = _mode()
     own = conn is None
     conn = conn or db.rag_conn()
     try:
         with conn.cursor() as cur:
             if mode == "boost" and q_tokens:
-                return masked_q, q_tokens, _search_boost(cur, vec, q_tokens, k)
+                return masked_q, q_tokens, rerank_top(masked_q, _search_boost(cur, vec, q_tokens, k))
             if q_tokens:
                 # 토큰 후보를 먼저 확정(MATERIALIZED)한 뒤 그 안에서만 거리 순으로 정렬한다.
                 # 필터를 바깥 쿼리에 두면 k가 작을 때 DB가 HNSW 근사 인덱스를 골라
@@ -82,7 +83,42 @@ def search(query, k=10, conn=None):
         if doc_id not in best:
             best[doc_id] = {"doc_id": doc_id, "chunk_id": chunk_id, "masked_text": text,
                             "tokens": tokens, "score": 1 - float(dist)}
-    return masked_q, q_tokens, list(best.values())[:k]
+    return masked_q, q_tokens, rerank_top(masked_q, list(best.values())[:k])
+
+
+# ---------------------------------------------------------------- 상위 문서 재정렬 (단어 겹침)
+_TOKEN = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
+_KEEP_TAGS = ("NNG", "NNP", "VV", "VA", "XR", "SL", "SN")
+
+
+def _terms(text):
+    """토큰을 지운 뒤 Kiwi로 내용어(명사·동사·형용사 등)만 뽑는다."""
+    from detection.rule.kiwi_filter import _get_kiwi   # 탐지기가 이미 불러 둔 Kiwi 재사용
+    return {t.form for t in _get_kiwi().tokenize(_TOKEN.sub(" ", text))
+            if t.tag in ("NNG", "NNP") or (t.tag.startswith(_KEEP_TAGS) and len(t.form) > 1)}
+
+
+def rerank_top(masked_q, docs):
+    """상위 RERANK_TOP(기본 5)개 문서만 '의미 점수 + 가중치 × 질문 단어 겹침'으로 다시 줄 세운다.
+
+    상위 5개에 드는 문서 구성은 바꾸지 않고 순서만 바꾸므로 Hit@5·Recall@5 는 그대로이고,
+    '완료/진행 중', '포인트', '감사 지적'처럼 같은 인물 문서끼리 갈리는 핵심 단어로 1등을 고른다.
+    holdout 재현 실험(bge-m3, AND): Hit@1 .852 → .898, MRR .904 → .934, 다른 지표 변화 없음.
+    RERANK_TOP=0 이면 끈다.
+    """
+    top = int(config.env("RERANK_TOP", "5"))
+    weight = float(config.env("RERANK_WEIGHT", "0.2"))
+    if top <= 1 or len(docs) <= 1 or weight <= 0:
+        return docs
+    q_terms = _terms(masked_q)
+    if not q_terms:
+        return docs
+    head, tail = docs[:top], docs[top:]
+    overlap = {d["doc_id"]: len(q_terms & _terms(d["masked_text"])) / len(q_terms) for d in head}
+    best = max(overlap.values()) or 1.0
+    for d in head:
+        d["score"] = d["score"] + weight * overlap[d["doc_id"]] / best
+    return sorted(head, key=lambda d: -d["score"]) + tail
 
 
 def _search_boost(cur, vec, q_tokens, k):

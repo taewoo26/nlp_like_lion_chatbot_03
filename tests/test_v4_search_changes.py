@@ -57,7 +57,7 @@ def _conn(fetches):
 def test_search_embeds_token_free_query(monkeypatch):
     seen = []
     monkeypatch.setattr(search, "mask_query", lambda q: ("<PERSON_abcdefabcdef> 고객", []))
-    monkeypatch.setattr(search, "embed", lambda texts: seen.extend(texts) or [[1.0]])
+    monkeypatch.setattr(search, "embed", lambda texts, **kw: seen.extend(texts) or [[1.0]])
     monkeypatch.setenv("SEARCH_MODE", "and")
     conn, _ = _conn([[]])
     search.search("입력", conn=conn)
@@ -67,7 +67,7 @@ def test_search_embeds_token_free_query(monkeypatch):
 def test_boost_ranks_token_docs_first_without_dropping_others(monkeypatch):
     tok = "<PERSON_abcdefabcdef>"
     monkeypatch.setattr(search, "mask_query", lambda q: (f"{tok} 문의", [tok]))
-    monkeypatch.setattr(search, "embed", lambda texts: [[1.0]])
+    monkeypatch.setattr(search, "embed", lambda texts, **kw: [[1.0]])
     monkeypatch.setenv("SEARCH_MODE", "boost")
     hits = [("H2", "H2#0", "내용", [], 0.05),            # 의미는 가깝지만 토큰 없음
             ("H1", "H1#0", f"{tok} 내용", [tok], 0.40)]  # 토큰 일치
@@ -79,7 +79,7 @@ def test_boost_ranks_token_docs_first_without_dropping_others(monkeypatch):
 
 def test_unknown_search_mode_is_rejected(monkeypatch):
     monkeypatch.setattr(search, "mask_query", lambda q: ("질의", []))
-    monkeypatch.setattr(search, "embed", lambda texts: [[1.0]])
+    monkeypatch.setattr(search, "embed", lambda texts, **kw: [[1.0]])
     monkeypatch.setenv("SEARCH_MODE", "loose")
     with pytest.raises(ValueError):
         search.search("입력", conn=_conn([[]])[0])
@@ -94,7 +94,7 @@ def test_embedding_text_keep_mode(monkeypatch):
 def test_token_filter_is_applied_before_vector_ordering(monkeypatch):
     """필터를 MATERIALIZED 후보 안에서 정렬해야 HNSW 근사 인덱스가 정답을 먼저 잘라내지 않는다."""
     monkeypatch.setattr(search, "mask_query", lambda q: ("질의", ["<PERSON_abcdefabcdef>"]))
-    monkeypatch.setattr(search, "embed", lambda texts: [[1.0]])
+    monkeypatch.setattr(search, "embed", lambda texts, **kw: [[1.0]])
     monkeypatch.setenv("SEARCH_MODE", "and")
     conn, cursor = _conn([[]])
     search.search("입력", k=3, conn=conn)
