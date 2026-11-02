@@ -78,7 +78,8 @@ def test_confirmed_initial_name_is_excluded(value):
 
 
 @pytest.mark.parametrize('value,region', [('청구 101동 905호', ''), ('서울 가구 101동 905호', '서울')])
-def test_unverified_region_is_not_exposed_by_actual_detector(value, region):
+def test_unverified_region_is_not_exposed_by_actual_detector(monkeypatch, value, region):
+    monkeypatch.setenv('ADDRESS_MODE', 'region')
     text = '주소: ' + value
     masked, records = pii.pseudonymize(text, pii.detect(text))
     assert masked == '주소: ' + (region + ' ' if region else '') + records[0]['token']

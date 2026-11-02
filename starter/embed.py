@@ -1,4 +1,11 @@
-"""임베딩. OpenAI 호환 /embeddings API 또는 테스트용 로컬 해시 임베딩.
+"""임베딩. OpenAI 호환 /embeddings API, 로컬 e5 모델, 또는 테스트용 로컬 해시 임베딩.
+
+EMBED_PROVIDER (.env)
+  api   : OpenAI 호환 API (예: CLOVA bge-m3, 1024차원)
+  e5    : 내 컴퓨터의 sentence-transformers 모델 (팀 기본: models/e5-small-ko-v2-fix, 384차원)
+          EMBED_MODEL_PATH 로 모델 폴더를 바꿀 수 있다. API 호출·속도 제한 없음.
+          e5 계열은 질의 앞에 "query: ", 문서 앞에 "passage: " 를 붙여야 성능이 나온다.
+  local : 문자 n-gram 해시 (동작 확인용, 검색 품질 낮음)
 
 주의: 이 함수에는 반드시 가명처리된(마스킹된) 텍스트만 넣어야 합니다.
 
@@ -25,6 +32,7 @@ _MAX_RETRY = 8
 _MAX_WAIT = 60.0
 _last_call = [0.0]
 _cache = None
+_st_model = None
 
 
 def _local(texts):
@@ -149,5 +157,34 @@ def _api(texts):
     return out
 
 
-def embed(texts):
-    return _api(texts) if config.EMBED_PROVIDER == "api" else _local(texts)
+# ---------------------------------------------------------------- 로컬 e5 (sentence-transformers)
+def _e5_model():
+    global _st_model
+    if _st_model is None:
+        from sentence_transformers import SentenceTransformer   # e5 를 쓸 때만 불러온다
+        path = config.env("EMBED_MODEL_PATH", "models/e5-small-ko-v2-fix")
+        full = config.ROOT / path
+        if not full.exists():
+            raise RuntimeError(f"임베딩 모델 폴더가 없습니다: {full} (hf download 로 먼저 받으세요)")
+        _st_model = SentenceTransformer(str(full), device="cpu")
+    return _st_model
+
+
+def _e5(texts, kind):
+    prefix = "query: " if kind == "query" else "passage: "
+    vecs = _e5_model().encode([prefix + t for t in texts], batch_size=32,
+                              normalize_embeddings=True, show_progress_bar=len(texts) > 50)
+    out = [np.asarray(v, dtype=np.float32) for v in vecs]
+    bad = {len(v) for v in out} - {config.EMBED_DIM}
+    if bad:
+        raise RuntimeError(f"임베딩 차원 {sorted(bad)} 이 EMBED_DIM={config.EMBED_DIM} 과 다릅니다.")
+    return out
+
+
+def embed(texts, kind="passage"):
+    """kind: 문서는 "passage"(기본), 검색 질의는 "query". e5 에서만 접두어가 달라지고 나머지는 무시."""
+    if config.EMBED_PROVIDER == "api":
+        return _api(texts)
+    if config.EMBED_PROVIDER == "e5":
+        return _e5(texts, kind)
+    return _local(texts)
