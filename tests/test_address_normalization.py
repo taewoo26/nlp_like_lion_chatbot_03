@@ -56,7 +56,8 @@ def test_different_address_information_is_preserved(left, right):
     ("123 Main St, Los Angeles, CA 90012", ""),
     ("서울숲길 12", ""),
 ])
-def test_address_masking_preserves_only_original_region(address, expected_region):
+def test_address_masking_preserves_only_original_region(monkeypatch, address, expected_region):
+    monkeypatch.setenv("ADDRESS_MODE", "region")       # v2 방식(시도·시군구 유지) 비교 모드
     text = "주소: " + address
     span = {"label": "address", "start": 4, "end": len(text)}
     masked, records = pii.pseudonymize(text, [span])
@@ -96,6 +97,7 @@ def test_unknown_address_format_only_collapses_whitespace():
     ('서울 부산진구 도담길 125', '서울'),  # 존재하는 구라도 시도가 다르면 보존하지 않음
     ('미확인시 도담길 125', ''),
 ])
-def test_unverified_region_is_masked(address, region):
+def test_unverified_region_is_masked(monkeypatch, address, region):
+    monkeypatch.setenv("ADDRESS_MODE", "region")
     masked, records = pii.pseudonymize(address, [{'label': 'address', 'start': 0, 'end': len(address)}])
     assert masked == (region + ' ' if region else '') + records[0]['token']

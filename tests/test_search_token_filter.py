@@ -8,7 +8,7 @@ from starter import search
 @pytest.mark.parametrize('tokens', [[], ['<PERSON_a>'], ['<PERSON_a>', '<PHONE_NUMBER_b>']])
 def test_search_binds_all_query_tokens_and_does_not_fall_back(monkeypatch, tokens):
     monkeypatch.setattr(search, 'mask_query', lambda query: ('가명 질의', tokens))
-    monkeypatch.setattr(search, 'embed', lambda texts: [[1., 0., 0.]])
+    monkeypatch.setattr(search, 'embed', lambda texts, **kw: [[1., 0., 0.]])
     cursor = Mock()
     cursor.__enter__ = Mock(return_value=cursor)
     cursor.__exit__ = Mock(return_value=False)
