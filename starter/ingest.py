@@ -85,14 +85,16 @@ def main():
             {k: r[k] for k in ("label", "start", "end", "token")} for r in records]})
         for r in records:
             collect_mapping(mapping, r)
+        aliases = {r["alias_token"] for r in records if r.get("alias_token")}  # NAME_LINK=doc 일 때만 생김
         for i, c in enumerate(chunk(masked, a.max_chars)):
             rows.append({"chunk_id": f"{d['id']}#{i}", "doc_id": d["id"], "chunk_idx": i,
                          "doc_type": d.get("doc_type"), "masked_text": c,
-                         "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)))})
+                         "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases)})
     t_mask = time.perf_counter() - t0
 
     t1 = time.perf_counter()
-    vecs = embed([r["masked_text"] for r in rows])
+    # 임베딩에는 토큰을 라벨 이름으로 바꾼 사본만 넣는다 (DB에는 masked_text 그대로 저장)
+    vecs = embed([pii_pipeline.embedding_text(r["masked_text"]) for r in rows])
     t_embed = time.perf_counter() - t1
 
     with db.rag_conn() as conn, conn.cursor() as cur:

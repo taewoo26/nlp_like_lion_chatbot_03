@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>도장곰 창구</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6efe4; --bg2:#efe3d1; --wall:#fbf6ee; --ink:#3a2a20; --ink2:#7a6253; --line:#e2d3bf;
+  --wood:#b97a4a; --wood2:#9a6239; --wood3:#7c4d2c; --glass:#dcefee;
+  --bear:#d49a62; --bear2:#b97e4b; --muzzle:#f7e3c8; --nose:#4a2e22; --blush:#f2a7a0;
+  --cap:#2f5d62; --cap2:#244a4e; --gold:#e7b84e; --ink-red:#d9534f;
+  --user:#2f5d62; --user-ink:#fff; --bot:#fffaf2; --chip:#f0e6d8;
+  --ok:#3f8f6b; --warn:#c0733a; --radius:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Gowun Dodum",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  background-image:radial-gradient(circle at 20% 10%,#fff8ec 0,transparent 40%),radial-gradient(circle at 90% 90%,#f1e2cd 0,transparent 45%)}
+.app{max-width:1120px;margin:0 auto;padding:20px 16px 24px;display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:20px;height:100vh;height:100dvh}
+@media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto auto 80vh;height:auto}.counter{min-height:460px}}
+header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-badge{width:42px;height:42px;border-radius:12px;background:var(--cap);display:grid;place-items:center;color:#fff;font-family:Jua;font-size:22px;box-shadow:0 3px 0 var(--cap2)}
+.brand h1{margin:0;font-family:Jua;font-size:26px;letter-spacing:.5px}
+.brand p{margin:0;color:var(--ink2);font-size:13px}
+.status{display:flex;gap:8px;flex-wrap:wrap}
+.pill{font-size:12px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2);display:inline-flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:#bbb}
+.dot.on{background:var(--ok)} .dot.demo{background:var(--warn)}
+
+/* ---------------- 창구 (왼쪽) ---------------- */
+.counter{position:relative;background:var(--wall);border:1px solid var(--line);border-radius:26px;overflow:hidden;min-height:0;display:flex;flex-direction:column}
+.wall{position:relative;flex:1;padding:16px 16px 0;display:flex;flex-direction:column;background:
+  linear-gradient(var(--wall),var(--wall)) padding-box,
+  repeating-linear-gradient(90deg,transparent 0 46px,rgba(185,122,74,.06) 46px 48px)}
+.sign{display:flex;justify-content:space-between;align-items:center}
+.window-no{font-family:Jua;background:var(--cap);color:#fff;padding:6px 12px;border-radius:10px;font-size:15px;box-shadow:0 3px 0 var(--cap2)}
+.clock{width:46px;height:46px;border-radius:50%;background:#fff;border:3px solid var(--wood2);position:relative}
+.clock::before,.clock::after{content:"";position:absolute;left:50%;top:50%;background:var(--ink);border-radius:2px;transform-origin:50% 100%}
+.clock::before{width:3px;height:14px;margin:-14px 0 0 -1.5px;transform:rotate(40deg)}
+.clock::after{width:2px;height:18px;margin:-18px 0 0 -1px;animation:tick 60s steps(60) infinite}
+@keyframes tick{to{transform:rotate(360deg)}}
+.stage{position:relative;flex:1;min-height:300px;display:grid;place-items:end center;margin-top:6px}
+.glass{position:absolute;inset:20px 18px 0;border-radius:22px 22px 0 0;background:linear-gradient(160deg,rgba(220,239,238,.55),rgba(220,239,238,.15));border:2px solid rgba(47,93,98,.18);border-bottom:none}
+.glass::before{content:"";position:absolute;top:18px;left:26px;width:60px;height:160px;border-radius:30px;background:linear-gradient(180deg,rgba(255,255,255,.65),rgba(255,255,255,0));transform:skewX(-14deg)}
+.glass-hole{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:150px;height:22px;border-radius:14px 14px 0 0;background:var(--wall);border:2px solid rgba(47,93,98,.18);border-bottom:none}
+#bear{position:relative;overflow:visible;width:338px;max-width:92%;max-height:100%;z-index:2;transform-origin:50% 100%}
+.desk{position:relative;z-index:3;flex:none;height:96px;background:linear-gradient(180deg,var(--wood) 0 22px,var(--wood2) 22px);border-top:3px solid #d49a6a;box-shadow:inset 0 -18px 0 var(--wood3)}
+.desk::before{content:"";position:absolute;left:0;right:0;top:22px;height:2px;background:rgba(0,0,0,.08)}
+.nameplate{position:absolute;left:22px;top:-26px;background:#fff8ea;border:2px solid var(--wood3);border-radius:8px;padding:4px 10px;font-family:Jua;font-size:14px;color:var(--wood3);box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.bell{position:absolute;right:30px;top:-20px;width:40px;height:22px}
+.bell i{position:absolute;bottom:0;left:2px;width:36px;height:6px;border-radius:3px;background:#8a8f99}
+.bell b{position:absolute;bottom:5px;left:6px;width:28px;height:16px;border-radius:14px 14px 2px 2px;background:linear-gradient(180deg,#f5d77b,#d9a93a)}
+.bell s{position:absolute;bottom:20px;left:17px;width:6px;height:5px;border-radius:3px;background:#d9a93a}
+.ticket{position:absolute;left:16px;right:16px;text-align:center;bottom:14px;font-size:12px;color:#f8ead6;opacity:.9;letter-spacing:.5px}
+
+/* 말풍선(생각/아하/죄송) */
+.bubble{position:absolute;z-index:4;top:4px;right:4%;padding:8px 14px;border-radius:16px;background:#fff;border:2px solid var(--ink);font-family:Jua;font-size:18px;opacity:0;transform:scale(.6) translateY(10px);transition:all .25s cubic-bezier(.3,1.6,.6,1)}
+.bubble::after{content:"";position:absolute;left:18px;bottom:-12px;width:14px;height:14px;background:#fff;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:rotate(45deg)}
+.state-thinking .bubble.think,.state-found .bubble.aha,.state-sorry .bubble.sorry,.state-nollm .bubble.aha{opacity:1;transform:none}
+.think span{display:inline-block;animation:dots 1.1s infinite}
+.think span:nth-child(2){animation-delay:.15s}.think span:nth-child(3){animation-delay:.3s}
+@keyframes dots{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+
+/* ---------------- 곰 표정 상태 ---------------- */
+.face{display:none}
+.state-idle .face.idle,.state-thinking .face.think,.state-found .face.happy,.state-nollm .face.happy,.state-sorry .face.sad{display:inline}
+.state-idle #bear{animation:breathe 3.2s ease-in-out infinite}
+.state-idle .eyes-open{animation:blink 4.6s infinite;transform-origin:120px 118px}
+@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+.state-thinking #head{animation:tilt 1.6s ease-in-out infinite;transform-origin:120px 190px}
+.state-thinking #pawL{animation:tap .5s ease-in-out infinite}
+@keyframes tilt{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(-3deg)}}
+@keyframes tap{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.state-found #bear,.state-nollm #bear{animation:hop .6s cubic-bezier(.3,1.6,.5,1) 1}
+@keyframes hop{0%{transform:translateY(0) scale(1)}40%{transform:translateY(-22px) scale(1.03,.97)}100%{transform:translateY(0)}}
+.bulb,.spark{opacity:0;transition:opacity .2s}
+.state-found .bulb,.state-nollm .bulb{opacity:1;animation:pop .5s cubic-bezier(.3,1.8,.5,1)}
+.state-found .spark,.state-nollm .spark{opacity:1;animation:twinkle 1.2s ease-in-out infinite}
+@keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+.bulb,.spark{transform-box:fill-box;transform-origin:center}
+.state-sorry #head{animation:bow .7s ease-out forwards;transform-origin:120px 200px}
+@keyframes bow{to{transform:rotate(0) translateY(10px)}}
+.sweat{opacity:0}
+.state-sorry .sweat{opacity:1;animation:drip 1.4s ease-in infinite}
+@keyframes drip{0%{transform:translateY(0);opacity:1}100%{transform:translateY(10px);opacity:0}}
+.stamp-arm{transition:transform .25s}
+.stamping .stamp-arm{animation:stampDown .45s ease-in-out 1}
+@keyframes stampDown{0%{transform:translateY(0)}45%{transform:translateY(16px)}100%{transform:translateY(0)}}
+
+/* ---------------- 상담 창 (오른쪽) ---------------- */
+.panel{background:#fff;border:1px solid var(--line);border-radius:26px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.panel-head h2{margin:0;font-family:Jua;font-size:19px}
+.panel-head small{color:var(--ink2)}
+.log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,#fffdf9,#fffaf2)}
+.msg{max-width:86%;padding:12px 15px;border-radius:var(--radius);line-height:1.65;font-size:15px;word-break:keep-all;overflow-wrap:anywhere;animation:rise .25s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+.msg.user{align-self:flex-end;background:var(--user);color:var(--user-ink);border-bottom-right-radius:6px}
+.msg.bot{align-self:flex-start;background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:6px}
+.msg.bot .who{font-family:Jua;font-size:13px;color:var(--wood3);margin-bottom:4px;display:flex;gap:6px;align-items:center}
+.msg.bot.sorry{background:#fff4ee;border-color:#f0cdb8}
+.typing{display:inline-flex;gap:4px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--ink2);animation:dots 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+.tok{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;margin:0 2px;border-radius:999px;background:var(--chip);border:1px dashed #cdb69b;font-size:13px;white-space:nowrap;vertical-align:1px}
+.tok b{font-weight:400;color:var(--ink2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.meta{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:grid;gap:8px}
+.mask-box{position:relative;background:#f7f2ea;border-radius:12px;padding:8px 10px;font-size:13.5px}
+.mask-box .label{font-family:Jua;font-size:12px;color:var(--cap);display:block;margin-bottom:2px}
+.seal{position:absolute;right:8px;top:6px;width:42px;height:42px;border-radius:50%;border:3px solid var(--ink-red);color:var(--ink-red);font-family:Jua;font-size:13px;display:grid;place-items:center;transform:rotate(-14deg) scale(1.6);opacity:0;mix-blend-mode:multiply}
+.seal.on{animation:seal .45s cubic-bezier(.2,1.6,.5,1) forwards}
+@keyframes seal{to{opacity:.85;transform:rotate(-14deg) scale(1)}}
+.docs{display:flex;flex-wrap:wrap;gap:6px}
+.doc{font-size:12.5px;padding:4px 10px;border-radius:999px;background:#eef5f4;color:var(--cap);border:1px solid #cfe3e1;cursor:help}
+.composer{border-top:1px solid var(--line);padding:12px;display:grid;gap:10px;background:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{font:inherit;font-size:12.5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
+.chips button:hover{background:#fff1dd}
+form{display:flex;gap:8px}
+input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none}
+input[type=text]:focus{border-color:var(--cap)}
+button.send{font-family:Jua;font-size:16px;padding:0 18px;border-radius:14px;border:none;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
+button.send:disabled{opacity:.55;cursor:wait}
+.note{font-size:12px;color:var(--ink2)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-badge" aria-hidden="true">印</div>
+      <div>
+        <h1>도장곰 창구</h1>
+        <p>이름·번호는 도장 쾅! 가명 토큰으로 바꿔서만 찾아드려요</p>
+      </div>
+    </div>
+    <div class="status">
+      <span class="pill"><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span></span>
+      <span class="pill" title="검색 방식">🔎 <span id="modeText">AND</span></span>
+      <span class="pill" title="원문은 외부로 나가지 않아요">🔒 실명 비공개</span>
+    </div>
+  </header>
+
+  <!-- ===================== 창구 ===================== -->
+  <section class="counter" aria-label="창구">
+    <div class="wall">
+      <div class="sign">
+        <span class="window-no">가명 상담 3번 창구</span>
+        <span class="clock" aria-hidden="true"></span>
+      </div>
+      <div class="stage state-idle" id="stage">
+        <div class="glass" aria-hidden="true"><div class="glass-hole"></div></div>
+        <div class="bubble think" aria-hidden="true"><span>·</span><span>·</span><span>·</span> 서류 찾는 중</div>
+        <div class="bubble aha" aria-hidden="true">아하! 찾았어요</div>
+        <div class="bubble sorry" aria-hidden="true">앗, 죄송해요…</div>
+
+        <svg id="bear" viewBox="-30 -95 300 395" role="img" aria-labelledby="bearT">
+          <title id="bearT">창구에 앉은 도장곰</title>
+          <!-- 몸통: 은행원 유니폼 -->
+          <g id="body">
+            <path d="M46 300 Q40 222 82 194 L158 194 Q200 222 194 300 Z" fill="var(--bear)"/>
+            <path d="M52 300 Q48 228 86 200 L104 200 L120 250 L136 200 L154 200 Q192 228 188 300 Z" fill="var(--cap)"/>
+            <path d="M104 200 L120 250 L136 200 Z" fill="#fffaf2"/>
+            <path d="M104 200 L113 214 L120 206 Z M136 200 L127 214 L120 206 Z" fill="#e9dfd0"/>
+            <path d="M120 250 L120 300" stroke="var(--cap2)" stroke-width="2"/>
+            <circle cx="128" cy="264" r="3.2" fill="var(--gold)"/><circle cx="128" cy="284" r="3.2" fill="var(--gold)"/>
+            <path d="M78 228 Q86 238 98 236" stroke="var(--cap2)" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <!-- 팔(소매) -->
+            <path d="M66 222 Q52 252 70 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
+            <path d="M174 222 Q188 252 168 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
+            <rect x="134" y="230" width="24" height="12" rx="3" fill="#fff8ea" stroke="var(--gold)" stroke-width="1.5"/>
+            <text x="146" y="239.5" font-size="8" text-anchor="middle" fill="var(--wood3)" font-family="Jua">주임</text>
+          </g>
+          <g transform="translate(120 196) scale(1.5) translate(-120 -196)">
+          <g id="head">
+            <!-- 귀 (모자 옆으로 보이게 바깥쪽으로) -->
+            <circle cx="50" cy="74" r="25" fill="var(--bear2)"/><circle cx="50" cy="74" r="13" fill="#f3c9a3"/>
+            <circle cx="190" cy="74" r="25" fill="var(--bear2)"/><circle cx="190" cy="74" r="13" fill="#f3c9a3"/>
+            <!-- 얼굴 -->
+            <ellipse cx="120" cy="124" rx="90" ry="80" fill="var(--bear)"/>
+            <!-- 은행원 모자 -->
+            <path d="M54 84 Q40 30 120 14 Q200 30 186 84 Q120 66 54 84Z" fill="var(--cap)"/>
+            <path d="M74 40 Q100 24 128 22" stroke="#4d8086" stroke-width="5" fill="none" stroke-linecap="round" opacity=".7"/>
+            <path d="M46 82 Q120 62 194 82 Q198 92 190 96 Q120 78 50 96 Q42 92 46 82Z" fill="var(--cap2)"/>
+            <path d="M52 88 Q120 70 188 88" stroke="var(--gold)" stroke-width="2" fill="none" opacity=".8"/>
+            <circle cx="120" cy="48" r="12" fill="var(--gold)"/><circle cx="120" cy="48" r="9" fill="none" stroke="#c99a35" stroke-width="1.5"/>
+            <text x="120" y="52.5" font-size="12" text-anchor="middle" fill="var(--cap2)" font-family="Jua">印</text>
+            <!-- 볼터치 -->
+            <ellipse cx="72" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
+            <ellipse cx="168" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
+            <!-- 주둥이 -->
+            <ellipse cx="120" cy="152" rx="40" ry="30" fill="var(--muzzle)"/>
+            <ellipse cx="120" cy="138" rx="11" ry="8" fill="var(--nose)"/>
+            <ellipse cx="116" cy="135" rx="3.5" ry="2" fill="#fff" opacity=".6"/>
+
+            <!-- 표정: 대기 -->
+            <g class="face idle">
+              <g class="eyes-open">
+                <circle cx="88" cy="118" r="8" fill="#3b2418"/><circle cx="85" cy="115" r="2.6" fill="#fff"/>
+                <circle cx="152" cy="118" r="8" fill="#3b2418"/><circle cx="149" cy="115" r="2.6" fill="#fff"/>
+              </g>
+              <path d="M110 152 Q115 159 120 152 Q125 159 130 152" stroke="#3b2418" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </g>
+            <!-- 표정: 생각 중 -->
+            <g class="face think">
+              <path d="M74 100 L100 96" stroke="#3b2418" stroke-width="3.5" stroke-linecap="round"/>
+              <path d="M140 92 L164 100" stroke="#3b2418" stroke-width="3.5" stroke-linecap="round"/>
+              <circle cx="86" cy="116" r="8" fill="#3b2418"/><circle cx="83" cy="112" r="2.6" fill="#fff"/>
+              <circle cx="150" cy="116" r="8" fill="#3b2418"/><circle cx="147" cy="112" r="2.6" fill="#fff"/>
+              <path d="M112 158 Q120 154 128 158" stroke="#3b2418" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </g>
+            <!-- 표정: 아하! -->
+            <g class="face happy">
+              <path d="M76 120 Q88 104 100 120" stroke="#3b2418" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M140 120 Q152 104 164 120" stroke="#3b2418" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M106 152 Q120 176 134 152 Z" fill="#7a3b2e"/><path d="M112 162 Q120 170 128 162" fill="#f08f86"/>
+            </g>
+            <!-- 표정: 죄송해요 -->
+            <g class="face sad">
+              <path d="M74 112 L98 103" stroke="#3b2418" stroke-width="3.5" stroke-linecap="round"/>
+              <path d="M142 103 L166 112" stroke="#3b2418" stroke-width="3.5" stroke-linecap="round"/>
+              <path d="M78 122 Q88 130 98 122" stroke="#3b2418" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M142 122 Q152 130 162 122" stroke="#3b2418" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M110 162 Q120 154 130 162" stroke="#3b2418" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path class="sweat" d="M186 92 Q192 104 186 110 Q180 104 186 92Z" fill="#8fd0f0"/>
+            </g>
+          </g>
+          </g>
+          <!-- 나비넥타이 -->
+          <g id="bow"><path d="M120 216 L102 207 Q98 216 102 225 Z M120 216 L138 207 Q142 216 138 225 Z" fill="var(--ink-red)"/><circle cx="120" cy="216" r="5" fill="#b8423f"/></g>
+          <!-- 아하 효과 -->
+          <g class="bulb">
+            <circle cx="244" cy="-22" r="15" fill="#ffe27a" stroke="#d9a93a" stroke-width="2"/>
+            <rect x="238" y="-8" width="12" height="7" rx="2" fill="#a7a7b0"/>
+            <path d="M244 -34 L244 -40 M260 -22 L266 -22 M228 -22 L222 -22 M255 -33 L259 -37 M233 -33 L229 -37" stroke="#e7b84e" stroke-width="3" stroke-linecap="round"/>
+          </g>
+          <path class="spark" d="M-8 10 L-4 20 L6 24 L-4 28 L-8 38 L-12 28 L-22 24 L-12 20Z" fill="#ffd166"/>
+          <path class="spark" d="M254 110 L257 117 L264 120 L257 123 L254 130 L251 123 L244 120 L251 117Z" fill="#ffd166" style="animation-delay:.4s"/>
+          <!-- 앞발 + 도장 -->
+          <g id="pawL"><ellipse cx="72" cy="282" rx="24" ry="16" fill="var(--bear2)"/><ellipse cx="72" cy="286" rx="12" ry="7" fill="#f3c9a3"/></g>
+          <g class="stamp-arm" id="stampArm" style="transform-box:fill-box">
+            <rect x="198" y="248" width="18" height="26" rx="8" fill="#8a5a36"/>
+            <circle cx="207" cy="248" r="8" fill="#a8703f"/>
+            <rect x="192" y="272" width="30" height="11" rx="4" fill="var(--ink-red)"/>
+            <ellipse cx="170" cy="282" rx="24" ry="16" fill="var(--bear2)"/><ellipse cx="170" cy="286" rx="12" ry="7" fill="#f3c9a3"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="desk">
+      <span class="nameplate">도장곰 주임</span>
+      <span class="bell" aria-hidden="true"><s></s><b></b><i></i></span>
+      <span class="ticket">실명은 창구 밖으로 나가지 않아요 · HMAC 가명 도장 사용</span>
+    </div>
+  </section>
+
+  <!-- ===================== 상담 창 ===================== -->
+  <section class="panel" aria-label="상담">
+    <div class="panel-head">
+      <h2>무엇을 찾아드릴까요?</h2>
+      <small id="hint">사내 문서 187건 · 가명 검색</small>
+    </div>
+    <div class="log" id="log" aria-live="polite">
+      <div class="msg bot">
+        <div class="who">🐻 도장곰 주임</div>
+        안녕하세요! 고객 이름이나 연락처를 말씀하셔도 괜찮아요. 제가 도장으로 가명 토큰으로 바꾼 뒤에만 문서를 찾아요.
+        문서에 없는 내용은 지어내지 않고 <b>모른다고</b> 말씀드릴게요.
+      </div>
+    </div>
+    <div class="composer">
+      <div class="chips" id="chips">
+        <button type="button">01057847365 이 번호로 들어온 건 있었나요?</button>
+        <button type="button">해외에서 카드 막혔다고 전화했던 정하은 고객 기록</button>
+        <button type="button">협력사 점검 출장 같이 간 김민준 직원 보고서 있어?</button>
+        <button type="button">김민준 고객 대출 상담 내역 알려줘</button>
+        <button type="button">보이스피싱 피해 접수</button>
+      </div>
+      <form id="form" autocomplete="off">
+        <label class="sr" for="q">질문</label>
+        <input type="text" id="q" placeholder="예) 윤선영 VOC 해결 완료 건" maxlength="500">
+        <button class="send" id="send" type="submit">물어보기</button>
+      </form>
+      <div class="note">입력한 질문 원문은 이 화면에만 보이고, 서버는 가명처리된 질문만 돌려줘요.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const stage = $("#stage"), log = $("#log"), form = $("#form"), input = $("#q"), sendBtn = $("#send");
+const LABEL = {PERSON:["👤","사람"], PHONE_NUMBER:["📞","전화"], EMAIL:["✉️","메일"], ADDRESS:["🏠","주소"],
+  RESIDENT_REGISTRATION_NUMBER:["🪪","주민번호"], ACCOUNT_NUMBER:["🏦","계좌"], CARD_NUMBER:["💳","카드"]};
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let DEMO = new URLSearchParams(location.search).has("demo") || location.protocol === "file:";
+let idleTimer;
+
+function setState(s){ stage.className = "stage state-" + s; clearTimeout(idleTimer);
+  if (s === "found" || s === "nollm" || s === "sorry") idleTimer = setTimeout(() => setState("idle"), 6000); }
+function esc(t){ return t.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function chipify(t){
+  return esc(t).replace(/&lt;([A-Z_]+)_([0-9A-Za-z]+)&gt;/g, (m, lab, id) => {
+    const [ico, name] = LABEL[lab.toUpperCase()] || ["🔖", lab];
+    return `<span class="tok" title="가명 토큰 ${lab}_${id}">${ico} ${name} <b>#${id.slice(0,4).toLowerCase()}</b></span>`;
+  }).replace(/\n/g, "<br>");
+}
+function addMsg(cls, html){ const d = document.createElement("div"); d.className = "msg " + cls; d.innerHTML = html;
+  log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+function stamp(){ stage.classList.remove("stamping"); void stage.offsetWidth; stage.classList.add("stamping");
+  setTimeout(() => stage.classList.remove("stamping"), 500); }
+
+async function typeInto(el, text){
+  if (REDUCED){ el.innerHTML = chipify(text); return; }
+  const parts = text.split(/(<[A-Za-z_]+_[0-9A-Za-z]+>)/);   // 토큰은 한 번에, 글자는 하나씩
+  let shown = "";
+  for (const p of parts){
+    if (/^<[A-Za-z_]+_[0-9A-Za-z]+>$/.test(p)){ shown += p; el.innerHTML = chipify(shown); await sleep(40); continue; }
+    for (const ch of p){ shown += ch; el.innerHTML = chipify(shown); log.scrollTop = log.scrollHeight; await sleep(ch === " " ? 8 : 18); }
+  }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function ask(q){
+  addMsg("user", esc(q));
+  setState("thinking"); stamp();
+  const bot = addMsg("bot", `<div class="who">🐻 도장곰 주임</div><span class="typing"><i></i><i></i><i></i></span>`);
+  const started = performance.now();
+  let res;
+  try { res = DEMO ? await demoAnswer(q) : await callApi(q); }
+  catch (e) { res = {state:"sorry", answer:"앗, 창구 시스템에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.", masked_query:"", docs:[]}; }
+  const wait = 1300 - (performance.now() - started); if (wait > 0) await sleep(wait);   // 생각하는 모습을 잠깐은 보여주기
+  setState(res.state === "sorry" ? "sorry" : "found");
+  if (res.state === "sorry") bot.classList.add("sorry");
+  const answer = res.answer || "참고 문서를 찾았어요. (LLM 키가 없어 문서 목록만 보여드려요)";
+  bot.innerHTML = `<div class="who">🐻 도장곰 주임 ${res.state === "sorry" ? "· 확인 불가" : "· 아하!"}</div><div class="ans"></div>`;
+  await typeInto(bot.querySelector(".ans"), answer);
+  const meta = document.createElement("div"); meta.className = "meta";
+  if (res.masked_query) meta.innerHTML += `<div class="mask-box"><span class="label">🔒 가명처리된 질문 (서버가 본 질문)</span>${chipify(res.masked_query)}<span class="seal">가명</span></div>`;
+  if (res.docs && res.docs.length) meta.innerHTML += `<div class="docs">${res.docs.map(d => `<span class="doc" title="${esc(d.snippet || "")}">📄 ${esc(d.doc_id)}</span>`).join("")}</div>`;
+  if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
+  log.scrollTop = log.scrollHeight;
+}
+
+async function callApi(q){
+  const r = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({query:q, k:3})});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+/* 서버 없이 화면만 볼 때 쓰는 예시 답변 (가명 토큰만 사용) */
+const DEMO_SET = [
+  {k:/0105784|번호로/, state:"found", masked_query:"<PHONE_NUMBER_d1fee87c1ce7> 이 번호로 들어온 건 있었나요?", docs:[{doc_id:"H0125"}],
+   answer:"네, 1건 있습니다. [H0125] 자동이체 신청서(2026-01-25 접수)에 신청인 <PERSON_39e8a9af8ae5>의 연락처로 <PHONE_NUMBER_d1fee87c1ce7>이 등록돼 있어요."},
+  {k:/정하은|해외/, state:"found", masked_query:"해외에서 카드 막혔다고 전화했던 <PERSON_b34820f87e4d> 고객 기록", docs:[{doc_id:"H0004"},{doc_id:"H0178"},{doc_id:"H0017"}],
+   answer:"[H0004] 녹취 요약에 <PERSON_b34820f87e4d> 고객이 해외 결제 중 카드가 정지됐다고 문의한 기록이 있어요. 해외 사용 차단 해제 후 정상 결제를 안내했어요."},
+  {k:/출장/, state:"found", masked_query:"협력사 점검 출장 같이 간 <PERSON_bd52a13d0d35> 직원 보고서 있어?", docs:[{doc_id:"H0153"},{doc_id:"H0024"}],
+   answer:"네, 2건이에요. [H0153], [H0024] 출장 결과 보고서에 <PERSON_bd52a13d0d35> 직원이 협력사 점검 출장 동행자로 기록돼 있어요."},
+  {k:/대출/, state:"sorry", masked_query:"<PERSON_bd52a13d0d35> 고객 대출 상담 내역 알려줘", docs:[{doc_id:"H0024"},{doc_id:"H0095"},{doc_id:"H0153"}],
+   answer:"제공된 문서에서는 확인되지 않습니다. 같은 토큰 <PERSON_bd52a13d0d35>이 나오는 문서는 모두 직원으로서의 출장·법인카드 문서라, 질문하신 고객과 다른 사람일 수 있어 답변을 보류할게요."},
+  {k:/보이스피싱/, state:"found", masked_query:"보이스피싱 피해 접수", docs:[{doc_id:"H0154"},{doc_id:"H0065"},{doc_id:"H0162"}],
+   answer:"보이스피싱 피해 접수 문서가 여러 건 있어요. [H0154] 피해 접수서가 가장 관련도가 높고, [H0065], [H0162]에도 접수 처리 내용이 있어요."},
+];
+async function demoAnswer(q){
+  await sleep(600);
+  return DEMO_SET.find(d => d.k.test(q)) ||
+    {state:"sorry", masked_query:q.replace(/[가-힣]{2,4}(?=\s*(고객|님|씨|직원))/g, "<PERSON_0000demo0000>"), docs:[],
+     answer:"데모 모드에서는 예시 질문만 답할 수 있어요. 서버를 켜면 실제 문서에서 찾아드려요."};
+}
+
+async function health(){
+  if (DEMO){ $("#srvDot").className = "dot demo"; $("#srvText").textContent = "데모 모드"; return; }
+  try {
+    const h = await (await fetch("/api/health")).json();
+    $("#srvDot").className = "dot on"; $("#srvText").textContent = h.llm ? "서버 연결 · LLM 사용" : "서버 연결 · LLM 키 없음";
+    $("#modeText").textContent = (h.search_mode || "and").toUpperCase();
+  } catch { DEMO = true; $("#srvDot").className = "dot demo"; $("#srvText").textContent = "데모 모드 (서버 없음)"; }
+}
+
+form.addEventListener("submit", async e => {
+  e.preventDefault(); const q = input.value.trim(); if (!q || sendBtn.disabled) return;
+  input.value = ""; sendBtn.disabled = true;
+  try { await ask(q); } finally { sendBtn.disabled = false; input.focus(); }
+});
+$("#chips").addEventListener("click", e => { if (e.target.tagName === "BUTTON"){ input.value = e.target.textContent; form.requestSubmit(); } });
+health();
+</script>
+</body>
+</html>
