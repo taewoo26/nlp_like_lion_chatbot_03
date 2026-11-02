@@ -8,6 +8,7 @@ openai
 fastapi
 uvicorn
 requests==2.31.0
+python-dotenv==1.0.1
 
 # CPU 탐지: 현재 로컬 검증 버전
 numpy==1.26.4
