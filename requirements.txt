@@ -15,6 +15,6 @@ onnxruntime==1.28.0
 transformers==5.20.2
 huggingface-hub==2.2.0
 
-# BGE-M3 로컬 임베딩
+# 로컬 임베딩(e5)
 torch
 sentence-transformers
