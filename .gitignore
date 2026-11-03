@@ -42,9 +42,15 @@ Thumbs.db
 # 로컬 테스트 캐시·개인 시각화
 .pytest_cache/
 /outputs/
+/local_results/
 
 # Local-only legacy detectors and experiments
 /experiments/
 outputs/
 __pycache__/
 *.pyc
+
+AGENTS.md
+CLAUDE.md
+.agents/
+/daily_logs/

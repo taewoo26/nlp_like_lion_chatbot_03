@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     doc_type    TEXT,                    -- 문서 유형 (예: 대출상담)
     chunk_text  TEXT NOT NULL,           -- 가명처리된 청크 본문
     tokens      TEXT[],                  -- 청크에 포함된 가명 토큰 목록
-    embedding   vector(1536),            -- 임베딩 벡터 (text-embedding-3-small 기준)
+    embedding   vector(384),            -- 임베딩 벡터 (text-embedding-3-small 기준)
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS vault (
 -- ─────────────────────────────────────────
 -- 벡터 유사도 검색 인덱스 (cosine)
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
-    ON chunks USING ivfflat (embedding vector_cosine_ops)
+    ON chunks USING HNSW (embedding vector_cosine_ops)
     WITH (lists = 100);
 
 -- 토큰 배열 검색 인덱스 (GIN)
