@@ -9,8 +9,10 @@
 
 원칙: 특정 값·문서에 맞춘 규칙이 아니라 '형식' 규칙만 쓴다.
 """
+import json
 import re
 from functools import lru_cache
+from pathlib import Path
 
 from detection.base import Span
 from detection.iban import iban_spans
@@ -95,6 +97,51 @@ FOREIGN_ADDRESS = re.compile(
     r"(?:,[ \t]*(?:United States(?: of America)?|USA))?(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
+
+# 확인된 행정구역 목록으로 이름 후보를 좁게 검토한다. 지명 접미사만으로 제외하지 않는다.
+_ADMIN_REGIONS = json.loads(
+    (Path(__file__).resolve().parents[1] / "starter" / "admin_regions.json").read_text(encoding="utf-8")
+)["regions"]
+_ADMIN_NAMES = {part for names in _ADMIN_REGIONS.values() for name in names for part in name.split()}
+_ADMIN_PHRASES = {name for names in _ADMIN_REGIONS.values() for name in names} | _ADMIN_NAMES
+_ADMIN_PHRASE = re.compile(
+    r"(?<![가-힣])(?:" + "|".join(re.escape(name) for name in sorted(_ADMIN_PHRASES, key=lambda name: (-len(name), name)))
+    + r")(?=$|[^가-힣]|에서|으로|입니다|에)"
+)
+_SIDO_BEFORE = re.compile(rf"{SIDO}\s+$")
+_LOCATION_AFTER = re.compile(r"(?:에서|에(?!게)|으로|입니다|\s+(?:소재|거주|지점|지역|주소|쪽|사는))")
+_EXPLICIT_NAME_BEFORE = re.compile(r"(?:성명|이름|고객명|담당자|신청인)\s*[:：]\s*$")
+
+
+def drop_admin_region_persons(text, spans):
+    """확인된 행정구역이 지역 문맥에 쓰였을 때만 PERSON 오탐을 제거한다."""
+    regions = list(_ADMIN_PHRASE.finditer(text))
+    out = []
+    for span in spans:
+        if span.label != "person" or span.text not in _ADMIN_NAMES:
+            out.append(span)
+            continue
+        before = text[max(0, span.start - 20):span.start]
+        after = text[span.end:span.end + 30]
+        if _EXPLICIT_NAME_BEFORE.search(before) or re.match(r"\s?(?:씨|님)(?![가-힣])", after):
+            out.append(span)
+            continue
+        region = next((m for m in regions if m.start() <= span.start and span.end <= m.end()), None)
+        if region is None:
+            out.append(span)
+            continue
+        prefix = text[max(0, region.start() - 20):region.start()]
+        suffix = text[region.end():region.end() + 30]
+        has_region_chain = " " in region.group() or _SIDO_BEFORE.search(prefix)
+        has_location_cue = _LOCATION_AFTER.match(suffix)
+        has_region_staff = re.match(r"\s+담당자\s+", suffix) and any(
+            other.label == "person" and other is not span
+            and region.end() < other.start <= region.end() + 15 for other in spans
+        )
+        if not (has_region_chain or has_location_cue or has_region_staff):
+            out.append(span)
+    return out
+
 
 # ---------------------------------------------------------------- 이름
 NAME_CUE = re.compile(

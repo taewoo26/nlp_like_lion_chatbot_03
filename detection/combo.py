@@ -167,7 +167,8 @@ class ComboDetector(BaseDetector):
         merged = v2.drop_name_words(merged)                                # ⑥ 역할어·경조사·가려진 값
         merged = v2.propagate_names(text, merged)                          # ⑥-2 확정된 짧은 이름 전파
         merged = clean(text, merged)                                       # ⑦ 고객사 기준
-        return v2.apply_exclusions(text, merged)                           # ⑧ 규칙 정의서 제외규칙 (마스킹·공용메일·법인·우편번호)
+        merged = v2.apply_exclusions(text, merged)                         # ⑧ 규칙 정의서 제외규칙 (마스킹·공용메일·법인·우편번호)
+        return v2.drop_admin_region_persons(text, merged)                 # ⑨ 지역 문맥의 행정구역 PERSON 오탐 제외
 
     def _veil(self, text, k_raw):
         """Veil은 필요한 줄에만 실행 (VEIL_FULL=1 이면 예전처럼 문서 전체)."""

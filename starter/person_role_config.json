@@ -1,0 +1,11 @@
+{
+  "aliases": {
+    "customer": ["고객님", "고객"],
+    "employee": ["임직원", "직원"],
+    "agent": ["상담사", "상담원"],
+    "staff_contact": ["담당자"]
+  },
+  "fields": {
+    "customer": ["피해 고객", "대상 고객", "고객명"]
+  }
+}
