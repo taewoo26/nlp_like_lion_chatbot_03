@@ -18,7 +18,7 @@ DB_NAME = env("POSTGRES_DB", "pii_rag")
 RAG_DSN = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user=rag_user password={env('RAG_PASSWORD', '')}"
 VAULT_DSN = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user=vault_user password={env('VAULT_PASSWORD', '')}"
 
-EMBED_PROVIDER = env("EMBED_PROVIDER", "local")  # api | local
+EMBED_PROVIDER = env("EMBED_PROVIDER", "local")  # api | local | bge-m3
 EMBED_API_BASE = env("EMBED_API_BASE", "")
 EMBED_API_KEY = env("EMBED_API_KEY", "")
 EMBED_MODEL = env("EMBED_MODEL", "text-embedding-3-small")
