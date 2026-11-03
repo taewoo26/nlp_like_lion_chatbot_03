@@ -61,7 +61,7 @@ nlp_like_lion_chatbot_03/
 ├── models/           # 로컬 임베딩 모델 (Git 제외)
 ├── results/          # 실전 1 실험 결과 (Git 제외, 로컬 보관)
 ├── outputs/          # 실전 2 실행·평가 결과 (Git 제외)
-├── .env2.example     # 실전 2 설정 예시 (실제 값은 .env에 보관)
+├── .env.example     # 실전 2 설정 예시 (실제 값은 .env에 보관)
 └── requirements.txt
 ```
 
@@ -81,7 +81,7 @@ python3.13 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
 
-# 새 환경에서는 .env2.example을 참고해 .env를 준비합니다.
+# 새 환경에서는 .env.example을 참고해 .env를 준비합니다.
 # 기존 .env는 덮어쓰지 않고 필요한 설정만 추가합니다.
 ```
 
@@ -104,7 +104,7 @@ docker compose -p pii_starter --env-file .env -f infra/compose.yaml ps
 `localhost:5432`에 띄우고, 최초 초기화 시 `infra/init/01_schema.sh`로
 같은 DB 안에 `rag.chunks`와 `vault.token_map`, 전용 계정을 만듭니다.
 벡터 차원은 `.env`의 `EMBED_DIM`을 따르며, 인덱스는 HNSW입니다.
-접속 설정은 `.env2.example`을 참고해 루트 `.env`에 준비합니다.
+접속 설정은 `.env.example`을 참고해 루트 `.env`에 준비합니다.
 이전 `rag_db` 컨테이너의 5433 포트 및 `public` 테이블과 구분합니다.
 초기화 스크립트는 빈 데이터 볼륨에서만 실행되며 `down -v`는 DB 데이터를 삭제합니다.
 임베딩 모델을 바꿔 `EMBED_DIM`이 달라지면 `down -v` 후 다시 `up` 해야 합니다.
@@ -151,7 +151,7 @@ uvicorn service.app:app --reload
 
 ## 6. 환경 변수
 
-`.env` 파일은 절대 커밋하지 않습니다. 실전 2는 `.env2.example`과 `starter/config.py`를 기준으로 설정합니다.
+`.env` 파일은 절대 커밋하지 않습니다. 실전 2는 `.env.example`과 `starter/config.py`를 기준으로 설정합니다.
 
 **DB·키**
 

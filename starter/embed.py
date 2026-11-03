@@ -28,8 +28,6 @@ import requests
 
 from . import config
 
-_BGE_DIM = 1024
-_BGE_MAX_TOKENS = 8192
 _RETRY_STATUS = {429, 500, 502, 503, 504}   # 속도 제한·일시 오류만 재시도
 _MAX_RETRY = 8
 _MAX_WAIT = 60.0
