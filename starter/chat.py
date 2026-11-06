@@ -88,10 +88,19 @@ def _post_llm(payload, retries=5):
 
 
 def answer(query, k=3):
-    masked_q, q_tokens, docs = search(query, k)
+    masked_q, q_tokens, docs, meta = search(query, k, with_meta=True)
     context = "\n\n".join(_doc_block(d, q_tokens) for d in docs)
     token_note = f"\n질문에 포함된 토큰: {', '.join(q_tokens)}" if q_tokens else ""
-    result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None}
+    result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None,
+              "notice": None}
+    if meta["ask_region"]:                         # REG-33 이름이 겹치는 시군구
+        result["answer"] = f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요."
+        return result
+    if meta["excluded"]:                           # ROLE-43 실명 없이 건수만 안내
+        result["notice"] = f"요청한 역할과 다른 문서 {meta['excluded']}건은 제외했습니다."
+    if meta["regions"]:                            # 문서 주소는 토큰이라 LLM이 지역을 확인할 수 없다
+        token_note += ("\n(시스템 확인) 질문의 지역 조건은 검색 단계에서 이미 확인했고, 그 지역 문서만 드렸습니다. "
+                       "문서의 주소는 <ADDRESS_…> 토큰으로 가려져 있으니 지역은 다시 따지지 말고 나머지 질문에 답하세요.")
     if not docs:
         result['answer'] = '일치하는 문서를 찾지 못했습니다.'
         return result
@@ -115,6 +124,8 @@ def main():
     res = answer(a.query, a.k)
     print(f"질의(가명처리): {res['masked_query']}")
     print("참고 문서:", ", ".join(d["doc_id"] for d in res["docs"]))
+    if res["notice"]:
+        print("안내:", res["notice"])
     print("\n답변:", res["answer"] or "(LLM_API_KEY 없음 — 검색 결과만 표시)")
 
 
