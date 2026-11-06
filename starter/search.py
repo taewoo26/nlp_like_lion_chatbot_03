@@ -16,82 +16,35 @@
 
 다른 코드(run_queries.py, chat.py)가 쓰는 약속
   search(query, k, conn=None) -> (masked_query, query_tokens, docs)
+  search(query, k, conn=None, with_meta=True) -> (masked_query, query_tokens, docs, meta)
   docs: [{"doc_id", "chunk_id", "masked_text", "tokens", "score"}, ...]  순위 순서
-        docs.info = {"notices": [...], "clarify": str|None}   안내 문구 (없으면 빈 dict)
+  meta: {"regions", "ask_region", "roles", "excluded"}
 검색 단계는 rag_user 계정만 씁니다 (매핑 테이블 접근 없음).
 
-메타데이터 조건 (규칙 정의서 v0.2 ROLE-40~46, REG-30~36, query_conditions.py)
-  .env SEARCH_METADATA=on(기본) | off,  ROLE_MASTER=db(기본) | file
-  처리 순서
-    1. 질의 가명처리 (기존)
-    2. 역할·지역 단서가 있을 만한 질의만 조건 분석. 없으면 아래 3~6 은 기존과 완전히 같다
-    3. 지역이 모호하면 검색하지 않고 되묻기 (REG-33)
-    4. 후보: 질의 토큰 AND 필터(기존) + 지역 조건(문서 단위, and 모드)
-    5. 문서별 가장 가까운 청크 → 역할 판정: 명백히 다른 문서 제외(ROLE-43) → 상위 k → 단어 겹침 재정렬(기존)
-    6. 역할 등급 순으로 안정 정렬: 일치(1) → 미상(2). 같은 등급 안에서는 5의 순서 유지
+메타데이터 (종합, 기본 off. 켜도 SEARCH_MODE=and 경로에만 적용)
+  REGION_META=on : 질문의 시도·시군구로 문서를 거른다 (REG-30~35). 이름이 겹치는 시군구는 되묻기.
+  ROLE_META=on   : 질문의 역할 단서로 '규칙상 역할이 다른 문서'만 뺀다 (ROLE-40~46)
+                   역할 조건은 질문 속 이름에 직접 붙은 역할어('직원 김민준', '김민준 고객')로만 정한다.
+                   사람 없이 지역이 있는 질문('대구 사는 고객')은 질문 전체의 역할어를 쓴다.
+                   남은 문서의 순서는 기존 점수 그대로 (등급 1·2로 순서를 바꾸면 같은 사람의
+                   다른 문서가 올라와 이름 질문 점수가 떨어졌다: holdout 6문항)
 """
 import argparse
 import re
-from functools import lru_cache
 
-from . import config, db, pii_pipeline
+from . import address, config, db, pii_pipeline
 from .embed import embed
-from .query_conditions import (Conditions, Docs, analyze, doc_tier, load_master_for_search,
-                               may_have_conditions, region_params)
+from .roles import load_rules, query_name_roles, query_roles
 
 TOKEN_POOL = 200   # boost: 토큰 후보 최대 청크 수
-
-
-@lru_cache(maxsize=128)
-def _masked_records(query):
-    # 질의는 strict=False: 처리할 수 없는 표기가 있어도 챗봇이 멈추지 않고 그 값만 [개인정보]로 가린다
-    return pii_pipeline.pseudonymize(query, pii_pipeline.detect(query), strict=False)
+ROLE_POOL = 60     # 역할 등급을 매길 후보 청크 수 (등급은 k개로 자르기 전에 매긴다)
+_rules_cache = {}
 
 
 def mask_query(query):
-    masked, records = _masked_records(query)
+    # 질의는 strict=False: 처리할 수 없는 표기가 있어도 챗봇이 멈추지 않고 그 값만 [개인정보]로 가린다
+    masked, records = pii_pipeline.pseudonymize(query, pii_pipeline.detect(query), strict=False)
     return masked, sorted({r["token"] for r in records})
-
-
-def _switch(name, default, allowed):
-    value = (config.env(name, default) or default).strip().lower()
-    if value not in allowed:
-        raise ValueError(f"{name} 는 {' 또는 '.join(allowed)} 이어야 합니다: {value}")
-    return value
-
-
-def _conditions(query, conn):
-    if _switch("SEARCH_METADATA", "on", ("on", "off")) == "off" or not may_have_conditions(query):
-        return Conditions()
-    master = load_master_for_search(conn, _switch("ROLE_MASTER", "db", ("db", "file")))
-    return analyze(query, _masked_records(query)[1], master)
-
-
-_REGION_SQL = """EXISTS (SELECT 1 FROM rag.chunks AS rg, unnest(rg.regions) AS reg(v)
-                        WHERE rg.doc_id = chunks.doc_id AND (reg.v = ANY(%s) OR reg.v LIKE ANY(%s)))"""
-
-
-def _doc_persons(cur, doc_ids):
-    cur.execute("SELECT doc_id, persons FROM rag.chunks WHERE doc_id = ANY(%s)", (list(doc_ids),))
-    out = {}
-    for doc_id, persons in cur.fetchall():
-        out.setdefault(doc_id, []).extend(persons or [])
-    return out
-
-
-def _apply_roles(docs, persons, cond, info):
-    """명백히 다른 문서를 빼고 등급을 붙인다 (순서는 그대로)."""
-    kept, dropped = [], 0
-    for d in docs:
-        tier = doc_tier(persons.get(d["doc_id"], []), cond.roles)
-        if tier == 3:
-            dropped += 1
-            continue
-        kept.append(d | {"role_tier": tier})
-    if dropped:
-        roles = ", ".join(sorted({c["name"] for c in cond.roles}))
-        info["notices"].append(f"질문의 역할({roles})과 다른 역할로 확인된 문서 {dropped}건은 제외했습니다.")
-    return kept
 
 
 def _mode():
@@ -101,63 +54,100 @@ def _mode():
     return mode
 
 
-def search(query, k=10, conn=None):
+def _rules(cur):
+    if "rules" not in _rules_cache:
+        _rules_cache["rules"] = load_rules(cur)
+    return _rules_cache["rules"]
+
+
+def role_grade(entries, wanted, groups):
+    """문서 속 대상 인물 언급들(entries)의 역할 → 1 일치 / 2 미상 / 3 제외 (ROLE-41~44).
+
+    wanted 가 비면 역할 조건 없음(1). 제외(3)는 모든 언급이 규칙(rule)으로 정해졌고
+    질문 역할과 그룹까지 다를 때만. LLM 판정·unknown·같은 그룹(직원↔상담사)은 2로 남긴다.
+    """
+    if not wanted:
+        return 1
+    if not entries:
+        return 2
+    if {p["role"] for p in entries} & wanted:
+        return 1
+    wanted_groups = {groups.get(r) for r in wanted}
+    if any(p["role"] == "unknown" or p.get("source") != "rule" or groups.get(p["role"]) in wanted_groups
+           for p in entries):
+        return 2
+    return 3
+
+
+def _doc_persons(cur, doc_ids):
+    cur.execute("SELECT doc_id, persons FROM rag.chunks WHERE doc_id = ANY(%s)", (doc_ids,))
+    out = {}
+    for doc_id, persons in cur.fetchall():
+        out.setdefault(doc_id, []).extend(persons or [])
+    return out
+
+
+def search(query, k=10, conn=None, with_meta=False):
     masked_q, q_tokens = mask_query(query)
+    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0}
+    if config.meta_on("REGION_META"):
+        meta["regions"], meta["ask_region"] = address.query_regions(query)
+        if meta["ask_region"]:                  # '중구 고객' → 검색하지 않고 되묻기 (REG-33)
+            return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
+    regions = meta["regions"]
+    person_tokens = [t for t in q_tokens if t.startswith("<PERSON_")]
     vec = embed([pii_pipeline.embedding_text(masked_q)], kind="query")[0]
     mode = _mode()
     own = conn is None
     conn = conn or db.rag_conn()
-    persons = {}
     try:
-        cond = _conditions(query, conn)
-        info = {"notices": list(cond.notices), "clarify": cond.clarify} if cond.active or cond.notices else {}
-        if cond.clarify:                                  # REG-33: 모호한 지역은 검색하지 않고 되묻기
-            return masked_q, q_tokens, Docs([], info)
-        region = []
-        if cond.regions and mode == "and":
-            region = list(region_params(cond.regions))
         with conn.cursor() as cur:
             if mode == "boost" and q_tokens:
-                docs = _search_boost(cur, vec, q_tokens, k * 3 if cond.roles else k)
-                if cond.roles:
-                    docs = _apply_roles(docs, _doc_persons(cur, [d["doc_id"] for d in docs]), cond, info)[:k]
-                docs = rerank_top(masked_q, docs)
-                if cond.roles:
-                    docs.sort(key=lambda d: d["role_tier"])
-                return masked_q, q_tokens, Docs(docs, info)
+                docs = rerank_top(masked_q, _search_boost(cur, vec, q_tokens, k))
+                return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
+            wanted, groups = set(), {}
+            if config.meta_on("ROLE_META") and (len(person_tokens) == 1 or (not person_tokens and regions)):
+                rules = _rules(cur)
+                groups = rules.role_group
+                wanted = (query_name_roles(masked_q, person_tokens[0], rules) if person_tokens
+                          else query_roles(query, rules))
+            meta["roles"] = sorted(wanted)
+            pool = max(k * 3, ROLE_POOL) if wanted else k * 3
+            where, params = [], [vec]
             if q_tokens:
                 # 토큰 후보를 먼저 확정(MATERIALIZED)한 뒤 그 안에서만 거리 순으로 정렬한다.
                 # 필터를 바깥 쿼리에 두면 k가 작을 때 DB가 HNSW 근사 인덱스를 골라
                 # '가까운 약 40개'만 꺼낸 뒤 필터를 걸어, 정답이 그 밖에 있으면 빈 결과가 된다.
-                sql = """WITH cand AS MATERIALIZED (
-                    SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
-                    FROM rag.chunks AS chunks
-                    WHERE NOT EXISTS (
+                where.append("""NOT EXISTS (
                         SELECT 1 FROM unnest(%s::text[]) AS q(token)
                         WHERE NOT EXISTS (
                             SELECT 1 FROM rag.chunks AS matched
                             WHERE matched.doc_id = chunks.doc_id
                               AND matched.tokens @> ARRAY[q.token]
                         )
-                    )""" + (f"\n                    AND {_REGION_SQL}" if region else "") + """
-                )
-                SELECT doc_id, chunk_id, masked_text, tokens, dist FROM cand ORDER BY dist LIMIT %s"""
-                params = [vec, q_tokens, *region, k * 3]
-            elif region:                                  # 이름 없는 지역 질의도 후보를 먼저 확정한다
+                    )""")
+                params.append(q_tokens)
+            if regions:
+                # 지역도 토큰처럼 '같은 문서의 어느 청크든' 가지고 있으면 통과 (REG-30·31)
+                where.append("""EXISTS (
+                        SELECT 1 FROM rag.chunks AS region
+                        WHERE region.doc_id = chunks.doc_id AND region.regions @> %s::text[]
+                    )""")
+                params.append(regions)
+            if where:
                 sql = f"""WITH cand AS MATERIALIZED (
                     SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
-                    FROM rag.chunks AS chunks WHERE {_REGION_SQL}
+                    FROM rag.chunks AS chunks
+                    WHERE {" AND ".join(where)}
                 )
                 SELECT doc_id, chunk_id, masked_text, tokens, dist FROM cand ORDER BY dist LIMIT %s"""
-                params = [vec, *region, k * 3]
             else:
                 sql = """SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
                          FROM rag.chunks AS chunks ORDER BY dist LIMIT %s"""
-                params = [vec, k * 3]
+            params.append(pool)
             cur.execute(sql, tuple(params))
             hits = cur.fetchall()
-            if cond.roles and hits:
-                persons = _doc_persons(cur, {h[0] for h in hits})
+            persons = _doc_persons(cur, sorted({h[0] for h in hits})) if wanted else {}
     finally:
         if own:
             conn.close()
@@ -167,14 +157,21 @@ def search(query, k=10, conn=None):
             best[doc_id] = {"doc_id": doc_id, "chunk_id": chunk_id, "masked_text": text,
                             "tokens": tokens, "score": 1 - float(dist)}
     docs = list(best.values())
-    if cond.roles:
-        docs = _apply_roles(docs, persons, cond, info)    # ROLE-43 제외는 상위 k 를 자르기 전에
-    docs = rerank_top(masked_q, docs[:k])
-    if cond.roles:
-        docs.sort(key=lambda d: d["role_tier"])           # ROLE-41·42: 등급 → 같은 등급은 기존 순서
-    if not docs and (cond.roles or cond.regions):
-        info["notices"].append("역할·지역 조건에 맞는 문서가 없습니다.")
-    return masked_q, q_tokens, Docs(docs, info)
+    if wanted:
+        # 모순(3) 문서는 k개로 자르기 전에 뺀다. 남은 문서는 기존 순서(거리 → 재정렬) 그대로.
+        kept = []
+        for d in docs:
+            entries = [p for p in persons.get(d["doc_id"], [])
+                       if not person_tokens or p["token"] in person_tokens]
+            d["role_grade"] = role_grade(entries, wanted, groups)
+            if d["role_grade"] == 3:
+                meta["excluded"] += 1
+            else:
+                kept.append(d)
+        docs = rerank_top(masked_q, kept[:k])
+    else:
+        docs = rerank_top(masked_q, docs[:k])
+    return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
 
 
 # ---------------------------------------------------------------- 상위 문서 재정렬 (단어 겹침)
@@ -246,10 +243,15 @@ def main():
     ap.add_argument("query")
     ap.add_argument("-k", type=int, default=5)
     a = ap.parse_args()
-    masked_q, q_tokens, docs = search(a.query, a.k)
-    print(f"질의(가명처리): {masked_q}\n질의 토큰: {q_tokens or '없음'}\n")
+    masked_q, q_tokens, docs, meta = search(a.query, a.k, with_meta=True)
+    print(f"질의(가명처리): {masked_q}\n질의 토큰: {q_tokens or '없음'}")
+    print(f"지역 조건: {meta['regions'] or '없음'}  역할 조건: {meta['roles'] or '없음'}  "
+          f"역할이 달라 제외: {meta['excluded']}건\n")
+    if meta["ask_region"]:
+        print(f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요.")
     for i, d in enumerate(docs, 1):
-        print(f"{i}. {d['doc_id']}  score={d['score']:.3f}  tokens={d['tokens'][:4]}")
+        grade = f"  역할등급={d['role_grade']}" if "role_grade" in d else ""
+        print(f"{i}. {d['doc_id']}  score={d['score']:.3f}{grade}  tokens={d['tokens'][:4]}")
         print("   " + d["masked_text"][:120].replace("\n", " ") + " …")
 
 

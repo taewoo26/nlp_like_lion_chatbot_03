@@ -2,9 +2,11 @@ from unittest.mock import Mock
 
 from starter import chat
 
+NO_META = {'regions': [], 'ask_region': None, 'roles': [], 'excluded': 0}
+
 
 def test_no_matching_documents_does_not_call_llm(monkeypatch):
-    monkeypatch.setattr(chat, 'search', lambda *args: ('가명 질문', ['<PERSON_a>'], []))
+    monkeypatch.setattr(chat, 'search', lambda *args, **kw: ('가명 질문', ['<PERSON_a>'], [], NO_META))
     monkeypatch.setattr(chat.config, 'LLM_API_KEY', 'synthetic-test-key')
     post = Mock()
     monkeypatch.setattr(chat.requests, 'post', post)
@@ -17,7 +19,7 @@ def test_no_matching_documents_does_not_call_llm(monkeypatch):
 def test_prompt_lists_query_tokens_and_documents(monkeypatch):
     tok = '<PHONE_NUMBER_d1fee87c1ce7>'
     docs = [{'doc_id': 'H0125', 'masked_text': f'자동이체 신청서\n연락처: {tok}'}]
-    monkeypatch.setattr(chat, 'search', lambda *args: (f'{tok} 이 번호로 들어온 건 있었나요?', [tok], docs))
+    monkeypatch.setattr(chat, 'search', lambda *args, **kw: (f'{tok} 이 번호로 들어온 건 있었나요?', [tok], docs, NO_META))
     monkeypatch.setattr(chat.config, 'LLM_API_KEY', 'synthetic-test-key')
     resp = Mock()
     resp.json.return_value = {'choices': [{'message': {'content': '네, 1건 있습니다.'}}]}
@@ -59,3 +61,18 @@ def test_llm_retries_on_429(monkeypatch):
     monkeypatch.setattr(chat.requests, 'post', post)
     monkeypatch.setattr(chat.time, 'sleep', lambda s: None)
     assert chat._post_llm({}) is ok and post.call_count == 2
+
+
+def test_region_condition_is_explained_to_llm(monkeypatch):
+    docs = [{'doc_id': 'H0001', 'masked_text': '<ADDRESS_aaaaaaaaaaaa>\n한도 상향 승인'}]
+    meta = dict(NO_META, regions=['부산광역시'])
+    monkeypatch.setattr(chat, 'search', lambda *args, **kw: ('부산 사는 고객 한도 결과', [], docs, meta))
+    monkeypatch.setattr(chat.config, 'LLM_API_KEY', 'synthetic-test-key')
+    response = Mock()
+    response.status_code = 200
+    response.json.return_value = {'choices': [{'message': {'content': '승인되었습니다.'}}]}
+    post = Mock(return_value=response)
+    monkeypatch.setattr(chat.requests, 'post', post)
+    chat.answer('부산 사는 고객 한도 결과')
+    user_msg = post.call_args.kwargs['json']['messages'][1]['content']
+    assert '지역 조건은 검색 단계에서 이미 확인' in user_msg

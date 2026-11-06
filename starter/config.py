@@ -12,6 +12,14 @@ def env(name, default=None):
     return os.getenv(name, default)
 
 
+def meta_on(name):
+    """REGION_META / ROLE_META = on|off (기본 off). 끄면 실전 2와 같은 결과 (규칙 정의서 COM-09)."""
+    mode = (env(name, "off") or "off").strip().lower()
+    if mode not in ("on", "off"):
+        raise ValueError(f"{name} 는 on 또는 off 여야 합니다: {mode}")
+    return mode == "on"
+
+
 DB_HOST = env("DB_HOST", "localhost")
 DB_PORT = int(env("DB_PORT", "5432"))
 DB_NAME = env("POSTGRES_DB", "pii_rag")
