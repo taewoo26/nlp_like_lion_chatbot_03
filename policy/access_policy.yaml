@@ -1,0 +1,92 @@
+# 권한 정책 (기계가 읽는 정책 파일, 정책의 단일 출처)
+# 사람이 읽는 설명: docs/permission_policy_draft.md
+# 수정 시 version을 올리고, policy/test_access_policy.py를 다시 실행하세요.
+
+version: "v0.3"
+updated: "2026-11-06"
+status: "팀 검토 전"
+
+levels:
+  0: { name: "일반 조회자", description: "전 직원 공개 문서 열람" }
+  1: { name: "상담원·민원 담당자", description: "Lv0 + 고객·업무 처리 문서 열람" }
+  2: { name: "관리자·준법 담당자", description: "전체 열람, 실명 복원, 감사 로그 열람" }
+
+# 계층형: 상위 레벨은 하위 레벨 권한을 포함합니다(Lv2 ⊇ Lv1 ⊇ Lv0).
+hierarchical: true
+
+defaults:
+  unregistered_min_level: 2   # 정책에 없는 doc_type은 Lv2 전용(기본 거부)
+
+# 판정 규칙(위에서부터 처음 해당하는 규칙):
+#  1 미등록 -> Lv2 / 2 인사·감사·계약·내부통제·준법·보안통제·내부 심사 판단 -> Lv2
+#  3 고객 정보 포함 또는 고객 업무 처리 기록 -> Lv1 / 4 직원 간 업무 소통·회의·보고 -> Lv1
+#  5 전 직원 공개 공지·안내 또는 PII 없는 내부 현황 집계 -> Lv0
+doc_types:
+  # ---- Lv0 ----
+  공지: { min_level: 0, rule: 5, rationale: "전사 공지, PII 없음" }
+  상품안내: { min_level: 0, rule: 5, rationale: "대외 상품 안내, PII 없음" }
+  경조사공지: { min_level: 0, rule: 5, rationale: "전사 공지 성격. 직원 가족 정보가 있어도 Lv0 유지로 결정" }
+  민원현황: { min_level: 0, rule: 5, rationale: "PII 없는 내부 현황 집계" }
+  # ---- Lv1 ----
+  회의록: { min_level: 1, rule: 4, rationale: "직원 간 업무 회의", note: "[계획서와 차이: 계획서는 Lv2 예시]" }
+  업무메일: { min_level: 1, rule: 4, rationale: "직원 간 업무 소통" }
+  사내메신저: { min_level: 1, rule: 4, rationale: "직원 간 업무 소통" }
+  영문혼용메일: { min_level: 1, rule: 4, rationale: "대외 협력 업무 메일" }
+  출장보고: { min_level: 1, rule: 4, rationale: "내부 업무 보고" }
+  VOC요약: { min_level: 1, rule: 3, rationale: "고객 의견 요약" }
+  녹취요약: { min_level: 1, rule: 3, rationale: "고객 통화 요약" }
+  고객편지: { min_level: 1, rule: 3, rationale: "고객 접수 의견" }
+  대출상담: { min_level: 1, rule: 3, rationale: "고객 상담 기록" }
+  민원처리: { min_level: 1, rule: 3, rationale: "고객 민원 처리" }
+  이상거래탐지: { min_level: 1, rule: 3, rationale: "고객 통화 기록" }
+  카드분실상담: { min_level: 1, rule: 3, rationale: "고객 상담 기록" }
+  고객정보변경: { min_level: 1, rule: 3, rationale: "고객 정보 처리" }
+  연체안내: { min_level: 1, rule: 3, rationale: "고객 통화 기록" }
+  가맹점변경: { min_level: 1, rule: 3, rationale: "가맹점 요청서" }
+  피해접수: { min_level: 1, rule: 3, rationale: "보이스피싱 피해 접수" }
+  대리인위임확인: { min_level: 1, rule: 3, rationale: "위임 확인서" }
+  우편반송처리: { min_level: 1, rule: 3, rationale: "반송 처리 기록" }
+  자동이체신청서: { min_level: 1, rule: 3, rationale: "고객 신청서" }
+  해외송금접수: { min_level: 1, rule: 3, rationale: "송금 접수 기록" }
+  # ---- Lv2 ----
+  한도심사결과: { min_level: 2, rule: 2, rationale: "내부 심사 판단" }
+  카드발급심사: { min_level: 2, rule: 2, rationale: "내부 심사 판단" }
+  분쟁조정: { min_level: 2, rule: 2, rationale: "분쟁 조정 검토 의견서, 준법 검토" }
+  감사지적: { min_level: 2, rule: 2, rationale: "내부 감사" }
+  법인카드소명: { min_level: 2, rule: 2, rationale: "내부통제, 비용 소명" }
+  권한신청: { min_level: 2, rule: 2, rationale: "시스템 접근 권한, 보안 통제" }
+  인사발령: { min_level: 2, rule: 2, rationale: "인사 정보" }
+  채용메일: { min_level: 2, rule: 2, rationale: "채용 지원자 정보, 인사" }
+  용역계약서: { min_level: 2, rule: 2, rationale: "계약 문서" }
+
+# 복원 규칙: level -> label -> mode (none | full). partial(일부 복원)은 추후 논의.
+restore:
+  modes: [none, full]
+  default_mode: none          # 목록에 없는 라벨은 복원하지 않음
+  0:
+    person: none
+    phone_number: none
+    email: none
+    address: none
+    resident_registration_number: none
+    account_number: none
+    card_number: none
+  1:
+    person: none
+    phone_number: none
+    email: none
+    address: none
+    resident_registration_number: none
+    account_number: none
+    card_number: none
+  2:
+    person: full
+    phone_number: full
+    email: full
+    address: full
+    resident_registration_number: full
+    account_number: full
+    card_number: full
+
+# 감사 로그 열람 권한
+audit_log_read_min_level: 2
