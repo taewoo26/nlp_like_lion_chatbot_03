@@ -89,11 +89,17 @@ def _post_llm(payload, retries=5):
 
 def answer(query, k=3):
     masked_q, q_tokens, docs = search(query, k)
+    info = getattr(docs, "info", None) or {}            # 검색 안내 (역할 제외·지역 되묻기 등)
+    notices = info.get("notices", [])
     context = "\n\n".join(_doc_block(d, q_tokens) for d in docs)
     token_note = f"\n질문에 포함된 토큰: {', '.join(q_tokens)}" if q_tokens else ""
-    result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None}
+    result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None,
+              "notices": notices}
+    if info.get("clarify"):                             # REG-33: 검색하지 않고 되묻기
+        result["answer"] = info["clarify"]
+        return result
     if not docs:
-        result['answer'] = '일치하는 문서를 찾지 못했습니다.'
+        result['answer'] = " ".join(['일치하는 문서를 찾지 못했습니다.', *notices])
         return result
     if not config.LLM_API_KEY:
         return result
@@ -104,6 +110,8 @@ def answer(query, k=3):
     r = _post_llm(payload)
     known = set(q_tokens) | {t for d in docs for t in TOKEN.findall(d["masked_text"])}
     result["answer"] = _restore_tokens(r.json()["choices"][0]["message"]["content"], known)
+    if notices:
+        result["answer"] += "\n\n(" + " ".join(notices) + ")"
     return result
 
 

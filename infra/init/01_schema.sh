@@ -1,6 +1,6 @@
 #!/bin/bash
 # 컨테이너 최초 실행 시 한 번만 실행됩니다. (다시 만들려면: docker compose down -v 후 up)
-# rag   : 마스킹된 청크 + 토큰 목록 + 임베딩  (rag_user 만 접근)
+# rag   : 마스킹된 청크 + 토큰 목록 + 임베딩 + 메타데이터(persons, regions)  (rag_user 만 접근)
 # vault : 토큰 ↔ 원문 매핑 테이블            (vault_user 만 접근)
 set -euo pipefail
 
@@ -21,11 +21,17 @@ CREATE TABLE rag.chunks (
     masked_text  TEXT NOT NULL,                  -- 원문 저장 금지
     tokens       TEXT[] NOT NULL DEFAULT '{}',   -- 청크에 들어 있는 토큰 목록
     embedding    vector(${EMBED_DIM}) NOT NULL,
+    -- 메타데이터 (규칙 정의서 v0.2)
+    persons      JSONB  NOT NULL DEFAULT '[]'::jsonb   -- 언급별 토큰·역할 짝 (ROLE-30·31·32)
+                 CHECK (jsonb_typeof(persons) = 'array'),
+    regions      TEXT[] NOT NULL DEFAULT '{}',          -- '시도 시군구' 표준값 (REG-20·21)
     created_at   TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX chunks_tokens_gin     ON rag.chunks USING GIN (tokens);
 CREATE INDEX chunks_embedding_hnsw ON rag.chunks USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX chunks_doc_id         ON rag.chunks (doc_id);
+CREATE INDEX chunks_persons_gin    ON rag.chunks USING GIN (persons jsonb_path_ops);
+CREATE INDEX chunks_regions_gin    ON rag.chunks USING GIN (regions);
 ALTER TABLE rag.chunks OWNER TO rag_user;
 
 -- 매핑용 스키마: 토큰 ↔ 원문

@@ -1,11 +1,30 @@
 {
-  "aliases": {
-    "customer": ["고객님", "고객"],
-    "employee": ["임직원", "직원"],
-    "agent": ["상담사", "상담원"],
-    "staff_contact": ["담당자"]
+  "_note": "rag.role_master 초기 데이터와 같은 내용 (infra/init/02_role_master.sql, infra/migrations/001). DB 연결이 없을 때(단위 테스트·오프라인) 쓰는 사본이다. 값을 바꾸면 DB 마스터도 같이 바꿔야 한다. 'extra_field_labels'는 v0.2 마스터에는 없지만 holdout에 실제로 나오는 항목명으로, DB 마스터 반영 여부는 팀 결정 대상이다.",
+  "roles": {
+    "customer": {"role_name_ko": "고객", "priority": 4,
+                 "query_cues": ["고객", "회원", "민원인"],
+                 "doc_cues": ["고객", "고객님", "회원", "신청인", "민원인", "가입자", "카드 소지자"],
+                 "field_labels": ["신청인:", "고객명:", "가입자:", "민원인:"]},
+    "employee": {"role_name_ko": "직원", "priority": 3,
+                 "query_cues": ["직원", "행원"],
+                 "doc_cues": ["대리", "과장", "차장", "부장", "팀장", "심사역", "담당 직원", "사원"],
+                 "field_labels": []},
+    "agent": {"role_name_ko": "상담원", "priority": 2,
+              "query_cues": ["상담사", "상담원"],
+              "doc_cues": ["상담사", "상담원", "상담 직원"],
+              "field_labels": ["상담사:", "상담원:"]},
+    "staff_contact": {"role_name_ko": "담당자 연락처", "priority": 1,
+                      "query_cues": ["담당자", "담당"],
+                      "doc_cues": ["담당자", "문의처", "담당", "작성자"],
+                      "field_labels": ["담당자:", "문의처:", "담당:", "작성자:"]},
+    "guardian": {"role_name_ko": "보호자·대리인", "priority": 1,
+                 "query_cues": ["대리인", "보호자"],
+                 "doc_cues": ["대리인", "위임받은 자", "수임인", "보호자", "법정대리인"],
+                 "field_labels": ["대리인:", "보호자:", "수임인:", "법정대리인:"]},
+    "unknown": {"role_name_ko": "미상", "priority": null,
+                "query_cues": [], "doc_cues": [], "field_labels": []}
   },
-  "fields": {
-    "customer": ["피해 고객", "대상 고객", "고객명"]
+  "extra_field_labels": {
+    "customer": ["피해 고객:", "대상 고객:"]
   }
 }
