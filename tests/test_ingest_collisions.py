@@ -46,7 +46,6 @@ def test_vault_failure_rolls_back_pending_rag_transaction(tmp_path, monkeypatch)
     source = tmp_path / 'synthetic.jsonl'
     source.write_text(json.dumps({'id': 'R1', 'text': '윤선영'}))
     monkeypatch.setattr(sys, 'argv', ['ingest', '--data', str(source)])
-    monkeypatch.setenv('ROLE_MASTER', 'file')  # 가짜 rag 연결에서 역할 마스터를 읽지 않게
     monkeypatch.setattr(ingest.config, 'OUT_DIR', tmp_path / 'out')
     monkeypatch.setattr(pii_pipeline, 'detect', lambda text: [{'label': 'person', 'start': 0, 'end': len(text)}])
     monkeypatch.setattr(pii_pipeline, 'make_token', lambda *args: '<PERSON_test>')
