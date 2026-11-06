@@ -10,7 +10,7 @@ import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import run_compare as scorer
+from eval import run_compare as scorer
 
 CATEGORIES = ('BOTH_CORRECT', 'RULE_ONLY', 'KOELECTRA_ONLY', 'BOTH_WRONG')
 CAUSES = ('CORRECT', 'COMPLETE_MISS', 'BOUNDARY_ERROR', 'LABEL_ERROR', 'ADJACENT_MERGE')
@@ -125,7 +125,7 @@ def main():
     protected = [p for folder in ('local_results/rule_baseline', 'local_results/token_cls_baseline',
                                  'detection/rule', 'detection/token_cls', 'logs')
                  for p in (root / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
-    protected += [root / p for p in ('run_compare.py', 'detection/base.py', 'label_guide_fixed.md', 'README.md')]
+    protected += [root / p for p in ('eval/run_compare.py', 'detection/base.py', 'docs/label_guide_fixed.md', 'README.md')]
     before = {str(p.relative_to(root)): digest(p) for p in protected}
     docs = scorer.load_gold(gold_path)
     assert len(docs) == len({d['id'] for d in docs}) == 100
@@ -276,7 +276,7 @@ def main():
     provenance = dict(gold=str(gold_path.relative_to(root)), gold_sha256=digest(gold_path),
         discovered=discovered, source_predictions={s: dict(path=str(p.relative_to(root)), sha256=digest(p))
                                                    for s, p in paths.items()},
-        scorer_sha256=digest(root/'run_compare.py'), documents=100, gold_entities=548,
+        scorer_sha256=digest(root/'eval'/'run_compare.py'), documents=100, gold_entities=548,
         labels=scorer.LABELS, exact_duplicate_gold=0, exact_duplicate_predictions=0,
         missing_or_extra_documents=0, invalid_spans=0, source_summary_metrics_reproduced=True,
         koelectra_gold_hash_verified=True,

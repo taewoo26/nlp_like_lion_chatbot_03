@@ -14,7 +14,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-import run_compare as scorer
+from eval import run_compare as scorer
 
 
 @dataclass(frozen=True)

@@ -47,9 +47,6 @@ Thumbs.db
 
 # Local-only legacy detectors and experiments
 /experiments/
-outputs/
-__pycache__/
-*.pyc
 
 AGENTS.md
 CLAUDE.md

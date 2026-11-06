@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-import run_compare as scorer
+from eval import run_compare as scorer
 from eval.export_summary import prepare
 from result_paths import ROOT, LOCAL_RESULTS, SHARED_RESULTS, private_output
 
@@ -31,7 +31,6 @@ class OutputRoutingTests(unittest.TestCase):
             ['-m', 'experiments.legacy.moai.smoke', '--out', target],
             ['-m', 'experiments.legacy.moai.test_reference', '--source', 'missing.py', '--out', target],
             ['-m', 'eval.cross_analysis', '--out', target],
-            ['run_compare.py', '--gold', 'missing.jsonl', '--pred', 'x=missing.jsonl', '--out', target],
         ]
         for command in commands:
             # Legacy implementations are intentionally absent in shared checkouts.

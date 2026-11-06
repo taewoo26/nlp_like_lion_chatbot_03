@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 import re
 
-import run_compare as scorer
+from eval import run_compare as scorer
 from result_paths import ROOT, LOCAL_RESULTS, SHARED_RESULTS
 
 MODELS = (
