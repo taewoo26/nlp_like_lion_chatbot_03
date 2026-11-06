@@ -114,3 +114,78 @@ def _normalize_elements(value):
     value = _ROAD.sub(r"\1 \2", value)
     value = _DETAIL.sub(r"\1\2", value)
     return re.sub(r"(?<=[A-Za-z0-9]동)\s*(?=[0-9])", " ", value)
+
+# ---------------------------------------------------------------- 지역 메타데이터 (규칙 정의서 REG)
+# 시군구 이름 → 그 이름이 있는 시도들. '중구'처럼 여러 시도에 있으면 시도를 추측하지 않는다.
+_SIGUNGU_OWNERS = {}
+for _sido, _names in _ADMIN_DATA['regions'].items():
+    for _name in _names:
+        if not _name.endswith('출장소'):                 # 시군구가 아닌 행정 출장소는 제외
+            _SIGUNGU_OWNERS.setdefault(_name, set()).add(_sido)
+
+_REGION_JOSA = ('에서', '으로', '에', '로', '쪽', '의', '은', '는', '이', '가', '도')
+
+
+def _clean_admin(name):
+    return re.sub(r'[\s,]+', ' ', name).strip(' ,')
+
+
+def regions_of(address):
+    """주소 원문 → {'대구광역시', '대구광역시 수성구'} (REG-02·03·04·10·11·20).
+
+    시도 단독 값도 함께 넣어 '대구 사는 고객'을 배열 포함 조건 하나로 찾게 한다.
+    시도 없이 시군구만 있으면 전국에 하나뿐일 때만 시도를 채우고, 확정할 수 없으면 빈 집합.
+    """
+    text = unicodedata.normalize('NFC', address).translate(_WIDTH)
+    postcode = _POSTCODE.match(text)
+    start = postcode.end() if postcode else len(text) - len(text.lstrip())
+    sido = _SIDO_RE.match(text, start)
+    if sido:
+        official = SIDO[sido.group()]
+        out = {official}
+        pattern = _ADMIN_PATTERNS.get(official)
+        admin = pattern.match(text, sido.end()) if pattern else None
+        if admin:
+            name = _clean_admin(admin.group())
+            if name in _SIGUNGU_OWNERS:
+                out.add(f'{official} {name}')
+        return out
+    admin = _LOCAL_ADMIN.match(text, start)
+    if admin:
+        name = _clean_admin(admin.group())
+        owners = _SIGUNGU_OWNERS.get(name, set())
+        if len(owners) == 1:
+            official = next(iter(owners))
+            return {official, f'{official} {name}'}
+    return set()
+
+
+def _strip_region_josa(word):
+    """'아산시에' → '아산시'. 지역 이름으로 확인될 때만 조사를 뗀다."""
+    w = word.strip(' ,.?!')
+    if w in REGION_WORDS:
+        return w
+    for josa in _REGION_JOSA:
+        if w.endswith(josa) and w[:-len(josa)] in REGION_WORDS:
+            return w[:-len(josa)]
+    return w
+
+
+def query_regions(query):
+    """질문 → (필터 값 목록, 되물을 시군구 이름) (REG-30~33).
+
+    '대구 사는 고객'        → (['대구광역시'], None)
+    '대구 수성구 고객'      → (['대구광역시 수성구'], None)
+    '수성구 고객'           → (['대구광역시 수성구'], None)   전국에 하나뿐인 시군구
+    '중구 고객'             → ([], '중구')                     어느 시도인지 되묻기
+    지역 단어 없음          → ([], None)
+    """
+    words = [_strip_region_josa(w) for w in unicodedata.normalize('NFC', query).split()]
+    for i, word in enumerate(words):
+        if word in SIDO or word in _SIGUNGU_OWNERS:
+            found = regions_of(' '.join(words[i:]))
+            if found:
+                return [max(found, key=len)], None
+            if len(_SIGUNGU_OWNERS.get(word, ())) > 1:
+                return [], word
+    return [], None

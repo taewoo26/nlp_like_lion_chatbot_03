@@ -11,8 +11,16 @@ import json
 import time
 from pathlib import Path
 
-from . import config, db, pii_pipeline
+from . import address, config, db, pii_pipeline
 from .embed import embed
+from .person_role_mapping import persons_by_chunk
+from .roles import load_rules
+
+
+def doc_regions(text, spans):
+    """문서의 주소 span 에서 시도·시군구만 뽑는다 (REG-01). 문서의 모든 청크에 같은 값을 넣는다."""
+    return sorted({r for s in spans if s["label"] == "address"
+                   for r in address.regions_of(text[s["start"]:s["end"]])})
 
 
 def load_docs(path, limit=None):
@@ -76,20 +84,34 @@ def main():
     config.OUT_DIR.mkdir(exist_ok=True)
     pseudo_path = config.OUT_DIR / f"pseudo_{Path(a.data).stem}.jsonl"
 
+    region_on, role_on = config.meta_on("REGION_META"), config.meta_on("ROLE_META")
+    rules = None
+    if role_on:
+        with db.rag_conn() as conn, conn.cursor() as cur:
+            rules = load_rules(cur)
+
     t0 = time.perf_counter()
     rows, mapping, pseudo = [], {}, []
     for d in docs:
         spans = pii_pipeline.detect(d["text"])
         masked, records = pii_pipeline.pseudonymize(d["text"], spans)
+        parts = chunk(masked, a.max_chars)
+        regions = doc_regions(d["text"], spans) if region_on else []
+        persons = (persons_by_chunk(d["id"], d["text"], masked, records, parts, rules,
+                                    [s for s in spans if s["label"] == "person"])
+                   if role_on else {})
         pseudo.append({"id": d["id"], "entities": [
             {k: r[k] for k in ("label", "start", "end", "token")} for r in records]})
         for r in records:
             collect_mapping(mapping, r)
         aliases = {r["alias_token"] for r in records if r.get("alias_token")}  # NAME_LINK=doc 일 때만 생김
-        for i, c in enumerate(chunk(masked, a.max_chars)):
-            rows.append({"chunk_id": f"{d['id']}#{i}", "doc_id": d["id"], "chunk_idx": i,
+        for i, c in enumerate(parts):
+            chunk_id = f"{d['id']}#{i}"
+            rows.append({"chunk_id": chunk_id, "doc_id": d["id"], "chunk_idx": i,
                          "doc_type": d.get("doc_type"), "masked_text": c,
-                         "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases)})
+                         "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases),
+                         "persons": json.dumps(persons.get(chunk_id, []), ensure_ascii=False),
+                         "regions": regions})
     t_mask = time.perf_counter() - t0
 
     t1 = time.perf_counter()
@@ -99,12 +121,15 @@ def main():
 
     with db.rag_conn() as conn, conn.cursor() as cur:
         if a.reset:
-            cur.execute("TRUNCATE rag.chunks")
+            cur.execute("TRUNCATE rag.chunks CASCADE")
         cur.executemany(
-            """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, masked_text, tokens, embedding)
-               VALUES (%(chunk_id)s, %(doc_id)s, %(chunk_idx)s, %(doc_type)s, %(masked_text)s, %(tokens)s, %(embedding)s)
+            """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, masked_text, tokens, embedding,
+                                       persons, regions)
+               VALUES (%(chunk_id)s, %(doc_id)s, %(chunk_idx)s, %(doc_type)s, %(masked_text)s, %(tokens)s,
+                       %(embedding)s, %(persons)s::jsonb, %(regions)s)
                ON CONFLICT (chunk_id) DO UPDATE SET masked_text = EXCLUDED.masked_text,
-                   tokens = EXCLUDED.tokens, embedding = EXCLUDED.embedding, doc_type = EXCLUDED.doc_type""",
+                   tokens = EXCLUDED.tokens, embedding = EXCLUDED.embedding, doc_type = EXCLUDED.doc_type,
+                   persons = EXCLUDED.persons, regions = EXCLUDED.regions""",
             [r | {"embedding": v} for r, v in zip(rows, vecs)])
 
         # Vault의 오류가 RAG 커밋 전에 전파되도록 한다. 두 DB 연결의 완전한 원자성은 별도 과제다.
