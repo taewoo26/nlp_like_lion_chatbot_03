@@ -4,6 +4,7 @@
     python -m starter.ingest                      # 문서 30건씩 처리하고 배치마다 커밋
     python -m starter.ingest --batch-size 50      # 배치 크기 변경 (.env 의 INGEST_BATCH 로도 가능)
     python -m starter.ingest --resume             # 중단된 실행을 이어서 (완료 배치만 건너뜀)
+    python -m starter.ingest --workers 4          # 탐지·가명처리를 4개 프로세스로 (.env 의 INGEST_WORKERS 로도 가능)
     python -m starter.ingest --reset              # 전체 재적재: 지금처럼 한 트랜잭션 (배치 커밋 안 함)
 
 - 입력 파일의 entities(정답 라벨)는 쓰지 않습니다. 탐지는 pii_pipeline.detect() 가 합니다.
@@ -18,6 +19,11 @@
   체크포인트의 문서가 DB에 청크 전부 + vault 토큰까지 있는지 확인한 뒤 확인된 문서만 건너뜁니다.
 - --reset 없이 적재할 때 DB에 이미 데이터가 있으면, 그 청크 몇 개를 현재 모델로 다시 임베딩해 비교합니다.
   벡터가 다르면(모델·설정 변경) 서로 다른 벡터가 섞이지 않도록 멈춥니다 → 모델을 바꿨다면 --reset 으로 적재하세요.
+
+병렬 처리 (--workers N)
+- 문서 1건의 탐지 → 가명처리 → 청크 → 메타데이터(process_doc)만 워커 프로세스에서 돌립니다.
+- 토큰 충돌 검사, 임베딩, DB 저장, 체크포인트는 이 프로세스에서 문서·배치 순서대로 하므로 결과는 --workers 1 과 같습니다.
+- 워커마다 탐지 모델을 따로 읽으므로 메모리를 N배 가까이 씁니다. 기본값은 1 (병렬 없음).
 
 한계 (후속 과제)
 - 수정된 문서만 골라 다시 넣는 기능은 없습니다. --resume 없이 실행하면 지금처럼 전체를 다시 처리합니다.
@@ -184,30 +190,72 @@ def check_embedding_model(rag_cur):
                 "서로 다른 벡터가 섞이지 않도록 멈춥니다. 임베딩 모델·설정을 바꿨다면 --reset 으로 전체 적재하세요.")
 
 
-def prepare(docs, a, region_on, role_on, rules):
-    """배치 문서의 탐지 → 가명처리 → 청크 → 메타데이터 (기존 처리와 같음)."""
+def process_doc(d, max_chars, region_on, role_on, rules):
+    """문서 1건: 탐지 → 가명처리 → 청크 → 메타데이터. 다른 문서와 공유하는 상태가 없어 워커에서 돌려도 된다."""
+    spans = pii_pipeline.detect(d["text"])
+    masked, records = pii_pipeline.pseudonymize(d["text"], spans)
+    parts = chunk(masked, max_chars)
+    regions = doc_regions(d["text"], spans) if region_on else []
+    persons = (persons_by_chunk(d["id"], d["text"], masked, records, parts, rules,
+                                [s for s in spans if s["label"] == "person"])
+               if role_on else {})
+    aliases = {r["alias_token"] for r in records if r.get("alias_token")}  # NAME_LINK=doc 일 때만 생김
+    rows = []
+    for i, c in enumerate(parts):
+        chunk_id = f"{d['id']}#{i}"
+        rows.append({"chunk_id": chunk_id, "doc_id": d["id"], "chunk_idx": i,
+                     "doc_type": d.get("doc_type"), "masked_text": c,
+                     "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases),
+                     "persons": json.dumps(persons.get(chunk_id, []), ensure_ascii=False),
+                     "regions": regions})
+    pseudo = {"id": d["id"], "entities": [
+        {k: r[k] for k in ("label", "start", "end", "token")} for r in records]}
+    return {"id": d["id"], "rows": rows, "records": records, "pseudo": pseudo}
+
+
+# 워커 프로세스 상태: 프로세스마다 한 번 만들고 문서마다 다시 만들지 않는다
+_WORKER = {}
+
+
+def _init_worker(max_chars, region_on, role_on, rules):
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[name] = "1"          # 워커끼리 코어를 두고 다투지 않게 한다
+    try:
+        import torch
+        torch.set_num_threads(1)
+    except Exception:
+        pass
+    _WORKER.update(max_chars=max_chars, region_on=region_on, role_on=role_on, rules=rules)
+    pii_pipeline._detector()            # 모델을 미리 읽어 둔다
+
+
+def _worker_process(d):
+    return process_doc(d, **_WORKER)
+
+
+def make_pool(workers, a, region_on, role_on, rules):
+    """workers 가 2 이상일 때만 프로세스 풀을 만든다 (1 이하면 None → 이 프로세스에서 순서대로 처리)."""
+    if workers <= 1:
+        return None
+    import multiprocessing
+    return multiprocessing.get_context("spawn").Pool(
+        workers, initializer=_init_worker, initargs=(a.max_chars, region_on, role_on, rules))
+
+
+def prepare(docs, a, region_on, role_on, rules, pool=None):
+    """배치 문서의 탐지 → 가명처리 → 청크 → 메타데이터. pool 이 있으면 문서를 워커에 나눠 맡기고,
+    결과는 항상 문서 순서대로 받아 토큰 충돌 검사·조립은 이 프로세스에서 순서대로 한다."""
+    if pool is None:
+        results = [process_doc(d, a.max_chars, region_on, role_on, rules) for d in docs]
+    else:
+        results = pool.map(_worker_process, docs, chunksize=1)
     rows, mapping, pseudo, counts = [], {}, [], {}
-    for d in docs:
-        spans = pii_pipeline.detect(d["text"])
-        masked, records = pii_pipeline.pseudonymize(d["text"], spans)
-        parts = chunk(masked, a.max_chars)
-        regions = doc_regions(d["text"], spans) if region_on else []
-        persons = (persons_by_chunk(d["id"], d["text"], masked, records, parts, rules,
-                                    [s for s in spans if s["label"] == "person"])
-                   if role_on else {})
-        pseudo.append({"id": d["id"], "entities": [
-            {k: r[k] for k in ("label", "start", "end", "token")} for r in records]})
-        for r in records:
+    for res in results:
+        for r in res["records"]:
             collect_mapping(mapping, r)
-        aliases = {r["alias_token"] for r in records if r.get("alias_token")}  # NAME_LINK=doc 일 때만 생김
-        counts[d["id"]] = len(parts)
-        for i, c in enumerate(parts):
-            chunk_id = f"{d['id']}#{i}"
-            rows.append({"chunk_id": chunk_id, "doc_id": d["id"], "chunk_idx": i,
-                         "doc_type": d.get("doc_type"), "masked_text": c,
-                         "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases),
-                         "persons": json.dumps(persons.get(chunk_id, []), ensure_ascii=False),
-                         "regions": regions})
+        counts[res["id"]] = len(res["rows"])
+        pseudo.append(res["pseudo"])
+        rows.extend(res["rows"])
     return rows, mapping, pseudo, counts
 
 
@@ -230,11 +278,15 @@ def main():
     ap.add_argument("--batch-size", type=int, default=int(config.env("INGEST_BATCH", "30")),
                     help="한 번에 처리·커밋할 원본 문서 수 (기본 .env INGEST_BATCH 또는 30)")
     ap.add_argument("--resume", action="store_true", help="중단된 실행을 이어서 (완료 확인된 문서만 건너뜀)")
+    ap.add_argument("--workers", type=int, default=int(config.env("INGEST_WORKERS", "1")),
+                    help="탐지·가명처리에 쓸 프로세스 수 (기본 .env INGEST_WORKERS 또는 1). 결과는 1일 때와 같다")
     a = ap.parse_args()
     if a.reset and a.resume:
         raise SystemExit("--reset 과 --resume 은 함께 쓸 수 없습니다.")
     if a.batch_size < 1:
         raise SystemExit("--batch-size 는 1 이상이어야 합니다.")
+    if a.workers < 1:
+        raise SystemExit("--workers 는 1 이상이어야 합니다.")
 
     if pii_pipeline.IS_DEMO and config.EMBED_PROVIDER == "api":
         print("⚠ 데모용 마스킹은 이름 등을 탐지하지 못해 원문 일부가 임베딩 API로 전송됩니다. "
@@ -287,45 +339,51 @@ def main():
     t_mask = t_embed = 0.0
     n_chunks, tokens_seen, n_batches = 0, set(), 0
 
-    # 첫 배치는 DB 를 열기 전에 준비한다: 문서 간 토큰 충돌이면 임베딩·DB 전에 멈춘다 (기존 동작)
-    t0 = time.perf_counter()
-    first = prepare(batches[0], a, region_on, role_on, rules) if batches else None
-    t_mask += time.perf_counter() - t0
+    pool = make_pool(a.workers if batches else 1, a, region_on, role_on, rules)
+    try:
+        # 첫 배치는 DB 를 열기 전에 준비한다: 문서 간 토큰 충돌이면 임베딩·DB 전에 멈춘다 (기존 동작)
+        t0 = time.perf_counter()
+        first = prepare(batches[0], a, region_on, role_on, rules, pool) if batches else None
+        t_mask += time.perf_counter() - t0
 
-    if batches:
-        with db.rag_conn() as rag, rag.cursor() as rag_cur:
-            # Vault의 오류가 RAG 커밋 전에 전파되도록 한다. 두 DB 연결의 완전한 원자성은 별도 과제다.
-            with db.vault_conn() as vault, vault.cursor() as vault_cur:
-                if not a.reset:
-                    check_embedding_model(rag_cur)
-                for i, batch in enumerate(batches):
-                    if i == 0:
-                        rows, mapping, pseudo, counts = first
-                    else:
-                        t0 = time.perf_counter()
-                        rows, mapping, pseudo, counts = prepare(batch, a, region_on, role_on, rules)
-                        t_mask += time.perf_counter() - t0
+        if batches:
+            with db.rag_conn() as rag, rag.cursor() as rag_cur:
+                # Vault의 오류가 RAG 커밋 전에 전파되도록 한다. 두 DB 연결의 완전한 원자성은 별도 과제다.
+                with db.vault_conn() as vault, vault.cursor() as vault_cur:
+                    if not a.reset:
+                        check_embedding_model(rag_cur)
+                    for i, batch in enumerate(batches):
+                        if i == 0:
+                            rows, mapping, pseudo, counts = first
+                        else:
+                            t0 = time.perf_counter()
+                            rows, mapping, pseudo, counts = prepare(batch, a, region_on, role_on, rules, pool)
+                            t_mask += time.perf_counter() - t0
 
-                    t1 = time.perf_counter()
-                    # 임베딩에는 토큰을 라벨 이름으로 바꾼 사본만 넣는다 (DB에는 masked_text 그대로 저장)
-                    vecs = embed([pii_pipeline.embedding_text(r["masked_text"]) for r in rows])
-                    t_embed += time.perf_counter() - t1
+                        t1 = time.perf_counter()
+                        # 임베딩에는 토큰을 라벨 이름으로 바꾼 사본만 넣는다 (DB에는 masked_text 그대로 저장)
+                        vecs = embed([pii_pipeline.embedding_text(r["masked_text"]) for r in rows])
+                        t_embed += time.perf_counter() - t1
 
-                    if a.reset:
-                        rag_cur.execute("TRUNCATE rag.chunks CASCADE")
-                    rag_cur.executemany(INSERT_SQL, [r | {"embedding": v} for r, v in zip(rows, vecs)])
-                    if a.reset:
-                        vault_cur.execute("TRUNCATE vault.token_map")
-                    save_mappings(vault_cur, mapping)
-                    vault.commit()       # 1) vault 먼저
-                    rag.commit()         # 2) 그다음 rag
-                    append_pseudo(part_path, pseudo)                                      # 3) pseudo 줄
-                    done.update(counts)
-                    write_json_atomic(ckpt_path, {"settings": settings, "done": done})   # 4) 완료 기록
-                    n_chunks += len(rows)
-                    tokens_seen |= mapping.keys()
-                    n_batches += 1
-                    print(f"  배치 {n_batches}/{len(batches)} 저장: 문서 {len(done)}/{len(docs)}", flush=True)
+                        if a.reset:
+                            rag_cur.execute("TRUNCATE rag.chunks CASCADE")
+                        rag_cur.executemany(INSERT_SQL, [r | {"embedding": v} for r, v in zip(rows, vecs)])
+                        if a.reset:
+                            vault_cur.execute("TRUNCATE vault.token_map")
+                        save_mappings(vault_cur, mapping)
+                        vault.commit()       # 1) vault 먼저
+                        rag.commit()         # 2) 그다음 rag
+                        append_pseudo(part_path, pseudo)                                      # 3) pseudo 줄
+                        done.update(counts)
+                        write_json_atomic(ckpt_path, {"settings": settings, "done": done})   # 4) 완료 기록
+                        n_chunks += len(rows)
+                        tokens_seen |= mapping.keys()
+                        n_batches += 1
+                        print(f"  배치 {n_batches}/{len(batches)} 저장: 문서 {len(done)}/{len(docs)}", flush=True)
+    finally:
+        if pool is not None:
+            pool.terminate()     # 정상 종료·오류·Ctrl+C 모두 워커를 남기지 않는다
+            pool.join()
 
     # 전체 완료: pseudo 를 입력 문서 순서대로 정리해 원래 이름으로 바꾸고 체크포인트를 지운다
     rows_by_id = read_pseudo(part_path)
@@ -339,7 +397,7 @@ def main():
     n = len(docs)
     print(f"문서 {n}건 (이번 실행 처리 {len(todo)}건, 배치 {n_batches}개) → 청크 {n_chunks}개, 토큰 {len(tokens_seen)}종 적재")
     if todo:
-        print(f"탐지+가명처리 {t_mask * 1000 / len(todo):.1f} ms/문서, "
+        print(f"탐지+가명처리 {t_mask * 1000 / len(todo):.1f} ms/문서 (워커 {a.workers}개), "
               f"임베딩 {t_embed * 1000 / len(todo):.1f} ms/문서 ({config.EMBED_PROVIDER})")
     print(f"가명처리 결과: {pseudo_path}")
 
