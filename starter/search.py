@@ -18,7 +18,7 @@
   search(query, k, conn=None) -> (masked_query, query_tokens, docs)
   search(query, k, conn=None, with_meta=True) -> (masked_query, query_tokens, docs, meta)
   docs: [{"doc_id", "chunk_id", "masked_text", "tokens", "score"}, ...]  순위 순서
-  meta: {"regions", "ask_region", "roles", "excluded"}
+  meta: {"regions", "ask_region", "roles", "excluded", "person_candidates"}
 검색 단계는 rag_user 계정만 씁니다 (매핑 테이블 접근 없음).
 
 메타데이터 (종합, 기본 off. 켜도 SEARCH_MODE=and 경로에만 적용)
@@ -28,11 +28,17 @@
                    사람 없이 지역이 있는 질문('대구 사는 고객')은 질문 전체의 역할어를 쓴다.
                    남은 문서의 순서는 기존 점수 그대로 (등급 1·2로 순서를 바꾸면 같은 사람의
                    다른 문서가 올라와 이름 질문 점수가 떨어졌다: holdout 6문항)
+
+인물 사전 (PERSON_DICT=on, 기본 off. SEARCH_MODE=and 경로에만 적용)
+  질문 속 이름 → rag.person_lookup 에서 그 이름의 후보 토큰(확정 인물 토큰 + 임시 이름 토큰)을 찾는다.
+  같은 이름의 후보 토큰은 '하나라도' 가진 문서를 통과시키고, 서로 다른 조건끼리는 지금처럼 '모두' 만족.
+  동명이인이면 후보가 여러 개라 두 사람 문서가 함께 나오고, ROLE_META=on 이면 역할이 다른 쪽이 빠진다.
+  vault 는 보지 않는다 (person_lookup 에는 이름 HMAC·토큰·역할·문서 수만 있다).
 """
 import argparse
 import re
 
-from . import address, config, db, pii_pipeline
+from . import address, config, db, person_dict, pii_pipeline
 from .embed import embed
 from .roles import load_rules, query_name_roles, query_roles
 
@@ -41,10 +47,51 @@ ROLE_POOL = 60     # 역할 등급을 매길 후보 청크 수 (등급은 k개�
 _rules_cache = {}
 
 
-def mask_query(query):
+def mask_query(query, with_records=False):
     # 질의는 strict=False: 처리할 수 없는 표기가 있어도 챗봇이 멈추지 않고 그 값만 [개인정보]로 가린다
+    # with_records=True: 인물 사전 조회에 쓸 이름 정규화 값(records)도 돌려준다 (DB 로는 HMAC 만 보냄)
     masked, records = pii_pipeline.pseudonymize(query, pii_pipeline.detect(query), strict=False)
-    return masked, sorted({r["token"] for r in records})
+    tokens = sorted({r["token"] for r in records})
+    return (masked, tokens, records) if with_records else (masked, tokens)
+
+
+def person_candidates(cur, records):
+    """질문 속 이름 토큰 → 같은 이름의 후보 토큰 묶음 {질문 토큰: [후보 토큰]} (PERSON_DICT=on).
+
+    후보에는 질문 토큰(= 임시 인물 이름 토큰)도 항상 넣는다. 사전에 없는 이름이면 지금과 같다.
+    """
+    out = {}
+    for r in records:
+        if r["label"] != "person" or r["token"] in out:
+            continue
+        cur.execute("SELECT token FROM rag.person_lookup WHERE name_hmac = %s ORDER BY token",
+                    (person_dict.name_hmac(r["normalized"]),))
+        out[r["token"]] = sorted({r["token"]} | {row[0] for row in cur.fetchall()})
+    return out
+
+
+def token_conditions(q_tokens, candidates):
+    """문서 통과 조건: 질문 토큰마다 '그 토큰(또는 같은 이름 후보 중 하나)을 가진 청크가 같은 문서에 있다'.
+
+    반환: (WHERE 조각 목록, 파라미터 목록). 후보가 없으면 실전 2와 같은 '모두 포함' 조건 하나.
+    """
+    if not any(len(candidates.get(t, [t])) > 1 for t in q_tokens):
+        return ["""NOT EXISTS (
+                        SELECT 1 FROM unnest(%s::text[]) AS q(token)
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM rag.chunks AS matched
+                            WHERE matched.doc_id = chunks.doc_id
+                              AND matched.tokens @> ARRAY[q.token]
+                        )
+                    )"""], [list(q_tokens)]
+    where, params = [], []
+    for t in q_tokens:
+        where.append("""EXISTS (
+                        SELECT 1 FROM rag.chunks AS matched
+                        WHERE matched.doc_id = chunks.doc_id AND matched.tokens && %s::text[]
+                    )""")
+        params.append(candidates.get(t, [t]))
+    return where, params
 
 
 def _mode():
@@ -88,8 +135,13 @@ def _doc_persons(cur, doc_ids):
 
 
 def search(query, k=10, conn=None, with_meta=False):
-    masked_q, q_tokens = mask_query(query)
-    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0}
+    dict_on = config.meta_on("PERSON_DICT")
+    if dict_on:
+        masked_q, q_tokens, q_records = mask_query(query, with_records=True)
+    else:
+        masked_q, q_tokens = mask_query(query)
+        q_records = []
+    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {}}
     if config.meta_on("REGION_META"):
         meta["regions"], meta["ask_region"] = address.query_regions(query)
         if meta["ask_region"]:                  # '중구 고객' → 검색하지 않고 되묻기 (REG-33)
@@ -112,21 +164,18 @@ def search(query, k=10, conn=None, with_meta=False):
                 wanted = (query_name_roles(masked_q, person_tokens[0], rules) if person_tokens
                           else query_roles(query, rules))
             meta["roles"] = sorted(wanted)
+            candidates = person_candidates(cur, q_records) if dict_on else {}
+            meta["person_candidates"] = {t: len(c) for t, c in candidates.items()}
+            allowed = {c for t in person_tokens for c in candidates.get(t, [t])}
             pool = max(k * 3, ROLE_POOL) if wanted else k * 3
             where, params = [], [vec]
             if q_tokens:
                 # 토큰 후보를 먼저 확정(MATERIALIZED)한 뒤 그 안에서만 거리 순으로 정렬한다.
                 # 필터를 바깥 쿼리에 두면 k가 작을 때 DB가 HNSW 근사 인덱스를 골라
                 # '가까운 약 40개'만 꺼낸 뒤 필터를 걸어, 정답이 그 밖에 있으면 빈 결과가 된다.
-                where.append("""NOT EXISTS (
-                        SELECT 1 FROM unnest(%s::text[]) AS q(token)
-                        WHERE NOT EXISTS (
-                            SELECT 1 FROM rag.chunks AS matched
-                            WHERE matched.doc_id = chunks.doc_id
-                              AND matched.tokens @> ARRAY[q.token]
-                        )
-                    )""")
-                params.append(q_tokens)
+                token_where, token_params = token_conditions(q_tokens, candidates)
+                where += token_where
+                params += token_params
             if regions:
                 # 지역도 토큰처럼 '같은 문서의 어느 청크든' 가지고 있으면 통과 (REG-30·31)
                 where.append("""EXISTS (
@@ -162,7 +211,7 @@ def search(query, k=10, conn=None, with_meta=False):
         kept = []
         for d in docs:
             entries = [p for p in persons.get(d["doc_id"], [])
-                       if not person_tokens or p["token"] in person_tokens]
+                       if not person_tokens or p["token"] in allowed]
             d["role_grade"] = role_grade(entries, wanted, groups)
             if d["role_grade"] == 3:
                 meta["excluded"] += 1
@@ -246,7 +295,7 @@ def main():
     masked_q, q_tokens, docs, meta = search(a.query, a.k, with_meta=True)
     print(f"질의(가명처리): {masked_q}\n질의 토큰: {q_tokens or '없음'}")
     print(f"지역 조건: {meta['regions'] or '없음'}  역할 조건: {meta['roles'] or '없음'}  "
-          f"역할이 달라 제외: {meta['excluded']}건\n")
+          f"역할이 달라 제외: {meta['excluded']}건  이름 후보 토큰 수: {meta['person_candidates'] or '없음'}\n")
     if meta["ask_region"]:
         print(f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요.")
     for i, d in enumerate(docs, 1):
