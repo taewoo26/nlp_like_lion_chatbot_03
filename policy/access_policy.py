@@ -1,6 +1,7 @@
 """권한 정책 조회 모듈.
 
 정책 파일(access_policy.yaml)을 읽어 검색 전 권한 필터와 복원 규칙을 돌려줍니다.
+(정책 원본을 DB policy.* 테이블로 옮기는 중입니다. 지금은 YAML 초기값을 읽습니다.)
 권한 판단은 LLM이 아니라 이 모듈(코드)에서 합니다.
 
 사용 예 (검색 SQL의 권한 필터):
@@ -24,6 +25,8 @@ import yaml
 
 POLICY_PATH = Path(__file__).with_name("access_policy.yaml")
 VALID_LEVELS = (0, 1, 2)
+# doc_type의 분류(정책서 3절 판정 질문의 결과)와 그 분류의 기본 레벨
+CATEGORY_BASE_LEVEL = {"직원개인": 2, "고객업무": 1, "내부업무": 1, "공개": 0}
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,8 @@ class AccessPolicy:
     restore_rules: dict       # level -> {label: mode}
     restore_default: str
     audit_read_min_level: int
+    team_default_levels: dict = None   # team -> 기본 레벨 (계정 생성용)
+    categories: dict = None            # doc_type -> 분류 (직원개인/고객업무/내부업무/공개)
 
     # --- 검색 전 권한 필터 -------------------------------------------------
     def min_level(self, doc_type: str | None) -> int:
@@ -66,6 +71,10 @@ class AccessPolicy:
         self._check_level(level)
         return self.restore_rules.get(level, {}).get(label, self.restore_default)
 
+    def default_level_for_team(self, team: str | None) -> int:
+        """계정을 만들 때 채울 기본 레벨. 표에 없거나 비어 있는 팀은 Lv0(기본 거부)."""
+        return (self.team_default_levels or {}).get((team or "").strip(), 0)
+
     def can_read_audit_log(self, level: int) -> bool:
         self._check_level(level)
         return level >= self.audit_read_min_level
@@ -79,6 +88,14 @@ class AccessPolicy:
 def load_policy(path: Path | str = POLICY_PATH) -> AccessPolicy:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     min_levels = {t: int(v["min_level"]) for t, v in raw["doc_types"].items()}
+    categories = {t: v["category"] for t, v in raw["doc_types"].items()}
+    for t, c in categories.items():
+        if c not in CATEGORY_BASE_LEVEL:
+            raise ValueError(f"{t}: 알 수 없는 분류 {c!r} (허용: {tuple(CATEGORY_BASE_LEVEL)})")
+        # DB CHECK doc_type_access_level_floor 와 같은 규칙: 분류 기본 레벨이 하한(올리기만 가능)
+        if min_levels[t] < CATEGORY_BASE_LEVEL[c]:
+            raise ValueError(f"{t}: 분류 {c}의 기본 레벨 Lv{CATEGORY_BASE_LEVEL[c]}보다 낮출 수 없습니다"
+                             f" (현재 Lv{min_levels[t]})")
     restore = raw["restore"]
     return AccessPolicy(
         version=raw["version"],
@@ -87,4 +104,6 @@ def load_policy(path: Path | str = POLICY_PATH) -> AccessPolicy:
         restore_rules={int(k): v for k, v in restore.items() if isinstance(k, int)},
         restore_default=restore["default_mode"],
         audit_read_min_level=int(raw["audit_log_read_min_level"]),
+        team_default_levels={str(t): int(v) for t, v in (raw.get("team_default_levels") or {}).items()},
+        categories=categories,
     )

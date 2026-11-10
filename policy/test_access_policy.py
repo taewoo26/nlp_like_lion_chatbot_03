@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from access_policy import VALID_LEVELS, load_policy  # noqa: E402
+from access_policy import CATEGORY_BASE_LEVEL, POLICY_PATH, VALID_LEVELS, load_policy  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = {
@@ -22,7 +22,7 @@ LABELS = ["person", "phone_number", "email", "address",
           "resident_registration_number", "account_number", "card_number"]
 
 # 정책서(docs/permission_policy_draft.md) 5절 표의 기대값 (holdout 187 / 전체 487)
-EXPECTED_VIEWABLE = {"holdout": {0: 23, 1: 120, 2: 187}, "all": {0: 73, 1: 390, 2: 487}}
+EXPECTED_VIEWABLE = {"holdout": {0: 23, 1: 158, 2: 187}, "all": {0: 73, 1: 443, 2: 487}}
 
 policy = load_policy()
 
@@ -110,6 +110,64 @@ def test_viewable_counts_match_policy_doc():
     for lv in VALID_LEVELS:
         assert sum(policy.can_view(lv, t) for t in dts["holdout"]) == EXPECTED_VIEWABLE["holdout"][lv]
         assert sum(policy.can_view(lv, t) for t in allv) == EXPECTED_VIEWABLE["all"][lv]
+
+
+
+def test_team_default_levels():
+    teams = policy.team_default_levels
+    assert teams, "team_default_levels 가 비어 있음"
+    assert all(v in VALID_LEVELS for v in teams.values())
+    assert policy.default_level_for_team("인사팀") == 2
+    assert policy.default_level_for_team(" 고객보호팀 ") == 1        # 앞뒤 공백 무시
+    assert policy.default_level_for_team("없는팀") == 0               # 표에 없으면 Lv0
+    assert policy.default_level_for_team(None) == 0
+
+
+
+def test_categories():
+    cats = policy.categories
+    assert set(cats) == set(policy.min_levels), "모든 doc_type에 분류가 있어야 함"
+    assert set(cats.values()) <= set(CATEGORY_BASE_LEVEL)
+    # 직원 개인 문서는 정확히 Lv2 전용 4종
+    assert sorted(t for t, c in cats.items() if c == "직원개인") == ["감사지적", "법인카드소명", "인사발령", "채용메일"]
+    # 현재 정책은 모든 doc_type이 자기 분류의 기본 레벨과 같다(관리자가 올린 예외 없음)
+    for t, c in cats.items():
+        assert policy.min_levels[t] == CATEGORY_BASE_LEVEL[c], f"{t}: 분류 {c} 기본 레벨과 다름"
+
+
+def _load_modified(doc_type: str, min_level: int):
+    """YAML을 복사해 doc_type 하나의 min_level만 바꿔 load_policy()에 넣는다."""
+    import tempfile
+
+    import yaml
+    raw = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+    raw["doc_types"][doc_type]["min_level"] = min_level
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / "p.yaml"
+        f.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        return load_policy(f)
+
+
+def _first_of(category: str) -> str:
+    return sorted(t for t, c in policy.categories.items() if c == category)[0]
+
+
+def test_level_floor_blocks_lowering():
+    # 분류 기본 레벨보다 낮추면 거부: 직원개인 2→1, 고객업무 1→0, 내부업무 1→0
+    for cat, lowered in (("직원개인", 1), ("고객업무", 0), ("내부업무", 0)):
+        t = _first_of(cat)
+        try:
+            _load_modified(t, lowered)
+        except ValueError:
+            continue
+        raise AssertionError(f"{cat} 문서({t})를 Lv{lowered}로 내린 정책이 통과함")
+
+
+def test_level_floor_allows_raising():
+    # 올리는 것은 허용: 공개 0→1, 고객업무 1→2
+    for cat, raised in (("공개", 1), ("고객업무", 2)):
+        t = _first_of(cat)
+        assert _load_modified(t, raised).min_levels[t] == raised
 
 
 if __name__ == "__main__":

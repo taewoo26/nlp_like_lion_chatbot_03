@@ -1,3 +1,4 @@
+-- [대체됨 2026-11-09] 이 보관안은 policy/draft/04_policy_tables.sql(관리자 화면 편집용 정책 테이블)로 대체되었다. 참고용으로만 남긴다.
 -- [보관용 · 현재 채택하지 않음] 정책 테이블을 DB에도 두는 안(RLS 등 확장 시 사용). 채택안은 policy/draft/03_audit_log.sql
 -- 확정 전까지 policy/draft/ 에 두며 자동 실행되지 않는다. 확정 후 infra/init/ 으로 옮기면
 -- 새 DB에서 01_schema.sh, 02_person_roles.sql 다음에 자동 실행된다.

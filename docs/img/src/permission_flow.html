@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<style>
+:root{
+  --blue:#2f66d8; --blue-bg:#eef3fd; --red:#c8323a; --red-bg:#fcf0f0;
+  --teal:#2a8f7c; --teal-bg:#ecf7f4; --purple:#6a3fd1; --purple-bg:#f4f0fd;
+  --orange:#b8741c; --orange-bg:#fdf3e3; --green:#2e8b46; --green-bg:#eaf6ec;
+  --ink:#2a2a33; --muted:#6b6f7b; --grey:#8a8f9b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font-family:'Noto Sans CJK KR','Noto Sans KR',sans-serif;color:var(--ink)}
+#canvas{width:1100px;padding:20px 22px 16px}
+.heads{display:grid;grid-template-columns:520px 284px 1fr;border:1.3px solid #d9dce3;border-radius:10px;overflow:hidden}
+.heads div{text-align:center;font-weight:700;font-size:14.5px;padding:10px 0}
+.heads div+div{border-left:1.3px solid #d9dce3}
+.cols{display:grid;grid-template-columns:520px 284px 1fr;margin-top:16px}
+.col{display:flex;flex-direction:column;align-items:center;padding:0 10px}
+.col+.col{border-left:1px dashed #e1e3e8}
+.b{border:1.6px solid;border-radius:10px;text-align:center;padding:7px 10px;font-weight:700;font-size:13px;line-height:18px;background:#fff;width:230px;flex:none}
+.b small{display:block;font-weight:500;font-size:10.5px;line-height:15px;margin-top:2px}
+.b.todo{border-style:dashed}
+.white{border-color:#8a8f9b;color:var(--ink)} .white small{color:var(--muted)}
+.teal{border-color:var(--teal);background:var(--teal-bg);color:var(--teal)}
+.blue{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.red{border-color:var(--red);background:var(--red-bg);color:var(--red)}
+.purple{border-color:var(--purple);background:var(--purple-bg);color:var(--purple)}
+.orange{border-color:var(--orange);background:var(--orange-bg);color:var(--orange)}
+.green{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+.dia{border-radius:30px}
+.down{width:2px;height:20px;background:var(--grey);position:relative;margin:0 auto}
+.down::after{content:"";position:absolute;left:-4px;bottom:-2px;border:5px solid transparent;border-top:7px solid var(--grey);border-bottom:0}
+.down.lbl{height:26px}
+.down .t{position:absolute;left:8px;top:4px;font-size:10px;font-weight:700;white-space:nowrap}
+.line{display:flex;align-items:center;justify-content:center;width:100%}
+.side{display:flex;align-items:center;width:166px;flex:none;padding-left:4px}
+.harrow{flex:none;width:30px;height:2px;background:var(--grey);position:relative;margin:0 4px}
+.harrow::after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left:7px solid var(--grey);border-right:0}
+.harrow.p{background:var(--purple)} .harrow.p::after{border-left-color:var(--purple)}
+.harrow.r{background:var(--red)} .harrow.r::after{border-left-color:var(--red)}
+.harrow .t{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9.5px;font-weight:700;white-space:nowrap}
+.log{flex:none;border:1.4px solid var(--purple);background:#fff;color:var(--purple);border-radius:8px;font-size:10.5px;line-height:15px;padding:5px 8px;width:128px;text-align:left;font-weight:700}
+.log small{display:block;font-weight:500;color:var(--purple);opacity:.9}
+.spacer{width:146px;flex:none}
+.note{font-size:10.5px;color:var(--muted);line-height:16px;text-align:center;margin-top:6px;width:250px}
+.sub{font-size:11.5px;font-weight:700;color:var(--muted);margin:4px 0 8px;align-self:center}
+.bar{display:grid;grid-template-columns:1fr 1fr 1fr;border:1.3px solid #d9dce3;border-radius:10px;margin-top:18px;font-size:11px;line-height:17px}
+.bar div{padding:8px 12px}
+.bar div+div{border-left:1px solid #e6e8ec}
+.bar b{display:block;font-size:11.5px;margin-bottom:2px}
+.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:#444;margin-top:12px;padding-left:4px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.legend .dash::before{background:#fff;border:1.5px dashed #888;width:12px;height:9px}
+</style></head><body>
+<div id="canvas">
+
+<div class="heads"><div>질문 1건 처리 (검색)</div><div>관리자 정책 편집</div><div>준비 단계 (최초 1회 · 계정 생성)</div></div>
+
+<div class="cols">
+  <!-- 1. 질문 처리 -->
+  <div class="col">
+    <div class="line"><div class="spacer"></div><div class="b white">질의 수신</div><div class="spacer"></div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b orange todo">① 미들웨어<small>get_user_level(user) → level<br>request_id 발급 · Access 생성</small></div><div class="spacer"></div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b teal">② 권한 필터 계산<small>get_policy().search_filter(level)<br>policy_state.version이 바뀔 때만 다시 읽음</small></div>
+      <div class="spacer" style="text-align:left;padding-left:10px;font-size:10px;line-height:15px;color:var(--teal);font-weight:600">Lv0·Lv1: 허용 doc_type 목록<br>Lv2: 필터 없음<br>(미등록·NULL 포함)</div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b blue">③ 질의 가명처리 + 검색<small>rag.chunks SELECT<br>AND doc_type = ANY(허용 목록)</small></div>
+      <div class="spacer" style="text-align:left;padding-left:10px;font-size:10px;line-height:15px;color:var(--purple);font-weight:600">질의 토큰·반환 문서<br>메모리에 보관</div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div><div class="b white">④ LLM 답변<small>가명 텍스트만 전달</small></div><div class="spacer"></div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b orange todo">⑤ 출력 재검사<small>답변에 남은 개인정보 탐지</small></div>
+      <div class="spacer" style="text-align:left;padding-left:10px;font-size:10px;line-height:15px;color:var(--purple);font-weight:600">조치·라벨별 개수<br>메모리에 보관</div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b red todo">⑥ Lv2만 원문 복원<small>vault.token_map (vault_user)</small></div>
+      <div class="side"><div class="harrow r"><span class="t" style="color:var(--red)">복원 시</span></div><div class="log" style="border-color:var(--red);color:var(--red)">audit.restore_log<small style="color:var(--red)">토큰마다 1행<br>기록 실패 → 복원 안 함</small></div></div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div>
+      <div class="b orange todo">⑦ 기록 마무리 (미들웨어)<small>응답 직전 · 어느 경로로 끝나든 1번</small></div>
+      <div class="side"><div class="harrow p"><span class="t" style="color:var(--purple)">INSERT</span></div><div class="log">audit.query_log<small>질문마다 1행<br>검색·재검사 결과 포함</small></div></div></div>
+    <div class="down"></div>
+    <div class="line"><div class="spacer"></div><div class="b green">결과 반환</div><div class="spacer"></div></div>
+    <div class="note" style="width:380px">결과 없음·지역 되묻기·LLM 없음·오류로 일찍 끝나도 ⑦은 실행됨<br>권한 밖 문서만 있어도 "일치하는 문서를 찾지 못했습니다"</div>
+  </div>
+
+  <!-- 2. 관리자 편집 -->
+  <div class="col">
+    <div class="b white">관리자 저장<small>doc_type_access · team_level 편집</small></div>
+    <div class="down"></div>
+    <div class="line" style="position:relative">
+      <div class="b orange dia" style="width:190px">편집자 정보 있음?<small>SET LOCAL app.actor</small></div>
+      <div class="harrow" style="width:18px"><span class="t" style="color:var(--red)">NO</span></div>
+      <div class="b red" style="width:52px;padding:7px 4px">거부</div>
+    </div>
+    <div class="down lbl"><span class="t" style="color:var(--green)">YES</span></div>
+    <div class="line">
+      <div class="b orange dia" style="width:190px">안전장치 통과?<small>직원개인은 Lv2 · 레벨 0~2<br>이름·분류 수정 불가</small></div>
+      <div class="harrow" style="width:18px"><span class="t" style="color:var(--red)">NO</span></div>
+      <div class="b red" style="width:52px;padding:7px 4px">거부</div>
+    </div>
+    <div class="down lbl"><span class="t" style="color:var(--green)">YES</span></div>
+    <div class="b teal">정책 테이블 반영<small>policy.doc_type_access<br>policy.team_level</small></div>
+    <div class="down"></div>
+    <div class="b purple">트리거<small>policy_state.version +1 (저장 1회에 1번)<br>audit.policy_change_log 기록<br>편집자·시각·변경 전후 값</small></div>
+    <div class="down"></div>
+    <div class="b green">다음 질문부터 새 정책 적용<small>앱이 version 변화를 보고 다시 읽음</small></div>
+    <div class="note" style="width:240px">거부되면 아무것도 바뀌지 않음<br>(버전·이력도 남지 않음)</div>
+  </div>
+
+  <!-- 3. 준비 -->
+  <div class="col">
+    <div class="sub">A. 정책 초기값 넣기</div>
+    <div class="b white">access_policy.yaml<small>doc_type 33종 · 팀 10개 초기값</small></div>
+    <div class="down"></div>
+    <div class="b orange">seed_sql.py<small>형식 검사 (직원개인 = Lv2 등)<br>→ 05_policy_seed.sql 생성</small></div>
+    <div class="down"></div>
+    <div class="b teal">policy 테이블 적재<small>표가 비어 있을 때만<br>관리자 편집값은 덮어쓰지 않음</small></div>
+    <div style="height:22px"></div>
+    <div class="sub">B. 계정 만들 때 레벨 정하기</div>
+    <div class="b white">새 계정 · 소속 팀</div>
+    <div class="down"></div>
+    <div class="b teal">policy.team_level 조회<small>팀의 기본 레벨 (표에 없으면 Lv0)</small></div>
+    <div class="down"></div>
+    <div class="b white">계정에 level 저장<small>로그인 담당 테이블<br>관리자가 개인별로 변경 가능</small></div>
+    <div class="down"></div>
+    <div class="b orange todo">get_user_level()<small>질문마다 이 값을 읽어 ①로 전달</small></div>
+  </div>
+</div>
+
+<div class="bar">
+  <div><b style="color:var(--blue)">rag_user (검색·챗봇)</b>rag.chunks 읽기 · policy 정책 읽기<br>query_log 쓰기(INSERT)만</div>
+  <div><b style="color:var(--red)">vault_user (복원)</b>vault.token_map 읽기<br>restore_log 쓰기(INSERT)만 · Lv2 복원 때만</div>
+  <div><b style="color:var(--teal)">관리자 화면 계정 (신규)</b>policy 편집 · policy_change_log 읽기<br>검색 데이터·실명·조회 로그 접근 없음</div>
+</div>
+<div style="font-size:10.5px;color:var(--muted);margin-top:6px;padding-left:4px">계정 권한은 설계안이며 WBS 3.4.1 구현 때 적용합니다.</div>
+
+<div class="legend">
+  <span style="--c:var(--teal)">정책 (policy)</span>
+  <span style="--c:var(--blue)">검색 (rag_user)</span>
+  <span style="--c:var(--red)">복원 (vault_user)</span>
+  <span style="--c:var(--purple)">감사 로그 (audit)</span>
+  <span style="--c:var(--orange)">판단·처리 단계</span>
+  <span style="--c:var(--green)">결과</span>
+  <span class="dash">점선 테두리 = 아직 구현 전</span>
+</div>
+</div>
+</body></html>

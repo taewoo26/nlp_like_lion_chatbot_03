@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<style>
+:root{
+  --blue:#2f66d8; --blue-bg:#eef3fd; --red:#c8323a; --red-bg:#fcf0f0;
+  --teal:#2a8f7c; --teal-bg:#ecf7f4; --purple:#6a3fd1; --purple-bg:#f4f0fd;
+  --orange:#c27a1a; --ink:#2a2a33; --muted:#6b6f7b; --line:#d9dce3;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font-family:'Noto Sans CJK KR','Noto Sans KR',sans-serif;color:var(--ink)}
+#canvas{position:relative;width:1060px;padding:20px 46px 16px 46px}
+.zone{position:relative;border:1.6px dashed;border-radius:14px;padding:40px 14px 14px}
+.zone>.ztitle{position:absolute;left:16px;top:10px;font-weight:700;font-size:14.5px}
+.z-policy{border-color:var(--teal);background:var(--teal-bg)} .z-policy>.ztitle{color:var(--teal)}
+.z-audit{border-color:var(--purple);background:var(--purple-bg)} .z-audit>.ztitle{color:var(--purple)}
+.z-rag{border-color:var(--blue);background:var(--blue-bg)} .z-rag>.ztitle{color:var(--blue)}
+.z-vault{border-color:var(--red);background:var(--red-bg)} .z-vault>.ztitle{color:var(--red)}
+.row{display:flex;gap:16px}
+.card{background:#fff;border:1.3px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card .hd{display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-weight:700;font-size:14px;padding:8px 10px;position:relative}
+.card .hd .tag{position:absolute;right:10px;font-size:9.5px;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.22)}
+.card .hd .kind{position:absolute;left:10px;font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.22)}
+.h-teal{background:var(--teal)} .h-purple{background:var(--purple)} .h-blue{background:var(--blue)} .h-red{background:var(--red)}
+.cols{padding:7px 12px 6px}
+.c{display:grid;grid-template-columns:22px 1fr auto;align-items:center;font-size:11.5px;line-height:21px;gap:4px}
+.c .k{color:var(--orange);font-weight:700;font-size:10.5px}
+.c .n{font-weight:500}
+.c .t{color:var(--muted);font-size:10px}
+.c.new .n{color:var(--purple)}
+.c.hl .n{color:var(--teal);font-weight:700}
+.c .badge{font-size:9px;font-weight:700;margin-left:6px;color:var(--teal)}
+.note{border-top:1px solid #eceef2;padding:6px 12px 8px;font-size:10.5px;line-height:17px}
+.note.teal{color:var(--teal)} .note.purple{color:var(--purple)} .note.blue{color:var(--blue)} .note.red{color:var(--red)} .note.muted{color:var(--muted)}
+.foot{font-size:10.5px;line-height:18px;color:var(--muted);margin-top:10px}
+.foot b{color:var(--ink);font-weight:600}
+.legend{display:flex;gap:26px;font-size:11px;color:#444;margin-top:12px;padding-left:4px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+svg#wires{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.wl{font-size:10px;font-weight:600}
+</style></head><body>
+<div id="canvas">
+
+<div class="row" style="align-items:stretch;gap:54px">
+  <!-- POLICY -->
+  <div class="zone z-policy" style="width:330px">
+    <div class="ztitle">POLICY 스키마 — 관리자 화면에서 편집</div>
+    <div class="card" id="dta">
+      <div class="hd h-teal"><span class="kind">마스터</span>policy.doc_type_access<span class="tag">NEW</span></div>
+      <div class="cols">
+        <div class="c" id="dta-doc"><span class="k">PK</span><span class="n">doc_type</span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">min_level</span><span class="t">SMALLINT 0~2</span></div>
+        <div class="c"><span class="k"></span><span class="n">category</span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">rationale</span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">updated_at</span><span class="t">TIMESTAMPTZ</span></div>
+        <div class="c" id="dta-by"><span class="k"></span><span class="n">updated_by</span><span class="t">TEXT</span></div>
+      </div>
+      <div class="note teal">category: 직원개인 → Lv2 · 고객업무/내부업무 → Lv1<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 공개 → Lv0<br>직원개인은 Lv2 고정 · 이름·분류 수정 불가 · 33행</div>
+    </div>
+    <div class="card" id="tl" style="margin-top:14px">
+      <div class="hd h-teal"><span class="kind">마스터</span>policy.team_level<span class="tag">NEW</span></div>
+      <div class="cols">
+        <div class="c" id="tl-team"><span class="k">PK</span><span class="n">team</span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">default_level</span><span class="t">SMALLINT 0~2</span></div>
+        <div class="c"><span class="k"></span><span class="n">updated_at</span><span class="t">TIMESTAMPTZ</span></div>
+        <div class="c"><span class="k"></span><span class="n">updated_by</span><span class="t">TEXT</span></div>
+      </div>
+      <div class="note teal">계정 생성 시 기본 레벨만 채움 (검색은 계정 level만 봄)<br>표에 없는 팀은 Lv0 · 10행</div>
+    </div>
+    <div class="card" id="ps" style="margin-top:14px">
+      <div class="hd h-teal"><span class="kind">상태</span>policy.policy_state<span class="tag">NEW</span></div>
+      <div class="cols">
+        <div class="c"><span class="k">PK</span><span class="n">id</span><span class="t">BOOLEAN (항상 1행)</span></div>
+        <div class="c" id="ps-ver"><span class="k"></span><span class="n">version</span><span class="t">INT</span></div>
+        <div class="c"><span class="k"></span><span class="n">updated_at / updated_by</span><span class="t"></span></div>
+        <div class="c"><span class="k"></span><span class="n">changed_txid</span><span class="t">BIGINT (내부용)</span></div>
+      </div>
+      <div class="note teal">저장 1회마다 version +1 (트리거) · 앱은 version이<br>바뀔 때만 정책을 다시 읽음</div>
+    </div>
+  </div>
+
+  <!-- AUDIT -->
+  <div class="zone z-audit" style="flex:1">
+    <div class="ztitle">AUDIT 스키마 — 쓰기(INSERT)만 · 원문 저장 금지</div>
+    <div class="row" style="gap:44px">
+      <div class="card" id="ql" style="flex:1">
+        <div class="hd h-purple"><span class="kind">이력</span>audit.query_log<span class="tag">NEW</span></div>
+        <div class="cols">
+          <div class="c"><span class="k">PK</span><span class="n">id</span><span class="t">BIGINT</span></div>
+          <div class="c"><span class="k"></span><span class="n">ts</span><span class="t">TIMESTAMPTZ</span></div>
+          <div class="c" id="ql-req"><span class="k"></span><span class="n">request_id</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">user_id</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">level</span><span class="t">SMALLINT</span></div>
+          <div class="c new"><span class="k"></span><span class="n">team <span class="badge">추가</span></span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">masked_query</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">query_tokens</span><span class="t">TEXT[]</span></div>
+          <div class="c" id="ql-docs"><span class="k"></span><span class="n">returned_doc_ids</span><span class="t">TEXT[]</span></div>
+          <div class="c new"><span class="k"></span><span class="n">recheck_action <span class="badge">합침</span></span><span class="t">TEXT</span></div>
+          <div class="c new"><span class="k"></span><span class="n">recheck_labels <span class="badge">합침</span></span><span class="t">JSONB</span></div>
+          <div class="c new"><span class="k"></span><span class="n">recheck_detector <span class="badge">합침</span></span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">state</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">latency_ms</span><span class="t">INT</span></div>
+          <div class="c" id="ql-ver"><span class="k"></span><span class="n">policy_version</span><span class="t">TEXT</span></div>
+        </div>
+        <div class="note purple">질문 1건당 1행 · 응답 직전에 미들웨어가 기록<br>결과 없음·오류로 일찍 끝나도 반드시 1행<br>returned_doc_ids = rag.chunks.doc_id 값</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+        <div class="card" id="sl">
+          <div class="hd h-purple"><span class="kind">이력</span>audit.restore_log<span class="tag">NEW</span></div>
+          <div class="cols">
+            <div class="c"><span class="k">PK</span><span class="n">id</span><span class="t">BIGINT</span></div>
+            <div class="c" id="sl-req"><span class="k"></span><span class="n">request_id · user_id · level</span><span class="t"></span></div>
+            <div class="c" id="sl-tok"><span class="k"></span><span class="n">token</span><span class="t">TEXT (토큰 형식만)</span></div>
+            <div class="c"><span class="k"></span><span class="n">label</span><span class="t">TEXT</span></div>
+            <div class="c"><span class="k"></span><span class="n">mode</span><span class="t">full</span></div>
+            <div class="c"><span class="k"></span><span class="n">ts</span><span class="t">TIMESTAMPTZ</span></div>
+          </div>
+          <div class="note purple">실제로 복원한 토큰마다 1행 (Lv2만)<br>기록 실패 시 복원하지 않음<br>정책 버전 없음 (복원 규칙은 코드에 고정)</div>
+        </div>
+        <div style="font-size:10.5px;line-height:18px;color:var(--muted);padding:2px 4px">
+          <b style="color:var(--purple)">두 로그 공통</b><br>
+          request_id · user_id · level(요청 시점 복사)<br>
+          외래키 없음 (원본이 지워져도 로그는 남김)<br>
+          query_log.policy_version = <b style="color:var(--teal)">policy_state.version</b><br><br>
+          <b style="color:var(--purple)">query_log 값</b><br>
+          recheck_action: none / masked / blocked<br>
+          &nbsp;&nbsp;(NULL = 재검사 전에 끝남)<br>
+          recheck_labels: 라벨별 개수 {"phone_number": 1}<br>
+          state: found / sorry / nollm / error<br><br>
+          <b style="color:var(--purple)">기록 순서</b><br>
+          restore_log: 복원할 때 (먼저)<br>
+          query_log: 응답 직전 (나중)<br>
+          <span style="color:#999">이전 판의 recheck_log는 query_log에 합침</span>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="cl" style="margin-top:14px;width:calc(50% - 22px)">
+      <div class="hd h-purple" style="font-size:12.5px"><span class="kind">이력</span>audit.policy_change_log<span class="tag">NEW</span></div>
+      <div class="cols">
+        <div class="c"><span class="k">PK</span><span class="n">id</span><span class="t">BIGINT</span></div>
+        <div class="c"><span class="k"></span><span class="n">ts · actor</span><span class="t">편집자 ID</span></div>
+        <div class="c"><span class="k"></span><span class="n">table_name</span><span class="t">TEXT</span></div>
+        <div class="c" id="cl-key"><span class="k"></span><span class="n">row_key</span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">action</span><span class="t">insert / update / delete</span></div>
+        <div class="c"><span class="k"></span><span class="n">old_value / new_value</span><span class="t">JSONB</span></div>
+        <div class="c"><span class="k"></span><span class="n">policy_version</span><span class="t">INT</span></div>
+      </div>
+      <div class="note purple">정책 편집마다 트리거가 기록 (앱은 직접 못 씀)<br>편집자(app.actor) 없으면 편집 자체가 거부됨</div>
+    </div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:22px;gap:54px">
+  <div class="zone z-rag" style="width:440px">
+    <div class="ztitle">RAG 스키마 (rag_user) — 기존 · 원문 없음</div>
+    <div class="card" id="ch">
+      <div class="hd h-blue">rag.chunks</div>
+      <div class="cols">
+        <div class="c"><span class="k">PK</span><span class="n">chunk_id</span><span class="t">TEXT</span></div>
+        <div class="c" id="ch-doc"><span class="k"></span><span class="n">doc_id</span><span class="t">TEXT</span></div>
+        <div class="c hl" id="ch-type"><span class="k"></span><span class="n">doc_type <span class="badge">인덱스 추가</span></span><span class="t">TEXT</span></div>
+        <div class="c"><span class="k"></span><span class="n">masked_text · tokens · embedding</span><span class="t"></span></div>
+        <div class="c"><span class="k"></span><span class="n">persons · regions · chunk_idx · created_at</span><span class="t"></span></div>
+      </div>
+      <div class="note blue">검색 시 AND doc_type = ANY(허용 목록) — Lv2는 필터 없음<br>정책에 없는 doc_type·NULL은 Lv2 전용</div>
+    </div>
+  </div>
+  <div style="flex:1;display:flex;gap:18px;align-items:stretch">
+    <div class="foot" style="flex:1;align-self:flex-end;margin:0 0 6px">
+      <b>점선 화살표</b> = 외래키 없이 같은 값으로 연결<br>(설계 전체에 외래키 없음)<br><br>
+      <b>레벨 0/1/2 정의</b>는 표 없이<br>CHECK 제약과 코드에 고정<br><br>
+      <b>계정 권한</b>은 WBS 3.4.1에서 적용<br>(rag_user · vault_user · 관리자 화면 계정)
+    </div>
+    <div class="zone z-vault" style="width:300px">
+      <div class="ztitle">VAULT 스키마 (vault_user) — 기존</div>
+      <div class="card" id="vt">
+        <div class="hd h-red">vault.token_map</div>
+        <div class="cols">
+          <div class="c" id="vt-tok"><span class="k">PK</span><span class="n">token</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">label · normalized</span><span class="t">TEXT</span></div>
+          <div class="c"><span class="k"></span><span class="n">originals</span><span class="t">TEXT[] (원문)</span></div>
+        </div>
+        <div class="note red">실명은 여기에만 · 검색 계정 접근 불가<br>Lv2 복원 때만 읽음</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span style="--c:var(--teal)">policy 스키마 (신규)</span>
+  <span style="--c:var(--purple)">audit 스키마 (신규)</span>
+  <span style="--c:var(--blue)">rag 스키마 (기존)</span>
+  <span style="--c:var(--red)">vault 스키마 (기존)</span>
+</div>
+
+<svg id="wires"></svg>
+</div>
+
+<script>
+const cv = document.getElementById('canvas');
+const svg = document.getElementById('wires');
+const NS = 'http://www.w3.org/2000/svg';
+function box(id){const r=document.getElementById(id).getBoundingClientRect(), c=cv.getBoundingClientRect();
+  return {l:r.left-c.left, r:r.right-c.left, t:r.top-c.top, b:r.bottom-c.top, cx:(r.left+r.right)/2-c.left, cy:(r.top+r.bottom)/2-c.top};}
+function defs(){const d=document.createElementNS(NS,'defs');
+  for(const [n,col] of [['teal','#2a8f7c'],['purple','#6a3fd1'],['blue','#2f66d8'],['red','#c8323a']]){
+    const m=document.createElementNS(NS,'marker');m.setAttribute('id','a-'+n);m.setAttribute('viewBox','0 0 10 10');
+    m.setAttribute('refX','9');m.setAttribute('refY','5');m.setAttribute('markerWidth','7');m.setAttribute('markerHeight','7');m.setAttribute('orient','auto-start-reverse');
+    const p=document.createElementNS(NS,'path');p.setAttribute('d','M0,0 L10,5 L0,10 z');p.setAttribute('fill',col);m.appendChild(p);d.appendChild(m);}
+  svg.appendChild(d);}
+const COL={teal:'#2a8f7c',purple:'#6a3fd1',blue:'#2f66d8',red:'#c8323a'};
+function wire(pts,color){
+  const p=document.createElementNS(NS,'path');
+  p.setAttribute('d','M'+pts.map(q=>q.join(',')).join(' L'));
+  p.setAttribute('fill','none');p.setAttribute('stroke',COL[color]);p.setAttribute('stroke-width','1.6');
+  p.setAttribute('stroke-dasharray','5 4');p.setAttribute('marker-end','url(#a-'+color+')');svg.appendChild(p);}
+function dot(x,y,color){const c=document.createElementNS(NS,'circle');c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r','2.6');c.setAttribute('fill',COL[color]);svg.appendChild(c);}
+function vlabel(x,y,text,color){ // 세로(위로 읽는) 라벨, 흰 바탕
+  const g=document.createElementNS(NS,'g');g.setAttribute('transform',`translate(${x},${y}) rotate(-90)`);
+  const t=document.createElementNS(NS,'text');t.setAttribute('class','wl');t.setAttribute('fill',COL[color]);
+  t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.textContent=text;
+  const bg=document.createElementNS(NS,'rect');g.appendChild(bg);g.appendChild(t);svg.appendChild(g);
+  const bb=t.getBBox();bg.setAttribute('x',bb.x-4);bg.setAttribute('y',bb.y-2);bg.setAttribute('width',bb.width+8);bg.setAttribute('height',bb.height+4);bg.setAttribute('fill','#fff');bg.setAttribute('rx','3');}
+function draw(){
+  svg.setAttribute('width',cv.offsetWidth);svg.setAttribute('height',cv.offsetHeight);defs();
+  const dta=box('dta'),dtaDoc=box('dta-doc'),chType=box('ch-type'),ch=box('ch');
+  const tl=box('tl'),tlTeam=box('tl-team'),cl=box('cl'),clKey=box('cl-key');
+  const ql=box('ql'),qlReq=box('ql-req'),sl=box('sl'),slReq=box('sl-req'),slTok=box('sl-tok'),vt=box('vt'),vtTok=box('vt-tok');
+  const pz=document.querySelector('.z-policy').getBoundingClientRect(), c0=cv.getBoundingClientRect();
+  const pzL=pz.left-c0.left, pzR=pz.right-c0.left;
+
+  // A. doc_type 값 연결: 왼쪽 바깥 통로
+  const ax=pzL-22;
+  wire([[dta.l,dtaDoc.cy],[ax,dtaDoc.cy],[ax,chType.cy],[ch.l,chType.cy]],'teal');
+  vlabel(ax,(dtaDoc.cy+chType.cy)/2,'doc_type 값으로 연결 (정책에 없는 doc_type = Lv2 전용)','teal');
+
+  // B. 정책 편집 → 변경 이력 (트리거)
+  const bx=pzR+20;
+  wire([[dta.r,dtaDoc.cy],[bx,dtaDoc.cy],[bx,clKey.cy],[cl.l,clKey.cy]],'purple');
+  wire([[tl.r,tlTeam.cy],[bx,tlTeam.cy]],'purple'); dot(bx,tlTeam.cy,'purple');
+  vlabel(bx+15,(tlTeam.cy+clKey.cy)/2,'편집하면 트리거가 기록 → row_key','purple');
+
+  // D. request_id 묶음
+  const dx=ql.r+28;
+  wire([[ql.r,qlReq.cy],[dx,qlReq.cy],[dx,slReq.cy],[sl.l,slReq.cy]],'purple');
+  vlabel(dx,slReq.cy+62,'request_id로 묶음','purple');
+
+  // E. token → vault
+  const ex=sl.r+22;
+  wire([[sl.r,slTok.cy],[ex,slTok.cy],[ex,vtTok.cy],[vt.r,vtTok.cy]],'red');
+  vlabel(ex,(slTok.cy+vtTok.cy)/2,'token (원문은 vault에만)','red');
+}
+document.fonts.ready.then(draw);
+</script>
+</body></html>
