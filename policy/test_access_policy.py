@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from access_policy import CATEGORY_BASE_LEVEL, POLICY_PATH, VALID_LEVELS, load_policy  # noqa: E402
+from access_policy import CATEGORY_BASE_LEVEL, POLICY_PATH, TEAM_CD_PATTERN, VALID_LEVELS, load_policy  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = {
@@ -113,14 +113,101 @@ def test_viewable_counts_match_policy_doc():
 
 
 
-def test_team_default_levels():
-    teams = policy.team_default_levels
-    assert teams, "team_default_levels 가 비어 있음"
-    assert all(v in VALID_LEVELS for v in teams.values())
-    assert policy.default_level_for_team("인사팀") == 2
-    assert policy.default_level_for_team(" 고객보호팀 ") == 1        # 앞뒤 공백 무시
-    assert policy.default_level_for_team("없는팀") == 0               # 표에 없으면 Lv0
-    assert policy.default_level_for_team(None) == 0
+def test_team_levels_initial():
+    rules = policy.team_levels
+    assert len(rules) == 10, "초기 규칙은 팀 규칙 10개"
+    assert all(r.position is None for r in rules), "초기값에는 직책 규칙이 없음"
+    assert policy.default_level_for("DEPT_HR") == 2
+    assert policy.default_level_for(" DEPT_CUST_PROT ") == 1              # 앞뒤 공백 무시
+    assert policy.default_level_for("DEPT_CUST_PROT", "팀장") == 1        # 직책 규칙이 없으면 팀 규칙
+    assert policy.default_level_for("DEPT_NONE") == 0                    # 맞는 규칙이 없으면 Lv0
+    assert policy.default_level_for(None, None) == 0
+
+
+def test_team_level_resolution():
+    # 직책 규칙을 더한 가상 정책으로 판정 순서를 확인
+    from dataclasses import replace
+
+    from access_policy import TeamLevelRule
+    p = replace(policy, team_levels=policy.team_levels + (
+        TeamLevelRule("DEPT_IT_OPS", "팀장", 1, "t"),      # 팀+직책
+        TeamLevelRule(None, "팀장", 1, "t"),            # 직책만 (전 팀 팀장 Lv1)
+        TeamLevelRule(None, "인턴", 0, "t"),            # 직책만
+    ))
+    assert p.default_level_for("DEPT_IT_OPS", "팀원") == 0      # 팀 규칙
+    assert p.default_level_for("DEPT_IT_OPS", "팀장") == 1      # 팀+직책이 가장 구체적
+    assert p.default_level_for("DEPT_DIGITAL", "팀장") == 0  # 팀만(0) = 직책만(1) 동률 → 낮은 레벨
+    assert p.default_level_for("DEPT_NONE", "팀장") == 1        # 직책 규칙만 맞음
+    assert p.default_level_for("DEPT_HR", "인턴") == 0        # 팀만(2) = 직책만(0) 동률 → 낮은 레벨
+
+
+def _load_rules(rules: list):
+    import tempfile
+
+    import yaml
+    raw = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+    raw["team_levels"] = rules
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / "p.yaml"
+        f.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        return load_policy(f)
+
+
+def test_teams_initial():
+    assert len(policy.teams) == 10
+    assert policy.teams["DEPT_CREDIT"] == "여신심사팀"
+    assert all(TEAM_CD_PATTERN.fullmatch(cd) for cd in policy.teams)
+    assert {r.team_cd for r in policy.team_levels} <= set(policy.teams), "규칙의 팀 코드는 팀 목록에 있어야 함"
+
+
+def _load_teams(teams: dict):
+    import tempfile
+
+    import yaml
+    raw = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+    raw["teams"] = teams
+    raw["team_levels"] = []
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / "p.yaml"
+        f.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        return load_policy(f)
+
+
+def test_teams_validation():
+    bad = [
+        {"인사팀": "인사팀"},                          # 코드 형식
+        {"dept_hr": "인사팀"},                         # 소문자
+        {"DEPT_": "인사팀"},                           # 빈 코드
+        {"DEPT_HR": ""},                               # 이름 없음
+        {"DEPT_HR": "인사팀", "DEPT_HR2": "인사팀"},   # 이름 중복
+    ]
+    for teams in bad:
+        try:
+            _load_teams(teams)
+        except ValueError:
+            continue
+        raise AssertionError(f"잘못된 팀 목록이 통과함: {teams}")
+    assert _load_teams({"DEPT_IT_OPS2": "IT운영2팀"}).teams == {"DEPT_IT_OPS2": "IT운영2팀"}
+
+
+def test_team_level_validation():
+    bad = [
+        [{"team_cd": "DEPT_UNKNOWN", "level": 1, "rationale": "t"}],              # 팀 목록에 없는 코드
+        [{"position": "팀장", "level": 2, "rationale": "t"}],                 # Lv2인데 팀 없음
+        [{"level": 1, "rationale": "t"}],                                       # 조건 없음
+        [{"team_cd": "DEPT_HR", "level": 1, "rationale": "t"},
+         {"team_cd": "DEPT_HR", "level": 0, "rationale": "t"}],                          # 중복
+        [{"team_cd": "DEPT_HR", "level": 1, "rationale": ""}],                           # 근거 없음
+        [{"team_cd": "DEPT_HR", "level": 3, "rationale": "t"}],                          # 레벨 범위
+    ]
+    for rules in bad:
+        try:
+            _load_rules(rules)
+        except ValueError:
+            continue
+        raise AssertionError(f"잘못된 규칙이 통과함: {rules}")
+    ok = _load_rules([{"team_cd": "DEPT_HR", "position": "팀장", "level": 2, "rationale": "t"}])
+    assert ok.default_level_for("DEPT_HR", "팀장") == 2
 
 
 

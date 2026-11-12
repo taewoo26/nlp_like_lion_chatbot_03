@@ -1,13 +1,13 @@
 -- 자동 생성 파일: 직접 수정하지 마세요. 원본은 policy/access_policy.yaml
 -- 생성: python -m policy.seed_sql
--- 초기값 정책 v0.4: doc_type 33종, 팀 10개
--- 표가 비어 있을 때만 넣는다(관리자가 편집한 값을 덮어쓰지 않음). 04_policy_tables.sql 적용 후 실행.
+-- 초기값 정책 v0.4: doc_type 33종, 팀 10개, 레벨 규칙 10개
+-- 표가 비어 있을 때만 넣는다(관리자가 편집한 값을 덮어쓰지 않음). infra/init/04_policy.sql 적용 후 실행.
 BEGIN;
-SET LOCAL app.actor = 'seed';
+SET LOCAL app.user_id = 'seed';
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM policy.doc_type_access) THEN
-    INSERT INTO policy.doc_type_access (doc_type, min_level, category, rationale) VALUES
+  IF NOT EXISTS (SELECT 1 FROM policy.doc_type_level) THEN
+    INSERT INTO policy.doc_type_level (doc_type, min_level, category, rationale) VALUES
       ('경조사공지', 0, '공개', '전사 공지 성격. 직원 가족 정보가 있어도 Lv0 유지로 결정'),
       ('공지', 0, '공개', '전사 공지, PII 없음'),
       ('민원현황', 0, '공개', 'PII 없는 내부 현황 집계'),
@@ -42,18 +42,32 @@ DO $$ BEGIN
       ('인사발령', 2, '직원개인', '직원 인사 정보'),
       ('채용메일', 2, '직원개인', '채용 지원자 개인 정보');
   END IF;
+  -- 팀을 먼저 넣는다 (team_level.team_cd → teams.team_cd 외래키)
+  IF NOT EXISTS (SELECT 1 FROM policy.teams) THEN
+    INSERT INTO policy.teams (team_cd, team_name) VALUES
+      ('DEPT_HR', '인사팀'),
+      ('DEPT_INFOSEC', '정보보호팀'),
+      ('DEPT_CUST_PROT', '고객보호팀'),
+      ('DEPT_COLLECTION', '채권관리팀'),
+      ('DEPT_CARD_OPS', '카드운영팀'),
+      ('DEPT_CREDIT', '여신심사팀'),
+      ('DEPT_RISK', '리스크관리팀'),
+      ('DEPT_CS_CENTER', '고객센터'),
+      ('DEPT_IT_OPS', 'IT운영팀'),
+      ('DEPT_DIGITAL', '디지털전략팀');
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM policy.team_level) THEN
-    INSERT INTO policy.team_level (team, default_level) VALUES
-      ('인사팀', 2),
-      ('정보보호팀', 2),
-      ('고객보호팀', 1),
-      ('고객센터', 1),
-      ('리스크관리팀', 1),
-      ('여신심사팀', 1),
-      ('채권관리팀', 1),
-      ('카드운영팀', 1),
-      ('IT운영팀', 0),
-      ('디지털전략팀', 0);
+    INSERT INTO policy.team_level (team_cd, position, level, rationale) VALUES
+      ('DEPT_HR', NULL, 2, '인사발령·채용 문서 담당'),
+      ('DEPT_INFOSEC', NULL, 2, '개인정보 보호·권한 신청(보안 통제) 담당, 준법 역할 가정'),
+      ('DEPT_CUST_PROT', NULL, 1, '고객 민원·상담 업무'),
+      ('DEPT_COLLECTION', NULL, 1, '고객 채권 업무'),
+      ('DEPT_CARD_OPS', NULL, 1, '카드 고객 업무'),
+      ('DEPT_CREDIT', NULL, 1, '고객 심사 업무'),
+      ('DEPT_RISK', NULL, 1, '고객 사고(이상거래·피해 접수) 처리'),
+      ('DEPT_CS_CENTER', NULL, 1, '상담 조직(대표 연락처 표기와 구분)'),
+      ('DEPT_IT_OPS', NULL, 0, '고객 문서가 업무에 필수 아님'),
+      ('DEPT_DIGITAL', NULL, 0, '고객 문서가 업무에 필수 아님');
   END IF;
 END $$;
 

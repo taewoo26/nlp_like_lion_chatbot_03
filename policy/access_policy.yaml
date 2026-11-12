@@ -1,11 +1,11 @@
 # 권한 정책 초기값(시드)
 # 운영 중 정책의 원본은 DB 정책 테이블(policy.*)이며 관리자 화면에서 편집합니다.
-# 이 파일은 새 DB에 처음 한 번 넣는 값입니다: python -m policy.seed_sql → policy/draft/05_policy_seed.sql
+# 이 파일은 새 DB에 처음 한 번 넣는 값입니다: python -m policy.seed_sql → policy/draft/07_policy_seed.sql
 # 사람이 읽는 설명: docs/permission_policy_draft.md
 # 수정 시 version을 올리고, policy/test_access_policy.py를 다시 실행하세요.
 
 version: "v0.4"
-updated: "2026-11-09"
+updated: "2026-11-10"
 status: "팀 검토 전"
 
 levels:
@@ -95,17 +95,36 @@ restore:
 # 감사 로그 열람 권한
 audit_log_read_min_level: 2
 
-# 팀별 기본 레벨 (DB policy.team_level의 초기값)
-# 계정을 만들 때 기본 레벨을 채우는 데만 씁니다. 검색은 계정의 level만 봅니다.
-# 표에 없는 팀은 Lv0(기본 거부). 근거: docs/permission_policy_draft.md 7.3절
-team_default_levels:
-  인사팀: 2
-  정보보호팀: 2
-  고객보호팀: 1
-  채권관리팀: 1
-  카드운영팀: 1
-  여신심사팀: 1
-  리스크관리팀: 1
-  고객센터: 1
-  IT운영팀: 0
-  디지털전략팀: 0
+# 팀 목록 (DB policy.teams의 초기값). 팀 코드 체계는 DEPT_<영문 대문자>
+# 팀 이름은 문서 본문에서 확인한 표기 그대로입니다(정책서 7.3절). 표기를 하나로 통일해 씁니다.
+teams:
+  DEPT_HR:          인사팀
+  DEPT_INFOSEC:     정보보호팀
+  DEPT_CUST_PROT:   고객보호팀
+  DEPT_COLLECTION:  채권관리팀
+  DEPT_CARD_OPS:    카드운영팀
+  DEPT_CREDIT:      여신심사팀
+  DEPT_RISK:        리스크관리팀
+  DEPT_CS_CENTER:   고객센터
+  DEPT_IT_OPS:      IT운영팀
+  DEPT_DIGITAL:     디지털전략팀
+
+# 사용자 레벨 규칙 (DB policy.team_level의 초기값). 근거: docs/permission_policy_draft.md 7절
+# 팀 코드(team_cd)와 직책(position) 조합으로 계정의 기본 레벨을 정합니다. 직급(grade)은 판정에 쓰지 않습니다.
+# 계정을 만들 때만 씁니다(팀·직책이 바뀌어도 자동 재계산 없음). 검색은 계정의 access_level만 봅니다.
+# - 칸을 생략하면 "모두"(DB에서는 NULL). 팀·직책 중 하나는 있어야 합니다.
+# - Lv2 규칙은 팀이 필수입니다(직책만으로 실명 열람 권한을 주지 않음).
+# - 판정: 맞는 규칙 중 더 구체적인 것(팀+직책 > 팀만 = 직책만), 같으면 낮은 레벨, 없으면 Lv0.
+# - team_cd는 위 teams의 코드여야 합니다(DB 외래키 team_level.team_cd → teams.team_cd).
+# 지금은 팀 규칙만 있습니다. 직책 규칙 예: { team_cd: DEPT_IT_OPS, position: 팀장, level: 1, rationale: "..." }
+team_levels:
+  - { team_cd: DEPT_HR,         level: 2, rationale: "인사발령·채용 문서 담당" }
+  - { team_cd: DEPT_INFOSEC,    level: 2, rationale: "개인정보 보호·권한 신청(보안 통제) 담당, 준법 역할 가정" }
+  - { team_cd: DEPT_CUST_PROT,  level: 1, rationale: "고객 민원·상담 업무" }
+  - { team_cd: DEPT_COLLECTION, level: 1, rationale: "고객 채권 업무" }
+  - { team_cd: DEPT_CARD_OPS,   level: 1, rationale: "카드 고객 업무" }
+  - { team_cd: DEPT_CREDIT,     level: 1, rationale: "고객 심사 업무" }
+  - { team_cd: DEPT_RISK,       level: 1, rationale: "고객 사고(이상거래·피해 접수) 처리" }
+  - { team_cd: DEPT_CS_CENTER,  level: 1, rationale: "상담 조직(대표 연락처 표기와 구분)" }
+  - { team_cd: DEPT_IT_OPS,     level: 0, rationale: "고객 문서가 업무에 필수 아님" }
+  - { team_cd: DEPT_DIGITAL,    level: 0, rationale: "고객 문서가 업무에 필수 아님" }

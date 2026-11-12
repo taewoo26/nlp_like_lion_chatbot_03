@@ -1,7 +1,7 @@
 """권한 정책 조회 모듈.
 
 정책 파일(access_policy.yaml)을 읽어 검색 전 권한 필터와 복원 규칙을 돌려줍니다.
-(정책 원본을 DB policy.* 테이블로 옮기는 중입니다. 지금은 YAML 초기값을 읽습니다.)
+(운영 중 원본은 DB policy.* 테이블입니다. 지금은 YAML 초기값을 읽습니다. DB에서 읽는 get_policy()는 구현 예정)
 권한 판단은 LLM이 아니라 이 모듈(코드)에서 합니다.
 
 사용 예 (검색 SQL의 권한 필터):
@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,25 @@ POLICY_PATH = Path(__file__).with_name("access_policy.yaml")
 VALID_LEVELS = (0, 1, 2)
 # doc_type의 분류(정책서 3절 판정 질문의 결과)와 그 분류의 기본 레벨
 CATEGORY_BASE_LEVEL = {"직원개인": 2, "고객업무": 1, "내부업무": 1, "공개": 0}
+# 팀 코드 체계 (DB CHECK teams_cd_format 과 같은 규칙)
+TEAM_CD_PATTERN = re.compile(r"DEPT_[A-Z0-9]+(_[A-Z0-9]+)*")
+
+
+@dataclass(frozen=True)
+class TeamLevelRule:
+    """사용자 레벨 규칙 한 행 (DB policy.team_level). team_cd/position이 None이면 '모두'."""
+    team_cd: str | None
+    position: str | None
+    level: int
+    rationale: str
+
+    @property
+    def specificity(self) -> int:
+        return (self.team_cd is not None) + (self.position is not None)
+
+    def matches(self, team_cd: str | None, position: str | None) -> bool:
+        return ((self.team_cd is None or self.team_cd == team_cd)
+                and (self.position is None or self.position == position))
 
 
 @dataclass(frozen=True)
@@ -37,8 +57,9 @@ class AccessPolicy:
     restore_rules: dict       # level -> {label: mode}
     restore_default: str
     audit_read_min_level: int
-    team_default_levels: dict = None   # team -> 기본 레벨 (계정 생성용)
+    team_levels: tuple = ()            # TeamLevelRule 목록 (팀·직책 → 계정 기본 레벨)
     categories: dict = None            # doc_type -> 분류 (직원개인/고객업무/내부업무/공개)
+    teams: dict = None                 # team_cd -> team_name (DB policy.teams)
 
     # --- 검색 전 권한 필터 -------------------------------------------------
     def min_level(self, doc_type: str | None) -> int:
@@ -71,9 +92,14 @@ class AccessPolicy:
         self._check_level(level)
         return self.restore_rules.get(level, {}).get(label, self.restore_default)
 
-    def default_level_for_team(self, team: str | None) -> int:
-        """계정을 만들 때 채울 기본 레벨. 표에 없거나 비어 있는 팀은 Lv0(기본 거부)."""
-        return (self.team_default_levels or {}).get((team or "").strip(), 0)
+    def default_level_for(self, team_cd: str | None, position: str | None = None) -> int:
+        """계정을 만들 때 채울 기본 레벨(이후 자동 재계산 없음). DB policy.resolve_team_level()과 같은 규칙.
+        맞는 규칙 중 더 구체적인 것 → 같으면 낮은 레벨 → 맞는 규칙이 없으면 Lv0(기본 거부)."""
+        team_cd, position = _clean(team_cd), _clean(position)
+        hits = [r for r in self.team_levels if r.matches(team_cd, position)]
+        if not hits:
+            return 0
+        return min(hits, key=lambda r: (-r.specificity, r.level)).level
 
     def can_read_audit_log(self, level: int) -> bool:
         self._check_level(level)
@@ -92,11 +118,12 @@ def load_policy(path: Path | str = POLICY_PATH) -> AccessPolicy:
     for t, c in categories.items():
         if c not in CATEGORY_BASE_LEVEL:
             raise ValueError(f"{t}: 알 수 없는 분류 {c!r} (허용: {tuple(CATEGORY_BASE_LEVEL)})")
-        # DB CHECK doc_type_access_level_floor 와 같은 규칙: 분류 기본 레벨이 하한(올리기만 가능)
+        # DB CHECK doc_type_level_floor 와 같은 규칙: 분류 기본 레벨이 하한(올리기만 가능)
         if min_levels[t] < CATEGORY_BASE_LEVEL[c]:
             raise ValueError(f"{t}: 분류 {c}의 기본 레벨 Lv{CATEGORY_BASE_LEVEL[c]}보다 낮출 수 없습니다"
                              f" (현재 Lv{min_levels[t]})")
     restore = raw["restore"]
+    teams = _parse_teams(raw.get("teams") or {})
     return AccessPolicy(
         version=raw["version"],
         min_levels=min_levels,
@@ -104,6 +131,54 @@ def load_policy(path: Path | str = POLICY_PATH) -> AccessPolicy:
         restore_rules={int(k): v for k, v in restore.items() if isinstance(k, int)},
         restore_default=restore["default_mode"],
         audit_read_min_level=int(raw["audit_log_read_min_level"]),
-        team_default_levels={str(t): int(v) for t, v in (raw.get("team_default_levels") or {}).items()},
+        team_levels=_parse_team_levels(raw.get("team_levels") or [], teams),
         categories=categories,
+        teams=teams,
     )
+
+
+def _clean(v: str | None) -> str | None:
+    """앞뒤 공백 제거, 빈 값은 None."""
+    v = (v or "").strip()
+    return v or None
+
+
+def _parse_teams(items: dict) -> dict:
+    """teams 검증. DB 제약(teams_*)과 같은 규칙: 코드 형식 DEPT_*, 이름 필수·중복 금지."""
+    teams, names = {}, set()
+    for cd, name in items.items():
+        cd, name = _clean(cd), _clean(name)
+        if cd is None or not TEAM_CD_PATTERN.fullmatch(cd):
+            raise ValueError(f"teams: 팀 코드 형식이 DEPT_<영문 대문자·숫자>가 아닙니다: {cd!r}")
+        if name is None:
+            raise ValueError(f"teams[{cd}]: 팀 이름이 비어 있습니다")
+        if name in names:
+            raise ValueError(f"teams[{cd}]: 팀 이름이 중복됩니다: {name}")
+        names.add(name)
+        teams[cd] = name
+    return teams
+
+
+def _parse_team_levels(items: list, teams: dict | None = None) -> tuple:
+    """team_levels 검증. DB 제약(team_level_*)과 같은 규칙을 YAML 단계에서도 확인한다.
+    teams를 주면 team_cd가 팀 목록에 있는지도 확인한다(DB 외래키 team_level_team_fk)."""
+    rules, seen = [], set()
+    for i, x in enumerate(items):
+        team_cd, position = _clean(x.get("team_cd")), _clean(x.get("position"))
+        level, rationale = int(x["level"]), (x.get("rationale") or "").strip()
+        where = f"team_levels[{i}] ({team_cd or '*'}/{position or '*'})"
+        if level not in VALID_LEVELS:
+            raise ValueError(f"{where}: 알 수 없는 레벨 {level}")
+        if teams is not None and team_cd is not None and team_cd not in teams:
+            raise ValueError(f"{where}: teams에 없는 팀 코드입니다")
+        if team_cd is None and position is None:
+            raise ValueError(f"{where}: 팀이나 직책 중 하나는 있어야 합니다")
+        if level == 2 and team_cd is None:
+            raise ValueError(f"{where}: Lv2 규칙에는 팀이 있어야 합니다")
+        if not rationale:
+            raise ValueError(f"{where}: rationale(근거)가 비어 있습니다")
+        if (team_cd, position) in seen:
+            raise ValueError(f"{where}: 같은 팀·직책 규칙이 중복됩니다")
+        seen.add((team_cd, position))
+        rules.append(TeamLevelRule(team_cd, position, level, rationale))
+    return tuple(rules)
