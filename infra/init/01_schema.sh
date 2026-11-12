@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # 컨테이너 최초 실행 시 한 번만 실행됩니다. (다시 만들려면: docker compose down -v 후 up)
 # rag   : 마스킹된 청크 + 토큰 목록 + 임베딩  (rag_user 만 접근)
 # vault : 토큰 ↔ 원문 매핑 테이블            (vault_user 만 접근)
