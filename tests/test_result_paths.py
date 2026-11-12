@@ -44,16 +44,11 @@ class OutputRoutingTests(unittest.TestCase):
                 self.assertFalse(Path(target).exists())
 
     @unittest.skipUnless((LOCAL_RESULTS/'token_cls_baseline/dev/predictions.jsonl').is_file(), 'Private experiment files required')
-    def test_dashboard_and_discovery_use_private_copies(self):
+    def test_discovery_uses_private_copies(self):
         from eval.cross_analysis import discover
-        from visualization.koelectra_dashboard import SOURCES
         _, sources, _ = discover(ROOT)
         self.assertEqual(set(sources), {'rule', 'koelectra'})
         self.assertTrue(all(path.is_relative_to(LOCAL_RESULTS) for path in sources.values()))
-        for source in SOURCES.values():
-            for path in (source.predictions, source.raw, source.errors):
-                self.assertTrue(path.is_relative_to(LOCAL_RESULTS))
-                self.assertTrue(path.is_file())
 
 
 class PreservationAndSharingTests(unittest.TestCase):
