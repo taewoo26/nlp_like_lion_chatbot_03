@@ -31,6 +31,11 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 .pill{font-size:12px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2);display:inline-flex;gap:6px;align-items:center}
 .dot{width:8px;height:8px;border-radius:50%;background:#bbb}
 .dot.on{background:var(--ok)} .dot.demo{background:var(--warn)}
+/* 로그인 사용자 영역 (상단 오른쪽) */
+.top-btn{font-family:Jua;font-size:13px;padding:6px 14px;border-radius:999px;border:none;cursor:pointer;background:var(--cap);color:#fff;box-shadow:0 2px 0 var(--cap2)}
+.top-btn.admin{background:var(--wood2,#9a6239);box-shadow:0 2px 0 var(--wood3)}
+.top-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+[hidden]{display:none!important}
 
 /* ---------------- 창구 (왼쪽) ---------------- */
 .counter{position:relative;background:var(--wall);border:1px solid var(--line);border-radius:26px;overflow:hidden;min-height:0;display:flex;flex-direction:column}
@@ -147,6 +152,9 @@ button.send:disabled{opacity:.55;cursor:wait}
       <span class="pill"><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span></span>
       <span class="pill" title="검색 방식">🔎 <span id="modeText">AND</span></span>
       <span class="pill" title="원문은 외부로 나가지 않아요">🔒 실명 비공개</span>
+      <span class="pill" id="whoPill" hidden title="로그인한 사용자"><span id="whoText"></span></span>
+      <button type="button" class="top-btn admin" id="adminBtn" hidden title="Lv2 전용">🔐 관리실</button>
+      <button type="button" class="top-btn" id="logoutBtn" hidden>로그아웃</button>
     </div>
   </header>
 
@@ -351,6 +359,7 @@ async function ask(q){
 
 async function callApi(q){
   const r = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({query:q, k:3})});
+  if (r.status === 401){ location.replace("/login?expired=1"); return new Promise(() => {}); }   // 로그인이 끝났으면 로그인 화면으로
   if (!r.ok) throw new Error(r.status);
   return r.json();
 }
@@ -384,6 +393,25 @@ async function health(){
   } catch { DEMO = true; $("#srvDot").className = "dot demo"; $("#srvText").textContent = "데모 모드 (서버 없음)"; }
 }
 
+/* ---------- 로그인 사용자 (F-70). 세션 남은 시간(F-03)은 고도화 때 추가 ---------- */
+async function loadMe(){
+  if (DEMO) return;
+  let r;
+  try { r = await fetch("/api/me"); } catch { return; }
+  if (r.status === 401){ location.replace("/login"); return; }
+  if (!r.ok) return;
+  const {user} = await r.json();
+  $("#whoText").textContent = `${user.user_id} · ${user.user_name} · Lv${user.access_level}`;
+  $("#whoPill").hidden = false; $("#logoutBtn").hidden = false;
+  $("#adminBtn").hidden = user.access_level !== 2;             // 관리실 버튼은 Lv2만
+}
+$("#logoutBtn").addEventListener("click", async () => {
+  try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
+});
+$("#adminBtn").addEventListener("click", () => {
+  addMsg("bot", `<div class="who">🐻 도장곰 주임</div>관리실은 아직 준비 중이에요. 들어갈 때 2차 인증을 거치도록 만들 예정이에요.`);
+});
+
 form.addEventListener("submit", async e => {
   e.preventDefault(); const q = input.value.trim(); if (!q || sendBtn.disabled) return;
   input.value = ""; sendBtn.disabled = true;
@@ -391,6 +419,7 @@ form.addEventListener("submit", async e => {
 });
 $("#chips").addEventListener("click", e => { if (e.target.tagName === "BUTTON"){ input.value = e.target.textContent; form.requestSubmit(); } });
 health();
+loadMe();
 </script>
 </body>
 </html>

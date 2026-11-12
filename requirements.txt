@@ -8,6 +8,8 @@ numpy==2.5.4
 openai
 fastapi
 uvicorn
+bcrypt>=4.2          # 로그인 비밀번호 비교 (service/auth.py)
+itsdangerous>=2.2    # 로그인 세션 쿠키 서명 (FastAPI SessionMiddleware)
 requests==2.31.0
 python-dotenv==1.0.1
 

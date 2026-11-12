@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도장곰 창구 · 로그인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+/* 색은 index.html(챗봇 화면)과 같은 값을 쓴다 */
+:root{
+  --bg:#f6efe4; --wall:#fbf6ee; --ink:#3a2a20; --ink2:#7a6253; --line:#e2d3bf;
+  --wood3:#7c4d2c; --bear:#d49a62; --bear2:#b97e4b; --muzzle:#f7e3c8; --nose:#4a2e22; --blush:#f2a7a0;
+  --cap:#2f5d62; --cap2:#244a4e; --gold:#e7b84e; --ink-red:#d9534f; --warn:#c0733a; --err:#b23b33;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Gowun Dodum",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  display:grid;place-items:center;min-height:100vh;min-height:100dvh;padding:24px 16px;
+  background-image:radial-gradient(circle at 20% 10%,#fff8ec 0,transparent 40%),radial-gradient(circle at 90% 90%,#f1e2cd 0,transparent 45%)}
+.wrap{width:100%;max-width:1080px;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}.hero .bear-box{display:none}}
+
+/* 왼쪽: 브랜드 카드 */
+.hero{background:var(--cap);color:#fff;border-radius:28px;padding:36px 36px 32px;display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-badge{width:58px;height:58px;border-radius:16px;background:#fff;color:var(--cap);display:grid;place-items:center;font-family:Jua;font-size:30px;flex:none}
+.brand h1{margin:0;font-family:Jua;font-size:30px;letter-spacing:.5px}
+.brand p{margin:2px 0 0;font-size:13px;opacity:.85}
+.bear-box{position:relative;background:#e9f1ee;border-radius:22px;aspect-ratio:4/5;max-height:420px;overflow:hidden;display:grid;place-items:end center;align-self:center;width:100%;max-width:380px}
+.bear-box::before{content:"";position:absolute;left:12%;top:4%;width:18%;height:60%;background:#fff;opacity:.35;border-radius:40px;transform:rotate(18deg)}
+.bear{width:78%;height:auto;position:relative;margin-bottom:-2%;animation:breathe 3.2s ease-in-out infinite}
+.bear .eyes-open{animation:blink 4.6s infinite;transform-origin:120px 118px}
+.nameplate{position:absolute;left:0;bottom:0;background:#fff8ea;border:2px solid var(--wood3);border-left:none;border-bottom:none;border-radius:0 10px 0 0;padding:4px 12px;font-family:Jua;font-size:14px;color:var(--wood3)}
+.hero ul{margin:0;padding:0;list-style:none;display:grid;gap:10px;font-size:14px}
+@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+
+/* 오른쪽: 로그인 카드 */
+.card{background:#fffcf6;border:1px solid var(--line);border-radius:28px;padding:44px 42px;display:flex;flex-direction:column}
+.card h2{margin:0;font-family:Jua;font-size:30px}
+.card .sub{margin:8px 0 28px;color:var(--ink2);font-size:14px}
+label{display:block;font-size:13px;color:var(--ink2);margin:0 0 6px}
+input{width:100%;font:inherit;font-size:16px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--ink);outline:none;margin-bottom:18px}
+input:focus{border-color:var(--cap);box-shadow:0 0 0 3px rgba(47,93,98,.15)}
+input[aria-invalid="true"]{border-color:var(--err)}
+.status{font-size:13px;color:var(--wood3);min-height:20px;margin:-4px 0 14px}
+.status.error{color:var(--err)}
+button{font-family:Jua;font-size:18px;width:100%;padding:15px;border:none;border-radius:16px;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.notice{font-size:13px;color:var(--ink2);margin:18px 0 0;line-height:1.55}
+.notice.legal{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="hero" aria-label="도장곰 창구 소개">
+    <div class="brand">
+      <div class="brand-badge" aria-hidden="true">印</div>
+      <div>
+        <h1>도장곰 창구</h1>
+        <p>이름·번호는 도장 쾅! 가명 토큰으로 바꿔서만 찾아드려요</p>
+      </div>
+    </div>
+    <div class="bear-box">
+      <svg id="bear" viewBox="-30 -95 300 395" role="img" aria-labelledby="bearT" class="bear">
+                <title id="bearT">창구에 앉은 도장곰</title>
+                <!-- 몸통: 은행원 유니폼 -->
+                <g id="body">
+                  <path d="M46 300 Q40 222 82 194 L158 194 Q200 222 194 300 Z" fill="var(--bear)"/>
+                  <path d="M52 300 Q48 228 86 200 L104 200 L120 250 L136 200 L154 200 Q192 228 188 300 Z" fill="var(--cap)"/>
+                  <path d="M104 200 L120 250 L136 200 Z" fill="#fffaf2"/>
+                  <path d="M104 200 L113 214 L120 206 Z M136 200 L127 214 L120 206 Z" fill="#e9dfd0"/>
+                  <path d="M120 250 L120 300" stroke="var(--cap2)" stroke-width="2"/>
+                  <circle cx="128" cy="264" r="3.2" fill="var(--gold)"/><circle cx="128" cy="284" r="3.2" fill="var(--gold)"/>
+                  <path d="M78 228 Q86 238 98 236" stroke="var(--cap2)" stroke-width="2" fill="none" stroke-linecap="round"/>
+                  <!-- 팔(소매) -->
+                  <path d="M66 222 Q52 252 70 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
+                  <path d="M174 222 Q188 252 168 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
+                  <rect x="134" y="230" width="24" height="12" rx="3" fill="#fff8ea" stroke="var(--gold)" stroke-width="1.5"/>
+                  <text x="146" y="239.5" font-size="8" text-anchor="middle" fill="var(--wood3)" font-family="Jua">주임</text>
+                </g>
+                <g transform="translate(120 196) scale(1.5) translate(-120 -196)">
+                <g id="head">
+                  <!-- 귀 (모자 옆으로 보이게 바깥쪽으로) -->
+                  <circle cx="50" cy="74" r="25" fill="var(--bear2)"/><circle cx="50" cy="74" r="13" fill="#f3c9a3"/>
+                  <circle cx="190" cy="74" r="25" fill="var(--bear2)"/><circle cx="190" cy="74" r="13" fill="#f3c9a3"/>
+                  <!-- 얼굴 -->
+                  <ellipse cx="120" cy="124" rx="90" ry="80" fill="var(--bear)"/>
+                  <!-- 은행원 모자 -->
+                  <path d="M54 84 Q40 30 120 14 Q200 30 186 84 Q120 66 54 84Z" fill="var(--cap)"/>
+                  <path d="M74 40 Q100 24 128 22" stroke="#4d8086" stroke-width="5" fill="none" stroke-linecap="round" opacity=".7"/>
+                  <path d="M46 82 Q120 62 194 82 Q198 92 190 96 Q120 78 50 96 Q42 92 46 82Z" fill="var(--cap2)"/>
+                  <path d="M52 88 Q120 70 188 88" stroke="var(--gold)" stroke-width="2" fill="none" opacity=".8"/>
+                  <circle cx="120" cy="48" r="12" fill="var(--gold)"/><circle cx="120" cy="48" r="9" fill="none" stroke="#c99a35" stroke-width="1.5"/>
+                  <text x="120" y="52.5" font-size="12" text-anchor="middle" fill="var(--cap2)" font-family="Jua">印</text>
+                  <!-- 볼터치 -->
+                  <ellipse cx="72" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
+                  <ellipse cx="168" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
+                  <!-- 주둥이 -->
+                  <ellipse cx="120" cy="152" rx="40" ry="30" fill="var(--muzzle)"/>
+                  <ellipse cx="120" cy="138" rx="11" ry="8" fill="var(--nose)"/>
+                  <ellipse cx="116" cy="135" rx="3.5" ry="2" fill="#fff" opacity=".6"/>
+      
+                  <!-- 표정: 대기 -->
+                  <g class="face idle">
+                    <g class="eyes-open">
+                      <circle cx="88" cy="118" r="8" fill="#3b2418"/><circle cx="85" cy="115" r="2.6" fill="#fff"/>
+                      <circle cx="152" cy="118" r="8" fill="#3b2418"/><circle cx="149" cy="115" r="2.6" fill="#fff"/>
+                    </g>
+                    <path d="M110 152 Q115 159 120 152 Q125 159 130 152" stroke="#3b2418" stroke-width="3" fill="none" stroke-linecap="round"/>
+                  </g>
+                </g>
+                </g>
+                <!-- 나비넥타이 -->
+                <g id="bow"><path d="M120 216 L102 207 Q98 216 102 225 Z M120 216 L138 207 Q142 216 138 225 Z" fill="var(--ink-red)"/><circle cx="120" cy="216" r="5" fill="#b8423f"/></g>
+                <!-- 앞발 + 도장 -->
+                <g id="pawL"><ellipse cx="72" cy="282" rx="24" ry="16" fill="var(--bear2)"/><ellipse cx="72" cy="286" rx="12" ry="7" fill="#f3c9a3"/></g>
+                <g class="stamp-arm" id="stampArm" style="transform-box:fill-box">
+                  <rect x="198" y="248" width="18" height="26" rx="8" fill="#8a5a36"/>
+                  <circle cx="207" cy="248" r="8" fill="#a8703f"/>
+                  <rect x="192" y="272" width="30" height="11" rx="4" fill="var(--ink-red)"/>
+                  <ellipse cx="170" cy="282" rx="24" ry="16" fill="var(--bear2)"/><ellipse cx="170" cy="286" rx="12" ry="7" fill="#f3c9a3"/>
+                </g>
+              </svg>
+      <span class="nameplate">도장곰 주임</span>
+    </div>
+    <ul>
+      <li>실명은 창구 밖으로 나가지 않아요.</li>
+      <li>사내 금융 문서를 가명 상태로만 검색해요.</li>
+    </ul>
+  </section>
+
+  <section class="card" aria-labelledby="loginTitle">
+    <h2 id="loginTitle">어서 오세요</h2>
+    <p class="sub">사번으로 로그인하면 바로 도장곰 창구로 안내해드려요.</p>
+    <form id="form" novalidate>
+      <label for="userId">사번</label>
+      <input id="userId" name="user_id" placeholder="SB260001" autocomplete="username" autocapitalize="characters" spellcheck="false" maxlength="20" required>
+      <label for="password">비밀번호</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" maxlength="200" required>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <button id="submit" type="submit">로그인</button>
+    </form>
+    <p class="notice">Lv2 권한이 있으면 창구 상단에 '관리실' 버튼이 보여요. 관리실에 들어갈 때 2차 인증을 한 번 더 거쳐요.</p>
+    <p class="notice legal">이 시스템의 접속 기록(로그인·조회·내보내기)은 보관되고 정기적으로 점검돼요. 권한 없는 접근은 금지돼요.</p>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const form = $("#form"), userId = $("#userId"), password = $("#password"), statusEl = $("#status"), submitBtn = $("#submit");
+
+function setStatus(text, kind = ""){ statusEl.textContent = text; statusEl.className = "status" + (kind ? " " + kind : ""); }
+function markInvalid(on){ [userId, password].forEach(el => el.setAttribute("aria-invalid", on ? "true" : "false")); }
+
+// 이미 로그인한 상태면 바로 챗봇으로
+fetch("/api/me").then(r => { if (r.ok) location.replace("/"); }).catch(() => {});
+
+if (new URLSearchParams(location.search).has("expired")) setStatus("로그인이 끝났어요. 다시 로그인해 주세요.");
+userId.focus();
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (submitBtn.disabled) return;
+  const uid = userId.value.trim(), pw = password.value;
+  if (!uid || !pw){ setStatus("사번과 비밀번호를 모두 입력해 주세요.", "error"); markInvalid(true); (uid ? password : userId).focus(); return; }
+
+  submitBtn.disabled = true; submitBtn.textContent = "확인 중…"; markInvalid(false);
+  try {
+    const r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
+                                         body:JSON.stringify({user_id: uid, password: pw})});
+    if (r.ok){ location.replace("/"); return; }
+    const body = await r.json().catch(() => ({}));
+    password.value = "";
+    if (body.reason === "inactive"){
+      setStatus(body.message, "error");
+    } else if (body.reason === "invalid"){
+      setStatus(body.message, "error"); markInvalid(true);
+    } else {
+      setStatus("로그인을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.", "error");
+    }
+    password.focus();
+  } catch {
+    setStatus("서버에 연결할 수 없어요. 서버가 켜져 있는지 확인해 주세요.", "error");
+  } finally {
+    submitBtn.disabled = false; submitBtn.textContent = "로그인";
+  }
+});
+</script>
+</body>
+</html>
