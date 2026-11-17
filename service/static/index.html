@@ -409,7 +409,7 @@ $("#logoutBtn").addEventListener("click", async () => {
   try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
 });
 $("#adminBtn").addEventListener("click", () => {
-  addMsg("bot", `<div class="who">🐻 도장곰 주임</div>관리실은 아직 준비 중이에요. 들어갈 때 2차 인증을 거치도록 만들 예정이에요.`);
+  window.location.href = "/admin";
 });
 
 form.addEventListener("submit", async e => {

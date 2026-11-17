@@ -147,3 +147,49 @@ def ask(body: Ask, user: dict = Depends(login_required)):   # 로그인 필요. 
     docs = [{"doc_id": d["doc_id"], "snippet": d["masked_text"][:180]} for d in res["docs"]]
     return {"masked_query": res["masked_query"], "query_tokens": res["query_tokens"],
             "docs": docs, "answer": res["answer"], "state": _state(res["docs"], res["answer"])}
+
+
+def admin_required(request: Request):
+    user = _session_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    if user.get("access_level") != 2:
+        raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
+    return user
+
+
+@app.get("/admin")
+def admin(request: Request):
+    user = _session_user(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    if user.get("access_level") != 2:
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC / "admin.html")
+
+
+@app.get("/api/admin/stats")
+def admin_stats(user: dict = Depends(admin_required)):
+    from starter import db
+    stats = {}
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
+        stats["total_docs"] = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks WHERE created_at::date = CURRENT_DATE")
+        stats["today_docs"] = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM rag.chunks")
+        stats["total_chunks"] = cur.fetchone()[0]
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM vault.token_map")
+        stats["total_tokens"] = cur.fetchone()[0]
+        cur.execute("""
+            SELECT resolution_status, COUNT(*)
+            FROM vault.person_info
+            GROUP BY resolution_status
+        """)
+        review = {row[0]: row[1] for row in cur.fetchall()}
+        stats["review_pending"] = review.get("pending", 0)
+        stats["review_resolved"] = review.get("resolved", 0)
+        stats["review_unresolved"] = review.get("unresolved", 0)
+    stats["fail_docs"] = 0
+    return stats
