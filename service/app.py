@@ -20,6 +20,8 @@
 - 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
   기록에 실패해도 답변은 그대로 돌려준다 (outputs/audit_fallback.jsonl, outputs/server_error.log 에 남김).
 """
+import logging
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -41,6 +43,10 @@ MIN_SECRET_LENGTH = 16
 
 @asynccontextmanager
 async def lifespan(_app):
+    fmt = logging.Formatter("%(levelname)-7s\t%(asctime)s\t%(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        for h in logging.getLogger(name).handlers:
+            h.setFormatter(fmt)
     if len(config.SESSION_SECRET) < MIN_SECRET_LENGTH:
         raise RuntimeError(
             ".env 의 SESSION_SECRET 이 없거나 너무 짧습니다(%d자 이상). 아래 명령으로 만들어 넣어 주세요:\n"
@@ -87,6 +93,15 @@ class Login(BaseModel):
 class Ask(BaseModel):
     query: str = Field(min_length=1, max_length=500)
     k: int = Field(default=3, ge=1, le=10)
+    restore: bool = False
+
+
+class VerifyPassword(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class RestoreTokens(BaseModel):
+    tokens: list[str] = Field(min_length=1, max_length=200)
 
 
 def _ui_state(state):
@@ -136,25 +151,92 @@ def me(user: dict = Depends(login_required)):
     return {"user": user}
 
 
+@app.post("/api/verify-password")
+def verify_password(body: VerifyPassword, request: Request, user: dict = Depends(login_required)):
+    if user.get("access_level") != 2:
+        raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
+    result = auth.authenticate(user["user_id"], body.password)
+    if not result.ok:
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
+    request.session["restore_verified"] = True
+    return {"ok": True}
+
+
+@app.post("/api/restore-tokens")
+def restore_tokens(body: RestoreTokens, request: Request, user: dict = Depends(login_required)):
+    if user.get("access_level") != 2:
+        raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
+    if not request.session.get("restore_verified"):
+        raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
+    valid = [t for t in body.tokens if _TOKEN_RE.fullmatch(t)]
+    token_map = _fetch_originals(set(valid))
+    return {"map": token_map}
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "llm": bool(config.LLM_API_KEY), "embed": config.EMBED_PROVIDER,
             "search_mode": (config.env("SEARCH_MODE", "and") or "and")}
 
 
+_TOKEN_RE = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
+
+
+def _restore_all(texts: list[str], token_map: dict[str, str]) -> list[str]:
+    """텍스트 목록에서 토큰을 원문으로 치환한다."""
+    def _replace(m):
+        return token_map.get(m.group(), m.group())
+    return [_TOKEN_RE.sub(_replace, t) if t else t for t in texts]
+
+
+def _fetch_originals(tokens: set[str]) -> dict[str, str]:
+    """vault.token_map에서 토큰 → 원문(첫 번째 표기) 매핑을 가져온다."""
+    if not tokens:
+        return {}
+    from starter import db
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT token, originals[1] FROM vault.token_map WHERE token = ANY(%s)",
+                    (sorted(tokens),))
+        return {row[0]: row[1] for row in cur.fetchall() if row[1]}
+
+
 @app.post("/api/chat")
-def ask(body: Ask, user: dict = Depends(login_required)):   # 로그인 필요. 동기 함수 → FastAPI가 스레드에서 실행 (탐지·임베딩·DB가 블로킹)
+def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     request_id = audit.new_request_id()
     started = time.perf_counter()
     try:
         res = chat.answer(body.query.strip(), body.k)
-    except Exception as exc:           # 원문이 들어갈 수 있는 예외 메시지는 그대로 내보내지 않는다
+    except Exception as exc:
         audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
     audit.record(audit.build_row(request_id, user, result=res, latency_ms=_elapsed_ms(started)))
     docs = [{"doc_id": d["doc_id"], "snippet": d["masked_text"][:180]} for d in res["docs"]]
-    return {"request_id": request_id, "masked_query": res["masked_query"], "query_tokens": res["query_tokens"],
-            "docs": docs, "answer": res["answer"], "state": _ui_state(res["state"])}
+    answer_text = res["answer"]
+    masked_query = res["masked_query"]
+    restored = False
+
+    should_restore = (
+        body.restore
+        and user.get("access_level") == 2
+        and request.session.get("restore_verified")
+    )
+    if should_restore and (answer_text or docs):
+        all_text = [answer_text or "", masked_query or ""] + [d["snippet"] for d in docs]
+        tokens_found = set()
+        for t in all_text:
+            tokens_found.update(_TOKEN_RE.findall(t))
+        token_map = _fetch_originals(tokens_found)
+        if token_map:
+            results = _restore_all(all_text, token_map)
+            answer_text = results[0] or answer_text
+            masked_query = results[1] or masked_query
+            for i, d in enumerate(docs):
+                d["snippet"] = results[2 + i]
+            restored = True
+
+    return {"request_id": request_id, "masked_query": masked_query, "query_tokens": res["query_tokens"],
+            "docs": docs, "answer": answer_text, "state": _ui_state(res["state"]),
+            "restored": restored}
 
 
 def admin_required(request: Request):
