@@ -20,7 +20,7 @@
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-family:"Gowun Dodum",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
   background-image:radial-gradient(circle at 20% 10%,#fff8ec 0,transparent 40%),radial-gradient(circle at 90% 90%,#f1e2cd 0,transparent 45%)}
-.app{max-width:1120px;margin:0 auto;padding:20px 16px 24px;display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:20px;height:100vh;height:100dvh}
+.app{max-width:1360px;margin:0 auto;padding:12px 10px 16px;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:14px;height:100vh;height:100dvh}
 @media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto auto 80vh;height:auto}.counter{min-height:460px}}
 header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px}
@@ -135,6 +135,30 @@ button.send{font-family:Jua;font-size:16px;padding:0 18px;border-radius:14px;bor
 button.send:disabled{opacity:.55;cursor:wait}
 .note{font-size:12px;color:var(--ink2)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* 원복 버튼 */
+.top-btn.restore{background:var(--wood2);box-shadow:0 2px 0 var(--wood3)}
+.top-btn.restore.on{background:var(--ok);box-shadow:0 2px 0 #2d7055}
+/* 세션 타이머 */
+.timer-pill{font-size:12px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2);display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.timer-pill.warn{color:var(--ink-red);border-color:var(--ink-red)}
+/* 모달 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:grid;place-items:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:#fffcf6;border:1px solid var(--line);border-radius:18px;padding:28px 24px;width:90%;max-width:360px;text-align:center}
+.modal h3{font-family:Jua;font-size:18px;margin:0 0 8px}
+.modal p{font-size:13px;color:var(--ink2);margin:0 0 16px}
+.modal input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;outline:none;margin-bottom:4px;box-sizing:border-box}
+.modal input:focus{border-color:var(--cap)}
+.modal .error{font-size:12px;color:var(--ink-red);min-height:18px;margin:0 0 10px}
+.modal-btns{display:flex;gap:8px}
+.modal-btns button{flex:1;font-family:Jua;font-size:14px;padding:10px;border-radius:12px;border:none;cursor:pointer}
+.modal-btns .confirm{background:var(--cap);color:#fff;box-shadow:0 2px 0 var(--cap2)}
+.modal-btns .cancel{background:#eee;color:var(--ink)}
+/* 원복된 텍스트 */
+.restored-tok{color:var(--ink-red);font-weight:700;border-bottom:2px dotted var(--ink-red);cursor:help}
+/* 마크다운 답변 */
+.msg.bot .ans ul{margin:6px 0;padding-left:20px}
+.msg.bot .ans li{margin:2px 0}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -149,11 +173,12 @@ button.send:disabled{opacity:.55;cursor:wait}
       </div>
     </div>
     <div class="status">
-      <span class="pill"><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span></span>
-      <span class="pill" title="검색 방식">🔎 <span id="modeText">AND</span></span>
-      <span class="pill" title="원문은 외부로 나가지 않아요">🔒 실명 비공개</span>
+      <span class="pill" id="srvPill" hidden><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span></span>
+      <span class="pill" id="modePill" hidden title="검색 방식">🔎 <span id="modeText">AND</span></span>
       <span class="pill" id="whoPill" hidden title="로그인한 사용자"><span id="whoText"></span></span>
+      <button type="button" class="top-btn restore" id="restoreBtn" hidden title="원문 복원 토글 (2차 인증 필요)">🔓 원복</button>
       <button type="button" class="top-btn admin" id="adminBtn" hidden title="Lv2 전용">🔐 관리실</button>
+      <span class="timer-pill" id="timerPill" hidden>⏱ <b id="sessionTimer">15:00</b></span>
       <button type="button" class="top-btn" id="logoutBtn" hidden>로그아웃</button>
     </div>
   </header>
@@ -286,20 +311,34 @@ button.send:disabled{opacity:.55;cursor:wait}
     </div>
     <div class="composer">
       <div class="chips" id="chips">
-        <button type="button">01057847365 이 번호로 들어온 건 있었나요?</button>
-        <button type="button">해외에서 카드 막혔다고 전화했던 정하은 고객 기록</button>
-        <button type="button">협력사 점검 출장 같이 간 김민준 직원 보고서 있어?</button>
-        <button type="button">김민준 고객 대출 상담 내역 알려줘</button>
-        <button type="button">보이스피싱 피해 접수</button>
+        <button type="button">보이스피싱 피해 접수 절차 알려줘</button>
+        <button type="button">법인카드 사용 보고서 찾아줘</button>
+        <button type="button">자동이체 신청서 조회</button>
+        <button type="button">고객 VOC 해결 완료 건</button>
+        <button type="button">출장 결과 보고서 확인</button>
       </div>
       <form id="form" autocomplete="off">
         <label class="sr" for="q">질문</label>
-        <input type="text" id="q" placeholder="예) 윤선영 VOC 해결 완료 건" maxlength="500">
+        <input type="text" id="q" placeholder="예) 자동이체 해지 요청 건 찾아줘" maxlength="500">
         <button class="send" id="send" type="submit">물어보기</button>
       </form>
       <div class="note">입력한 질문 원문은 이 화면에만 보이고, 서버는 가명처리된 질문만 돌려줘요.</div>
     </div>
   </section>
+</div>
+
+<!-- 원복 2차 인증 모달 -->
+<div class="modal-overlay" id="restoreModal">
+  <div class="modal">
+    <h3>2차 인증</h3>
+    <p>원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.</p>
+    <input type="password" id="restorePw" placeholder="비밀번호" maxlength="200">
+    <div class="error" id="restoreErr"></div>
+    <div class="modal-btns">
+      <button class="cancel" id="restoreCancel">취소</button>
+      <button class="confirm" id="restoreConfirm">확인</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -315,10 +354,25 @@ function setState(s){ stage.className = "stage state-" + s; clearTimeout(idleTim
   if (s === "found" || s === "nollm" || s === "sorry") idleTimer = setTimeout(() => setState("idle"), 6000); }
 function esc(t){ return t.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function chipify(t){
-  return esc(t).replace(/&lt;([A-Z_]+)_([0-9A-Za-z]+)&gt;/g, (m, lab, id) => {
+  let h = esc(t);
+  h = h.replace(/&lt;([A-Z_]+)_([0-9A-Za-z]+)&gt;/g, (m, lab, id) => {
     const [ico, name] = LABEL[lab.toUpperCase()] || ["🔖", lab];
     return `<span class="tok" title="가명 토큰 ${lab}_${id}">${ico} ${name} <b>#${id.slice(0,4).toLowerCase()}</b></span>`;
-  }).replace(/\n/g, "<br>");
+  });
+  h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const lines = h.split('\n');
+  let out = '', inList = false;
+  for (const line of lines) {
+    if (/^- /.test(line)) {
+      if (!inList) { out += '<ul>'; inList = true; }
+      out += `<li>${line.slice(2)}</li>`;
+    } else {
+      if (inList) { out += '</ul>'; inList = false; }
+      out += (out && !out.endsWith('</ul>') ? '<br>' : '') + line;
+    }
+  }
+  if (inList) out += '</ul>';
+  return out;
 }
 function addMsg(cls, html){ const d = document.createElement("div"); d.className = "msg " + cls; d.innerHTML = html;
   log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
@@ -354,6 +408,7 @@ async function ask(q){
   if (res.masked_query) meta.innerHTML += `<div class="mask-box"><span class="label">🔒 가명처리된 질문 (서버가 본 질문)</span>${chipify(res.masked_query)}<span class="seal">가명</span></div>`;
   if (res.docs && res.docs.length) meta.innerHTML += `<div class="docs">${res.docs.map(d => `<span class="doc" title="${esc(d.snippet || "")}">📄 ${esc(d.doc_id)}</span>`).join("")}</div>`;
   if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
+  if (restoreMode) applyRestore();
   log.scrollTop = log.scrollHeight;
 }
 
@@ -366,16 +421,16 @@ async function callApi(q){
 
 /* 서버 없이 화면만 볼 때 쓰는 예시 답변 (가명 토큰만 사용) */
 const DEMO_SET = [
-  {k:/0105784|번호로/, state:"found", masked_query:"<PHONE_NUMBER_d1fee87c1ce7> 이 번호로 들어온 건 있었나요?", docs:[{doc_id:"H0125"}],
-   answer:"네, 1건 있습니다. [H0125] 자동이체 신청서(2026-01-25 접수)에 신청인 <PERSON_39e8a9af8ae5>의 연락처로 <PHONE_NUMBER_d1fee87c1ce7>이 등록돼 있어요."},
-  {k:/정하은|해외/, state:"found", masked_query:"해외에서 카드 막혔다고 전화했던 <PERSON_b34820f87e4d> 고객 기록", docs:[{doc_id:"H0004"},{doc_id:"H0178"},{doc_id:"H0017"}],
-   answer:"[H0004] 녹취 요약에 <PERSON_b34820f87e4d> 고객이 해외 결제 중 카드가 정지됐다고 문의한 기록이 있어요. 해외 사용 차단 해제 후 정상 결제를 안내했어요."},
-  {k:/출장/, state:"found", masked_query:"협력사 점검 출장 같이 간 <PERSON_bd52a13d0d35> 직원 보고서 있어?", docs:[{doc_id:"H0153"},{doc_id:"H0024"}],
-   answer:"네, 2건이에요. [H0153], [H0024] 출장 결과 보고서에 <PERSON_bd52a13d0d35> 직원이 협력사 점검 출장 동행자로 기록돼 있어요."},
-  {k:/대출/, state:"sorry", masked_query:"<PERSON_bd52a13d0d35> 고객 대출 상담 내역 알려줘", docs:[{doc_id:"H0024"},{doc_id:"H0095"},{doc_id:"H0153"}],
-   answer:"제공된 문서에서는 확인되지 않습니다. 같은 토큰 <PERSON_bd52a13d0d35>이 나오는 문서는 모두 직원으로서의 출장·법인카드 문서라, 질문하신 고객과 다른 사람일 수 있어 답변을 보류할게요."},
-  {k:/보이스피싱/, state:"found", masked_query:"보이스피싱 피해 접수", docs:[{doc_id:"H0154"},{doc_id:"H0065"},{doc_id:"H0162"}],
-   answer:"보이스피싱 피해 접수 문서가 여러 건 있어요. [H0154] 피해 접수서가 가장 관련도가 높고, [H0065], [H0162]에도 접수 처리 내용이 있어요."},
+  {k:/보이스피싱/, state:"found", masked_query:"보이스피싱 피해 접수 절차 알려줘", docs:[{doc_id:"H0154"},{doc_id:"H0065"},{doc_id:"H0162"}],
+   answer:"보이스피싱 피해 접수 문서가 여러 건 있어요.\n\n- **[H0154]** 피해 접수서가 가장 관련도가 높아요.\n- **[H0065]**, **[H0162]**에도 접수 처리 내용이 있어요."},
+  {k:/법인카드/, state:"found", masked_query:"법인카드 사용 보고서 찾아줘", docs:[{doc_id:"H0024"},{doc_id:"H0095"}],
+   answer:"법인카드 사용 보고서 2건을 찾았어요.\n\n- **[H0024]** 2026년 1분기 법인카드 사용 보고서\n- **[H0095]** 협력사 미팅 경비 정산 보고서"},
+  {k:/자동이체/, state:"found", masked_query:"자동이체 신청서 조회", docs:[{doc_id:"H0125"}],
+   answer:"자동이체 관련 문서 1건이에요. **[H0125]** 자동이체 신청서(2026-01-25 접수)에 신청 내역이 등록돼 있어요."},
+  {k:/VOC|해결/, state:"found", masked_query:"고객 VOC 해결 완료 건", docs:[{doc_id:"H0088"},{doc_id:"H0112"}],
+   answer:"VOC 해결 완료 건 2건이에요.\n\n- **[H0088]** 카드 배송 지연 VOC → 해결 완료\n- **[H0112]** 인터넷뱅킹 오류 VOC → 해결 완료"},
+  {k:/출장/, state:"found", masked_query:"출장 결과 보고서 확인", docs:[{doc_id:"H0153"},{doc_id:"H0024"}],
+   answer:"출장 결과 보고서 2건이에요.\n\n- **[H0153]** 협력사 점검 출장 결과 보고서\n- **[H0024]** 고객사 방문 출장 보고서"},
 ];
 async function demoAnswer(q){
   await sleep(600);
@@ -385,15 +440,36 @@ async function demoAnswer(q){
 }
 
 async function health(){
-  if (DEMO){ $("#srvDot").className = "dot demo"; $("#srvText").textContent = "데모 모드"; return; }
+  if (DEMO) return;
   try {
     const h = await (await fetch("/api/health")).json();
-    $("#srvDot").className = "dot on"; $("#srvText").textContent = h.llm ? "서버 연결 · LLM 사용" : "서버 연결 · LLM 키 없음";
-    $("#modeText").textContent = (h.search_mode || "and").toUpperCase();
-  } catch { DEMO = true; $("#srvDot").className = "dot demo"; $("#srvText").textContent = "데모 모드 (서버 없음)"; }
+    if (!h.llm) { $("#srvPill").hidden = false; $("#srvDot").className = "dot demo"; $("#srvText").textContent = "LLM 키 없음"; }
+  } catch { DEMO = true; }
 }
 
-/* ---------- 로그인 사용자 (F-70). 세션 남은 시간(F-03)은 고도화 때 추가 ---------- */
+/* ---------- 원복 모드 ---------- */
+let restoreMode = false;
+
+/* ---------- 세션 타이머 (F-03) ---------- */
+let sessionRemaining = 30 * 60;
+let sessionTimerHandle;
+function startSessionTimer(){
+  const el = $("#sessionTimer"), pill = $("#timerPill");
+  pill.hidden = false;
+  sessionTimerHandle = setInterval(() => {
+    if (sessionRemaining <= 0){
+      clearInterval(sessionTimerHandle);
+      fetch("/api/logout", {method:"POST"}).finally(() => location.replace("/login?expired=1"));
+      return;
+    }
+    sessionRemaining--;
+    const m = Math.floor(sessionRemaining / 60), s = sessionRemaining % 60;
+    el.textContent = `${m}:${String(s).padStart(2,"0")}`;
+    if (sessionRemaining <= 120) pill.classList.add("warn");
+  }, 1000);
+}
+
+/* ---------- 로그인 사용자 ---------- */
 async function loadMe(){
   if (DEMO) return;
   let r;
@@ -403,13 +479,96 @@ async function loadMe(){
   const {user} = await r.json();
   $("#whoText").textContent = `${user.user_id} · ${user.user_name} · Lv${user.access_level}`;
   $("#whoPill").hidden = false; $("#logoutBtn").hidden = false;
-  $("#adminBtn").hidden = user.access_level !== 2;             // 관리실 버튼은 Lv2만
+  $("#adminBtn").hidden = user.access_level !== 2;
+  $("#restoreBtn").hidden = user.access_level !== 2;
+  startSessionTimer();
 }
 $("#logoutBtn").addEventListener("click", async () => {
   try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
 });
 $("#adminBtn").addEventListener("click", () => {
   window.location.href = "/admin";
+});
+
+/* ---------- 원복 2차 인증 모달 ---------- */
+const restoreModal = $("#restoreModal");
+const savedTokHtml = {};
+
+async function applyRestore(){
+  const chips = log.querySelectorAll(".tok");
+  if (!chips.length) return;
+  const tokenSet = new Set();
+  chips.forEach(el => {
+    const t = el.getAttribute("title");
+    if (t) tokenSet.add("<" + t.replace("가명 토큰 ", "") + ">");
+  });
+  if (!tokenSet.size) return;
+  try {
+    const r = await fetch("/api/restore-tokens", {method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({tokens:[...tokenSet]})});
+    if (!r.ok) return;
+    const {map} = await r.json();
+    chips.forEach(el => {
+      const t = el.getAttribute("title");
+      if (!t) return;
+      const token = "<" + t.replace("가명 토큰 ", "") + ">";
+      const original = map[token];
+      if (!original) return;
+      if (!savedTokHtml[token]) savedTokHtml[token] = el.outerHTML;
+      const restored = document.createElement("b");
+      restored.textContent = original;
+      restored.className = "restored-tok";
+      restored.dataset.token = token;
+      el.replaceWith(restored);
+    });
+  } catch {}
+}
+
+function undoRestore(){
+  log.querySelectorAll(".restored-tok").forEach(el => {
+    const token = el.dataset.token;
+    const html = savedTokHtml[token];
+    if (!html) return;
+    const tmp = document.createElement("span");
+    tmp.innerHTML = html;
+    el.replaceWith(tmp.firstChild);
+  });
+}
+
+$("#restoreBtn").addEventListener("click", () => {
+  if (restoreMode) {
+    restoreMode = false;
+    $("#restoreBtn").classList.remove("on");
+    $("#restoreBtn").textContent = "🔓 원복";
+    undoRestore();
+    return;
+  }
+  restoreModal.classList.add("open");
+  $("#restorePw").value = "";
+  $("#restoreErr").textContent = "";
+  setTimeout(() => $("#restorePw").focus(), 100);
+});
+$("#restoreCancel").addEventListener("click", () => restoreModal.classList.remove("open"));
+restoreModal.addEventListener("click", e => { if (e.target === restoreModal) restoreModal.classList.remove("open"); });
+$("#restorePw").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); $("#restoreConfirm").click(); } });
+$("#restoreConfirm").addEventListener("click", async () => {
+  const pw = $("#restorePw").value;
+  if (!pw){ $("#restoreErr").textContent = "비밀번호를 입력해 주세요."; return; }
+  $("#restoreConfirm").disabled = true;
+  try {
+    const r = await fetch("/api/verify-password", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password: pw})});
+    if (!r.ok){
+      const body = await r.json().catch(() => ({}));
+      $("#restoreErr").textContent = body.detail || "인증에 실패했습니다.";
+      return;
+    }
+    restoreMode = true;
+    $("#restoreBtn").classList.add("on");
+    $("#restoreBtn").textContent = "🔓 원복 ON";
+    restoreModal.classList.remove("open");
+    applyRestore();
+  } catch { $("#restoreErr").textContent = "서버에 연결할 수 없습니다."; }
+  finally { $("#restoreConfirm").disabled = false; }
 });
 
 form.addEventListener("submit", async e => {
