@@ -1,6 +1,6 @@
 # 권한 정책 데이터 구조 (초안)
 
-2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가
+2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가 · 2026-11-17 `query_log` 기록 구현 반영(4.1, ⑧ 단계)
 상태: **설계 기록**. 2026-11-12부터 DB 스키마는 develop의 `infra/init/04~07`이 기준입니다. 4·5절의 표·트리거 설명 중 develop에 없는 항목(아래 '고도화 후보')은 아직 적용되지 않았습니다.
 
 관련 파일
@@ -64,7 +64,7 @@ flowchart TD
     W -- "INSERT 1행<br/>(검색·재검사 결과 포함)" --> QL[["audit.query_log"]]
 
     classDef todo stroke-dasharray: 5 5
-    class MW,R,X,W todo
+    class MW,R,X todo
 ```
 
 | 단계 | 사용하는 테이블·함수 | 비고 |
@@ -74,7 +74,7 @@ flowchart TD
 | ④ 검색 | `rag.chunks` 읽기 | `access`는 **필수 인자**(정책서 9절 결정 4). SQL 세 경로(AND·토큰 없음·boost) 모두에 `AND doc_type = ANY(허용 목록)`을 `LIMIT` 전에 추가. 결과(질의 토큰, 반환 문서)는 메모리에 보관 |
 | ⑥ 재검사 | (없음) | 결과(조치, 라벨별 개수, 탐지기)를 메모리에 보관 |
 | ⑦ 복원 | `vault.token_map` 읽기, `audit.restore_log` 쓰기 | Lv2만 `full`. **실제로 복원한 경우에만 기록**하며, 기록에 실패하면 복원하지 않음 |
-| ⑧ 기록 마무리 | `audit.query_log` 쓰기 | 미들웨어가 응답 직전에 **한 번** 씀(`finally`). 결과 없음·LLM 없음·지역 되묻기·오류로 일찍 끝나도 반드시 1행. 기록에 실패해도 답변은 돌려주고 서버 오류 로그에 남김 |
+| ⑧ 기록 마무리 | `audit.query_log` 쓰기 | 응답 직전에 **한 번** 씀. 결과 없음·LLM 없음·지역 되묻기·오류로 일찍 끝나도 반드시 1행. 기록에 실패해도 답변은 돌려주고, 같은 행을 `outputs/audit_fallback.jsonl`에 추가한 뒤 실패 사실(시각·`request_id`·예외 종류)을 `outputs/server_error.log`와 터미널에 남김. 대체 파일도 실패하면 오류 로그에만 남음. **구현됨(2026-11-17)**: 미들웨어 대신 `/api/chat`(`service/app.py`)이 `service/audit.py`를 호출 |
 
 권한 밖 문서만 있어서 결과가 없을 때도 "일치하는 문서를 찾지 못했습니다"를 그대로 씁니다. "권한 밖 문서 N건 제외" 같은 안내는 하지 않습니다(문서 존재 비노출, 정책서 9절 결정 5).
 
@@ -171,7 +171,7 @@ erDiagram
         text recheck_detector "재검사 탐지기"
         text state "answered no_result withheld clarify search_only error"
         int latency_ms "응답 시간"
-        text policy_version "적용 정책 버전"
+        int policy_version "적용 정책 버전"
     }
     audit_restore_log {
         bigint restore_log_id PK "자동 증가"
@@ -229,27 +229,35 @@ flowchart LR
 - 앱 계정은 **INSERT만** 할 수 있게 설계했습니다(6절). 그래서 앱에서 `INSERT ... RETURNING`은 쓸 수 없습니다.
 - `level`은 요청 시점의 레벨을 복사해 둡니다. 나중에 사용자 레벨이 바뀌어도 당시 판단을 재현할 수 있습니다.
 - `user_id`는 로그인 ID 문자열(예: `demo_lv1`)이며, 로그인 테이블과 외래키로 잇지 않습니다.
-- `query_log.policy_version`에는 `policy.policy_state.version` 값을 문자열로 적습니다. 그 시점의 정책 내용은 `audit.policy_change_log`를 거슬러 올라가 재현합니다.
-- **`request_id`로 한 질문의 로그를 묶습니다.** 미들웨어가 질문마다 번호를 하나 만들어 `query_log`와 `restore_log`에 같은 값을 적습니다. 재검사 결과는 `query_log`의 같은 행에 들어 있습니다. 예를 들어 `demo_lv2`의 질문 하나에 `req-7f3a`가 붙었다면:
+- `query_log.policy_version`에는 `policy.policy_state.version` 값(INT)을 적습니다. 구현에서는 INSERT 문 안에서 함께 읽습니다. 그 시점의 정책 내용은 `audit.policy_change_log`를 거슬러 올라가 재현합니다.
+- **`request_id`로 한 질문의 로그를 묶습니다.** 미들웨어가 질문마다 번호를 하나 만들어 `query_log`와 `restore_log`에 같은 값을 적습니다. 재검사 결과는 `query_log`의 같은 행에 들어 있습니다. 예를 들어 `demo_lv2`의 질문 하나에 `req_20261117_3f9a1c07b2e4`가 붙었다면:
 
   | 테이블 | 기록된 행 |
   |---|---|
-  | `query_log` | `req-7f3a` / demo_lv2 / Lv2 / 반환 문서 D0012, D0031 / 재검사 `masked`, `{"phone_number": 1}` |
-  | `restore_log` | `req-7f3a` / demo_lv2 / `<PERSON_ab12…>` / full |
-  | `restore_log` | `req-7f3a` / demo_lv2 / `<PERSON_c9e0…>` / full |
+  | `query_log` | `req_20261117_3f9a1c07b2e4` / demo_lv2 / Lv2 / 반환 문서 D0012, D0031 / 재검사 `masked`, `{"phone_number": 1}` |
+  | `restore_log` | `req_20261117_3f9a1c07b2e4` / demo_lv2 / `<PERSON_ab12…>` / full |
+  | `restore_log` | `req_20261117_3f9a1c07b2e4` / demo_lv2 / `<PERSON_c9e0…>` / full |
 
-  `req-7f3a`로 찾으면 "문서 2건 반환, 전화번호 1건 가림, 실명 2명 복원"을 한 번에 재구성할 수 있습니다. 같은 사람이 짧은 간격으로 여러 번 질문해도 어느 복원이 어느 질문에서 나왔는지 구분됩니다.
+  `req_20261117_3f9a1c07b2e4`로 찾으면 "문서 2건 반환, 전화번호 1건 가림, 실명 2명 복원"을 한 번에 재구성할 수 있습니다. 같은 사람이 짧은 간격으로 여러 번 질문해도 어느 복원이 어느 질문에서 나왔는지 구분됩니다.
 
 ### 4.1 `audit.query_log` — 조회 로그
 
 근거: 계획서 3절 "평가·감사용 로그에는 가명처리된 질의, 검색 결과, 응답 시간, 재검사 결과만 기록", "출력 재검사 적발 건은 사용자·시각·토큰 단위로 감사 로그에 기록"
 기록 시점: 미들웨어가 **응답 직전에 질문마다 1행**. 어느 경로로 끝나든(결과 없음·LLM 없음·지역 되묻기·오류) 반드시 남깁니다.
 
+구현 (2026-11-17, `service/audit.py` · `service/app.py` `/api/chat`)
+- `request_id`는 요청 시작 시 앱이 만듭니다(`req_20261117_3f9a1c07b2e4`). DB 시퀀스는 쓰지 않습니다.
+- `level`·`team_cd`·`position`은 로그인 사용자(`policy.users`)에서, `latency_ms`는 앱에서 잽니다.
+- 오류(`error`)일 때 `masked_query`: 가명처리 뒤 실패면 가명 질의, 가명처리 전 실패(탐지 오류)면 고정값 `[MASK_FAILED]`. 원문은 남기지 않습니다.
+- 출력 재검사가 아직 없어 `recheck_action`·`recheck_detector`는 NULL, `recheck_labels`는 `{}`입니다.
+- 기록 실패 시 처리는 2절 ⑧ 단계를 따릅니다. 대체 파일의 행은 `policy_version`이 null이고 `db_error`(예외 종류)가 붙습니다.
+- 기록 계정은 지금 `rag_user`(audit 스키마 소유자)입니다. 고도화 때 `app_search`로 바꿉니다.
+
 | 컬럼 | 타입 | NULL | 제약·기본값 | 설명 |
 |---|---|---|---|---|
 | `query_log_id` | BIGINT | N | PK, 자동 증가 | 행 번호 |
 | `created_at` | TIMESTAMPTZ | N | 기본값 `now()` | 기록 시각(응답 직전). 질문 시작 시각은 `created_at - latency_ms` |
-| `request_id` | TEXT | N | UNIQUE | `restore_log`와 잇는 키 (질문마다 1개, 중복 불가) |
+| `request_id` | TEXT | N | UNIQUE | `restore_log`와 잇는 키 (질문마다 1개, 중복 불가). 형식 `req_<KST 날짜>_<uuid 앞 12자리>` |
 | `user_id` | TEXT | N | | 로그인 ID |
 | `level` | SMALLINT | N | 0~2 | 요청 시점의 권한 레벨 |
 | `team_cd` | TEXT | Y | | 요청 시점의 소속 팀 코드. 감사 분석과 ABAC 전환 근거 (신규) |
@@ -262,11 +270,11 @@ flowchart LR
 | `recheck_detector` | TEXT | Y | | 재검사에 쓴 탐지기 (예: `koelectra_post_kiwi_split_v3`) |
 | `state` | TEXT | N | 아래 6개 값 | 질문에 대한 최종 응답 상태. 아래 표 참고 |
 | `latency_ms` | INT | Y | 0 이상 | 응답 시간(ms) |
-| `policy_version` | TEXT | N | | 판단에 사용한 정책 버전 |
+| `policy_version` | INT | N | | 판단에 사용한 정책 버전 |
 
 인덱스: `created_at`, `(user_id, created_at)`
 
-`state` 값 (미들웨어가 위에서부터 차례로 판정. 화면 응답 `/api/chat`의 `found`/`sorry`/`nollm`과는 별개)
+`state` 값 (`chat.answer()`가 위에서부터 차례로 판정하고, 예외면 `/api/chat`이 `error`로 기록. 화면 응답 `/api/chat`의 `found`/`sorry`/`nollm`과는 별개이며, 화면 값은 `answered`→`found`, `search_only`→`nollm`, 나머지→`sorry`로 바꿔 보냄)
 
 | 값 | 뜻 | 나타나는 상황 | 질문 예시 |
 |---|---|---|---|
