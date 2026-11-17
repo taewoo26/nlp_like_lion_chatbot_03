@@ -25,7 +25,9 @@ def state(monkeypatch):
     monkeypatch.setattr(app_module.auth, "authenticate", fake_authenticate)
     monkeypatch.setattr(app_module.auth, "get_active_user", lambda uid, conn=None: dict(USER) if s["active"] else None)
     monkeypatch.setattr(app_module.chat, "answer", lambda q, k: {
-        "masked_query": q, "query_tokens": [], "docs": [], "answer": "일치하는 문서를 찾지 못했습니다."})
+        "masked_query": q, "query_tokens": [], "docs": [], "answer": "일치하는 문서를 찾지 못했습니다.",
+        "state": "no_result"})
+    monkeypatch.setattr(app_module.audit, "record", lambda row, conn=None: "db")   # 감사 로그는 test_chat_api.py 에서 확인
     return s
 
 

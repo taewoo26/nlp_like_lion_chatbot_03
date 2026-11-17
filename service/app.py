@@ -10,14 +10,18 @@
         POST /api/logout → {"ok": true}
         GET  /api/me → 로그인한 사용자. 로그인하지 않았으면 401
         POST /api/chat {"query": "...", "k": 3}   (로그인 필요, 아니면 401)
-        → {"masked_query", "query_tokens", "docs":[{"doc_id","snippet"}], "answer", "state"}
+        → {"request_id", "masked_query", "query_tokens", "docs":[{"doc_id","snippet"}], "answer", "state"}
 - 로그인 유지: 서명된 세션 쿠키(SESSION_SECRET). 쿠키에는 사번만 두고, 권한·계정 상태는 요청마다
   DB(policy.users)에서 다시 읽는다. 브라우저를 닫거나 로그아웃하면 끝난다.
   고도화 때 추가 예정: 미사용 시 자동 로그아웃(F-03), 로그인 실패 잠금(F-68).
 - 질문 원문은 서버 로그·응답 어디에도 남기지 않는다. 응답에는 가명처리된 질문과 문서만 담는다.
-- state: found(아하!) / sorry(문서 없음·확인 불가·답변 보류) / nollm(LLM 키 없음, 검색 결과만)
+- state(화면용): found(아하!) / sorry(되물음·문서 없음·답변 보류) / nollm(LLM 키 없음, 검색 결과만)
+  chat.answer()의 state(감사 로그용 6개 값)를 UI_STATE 로 바꿔 보낸다. answered→found, search_only→nollm, 나머지→sorry
+- 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
+  기록에 실패해도 답변은 그대로 돌려준다 (outputs/audit_fallback.jsonl, outputs/server_error.log 에 남김).
 """
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,11 +31,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
-from service import auth
+from service import audit, auth
 from starter import chat, config, pii_pipeline
 
 STATIC = Path(__file__).with_name("static")
-SORRY_WORDS = ("확인되지 않", "찾지 못", "보류", "확인할 수 없", "알 수 없")
+UI_STATE = {"answered": "found", "search_only": "nollm"}   # 그 밖의 state 는 화면에서 sorry
 MIN_SECRET_LENGTH = 16
 
 
@@ -85,12 +89,12 @@ class Ask(BaseModel):
     k: int = Field(default=3, ge=1, le=10)
 
 
-def _state(docs, answer):
-    if not docs:
-        return "sorry"
-    if answer is None:
-        return "nollm"
-    return "sorry" if any(w in answer for w in SORRY_WORDS) else "found"
+def _ui_state(state):
+    return UI_STATE.get(state, "sorry")
+
+
+def _elapsed_ms(started):
+    return int((time.perf_counter() - started) * 1000)
 
 
 @app.get("/")
@@ -140,10 +144,14 @@ def health():
 
 @app.post("/api/chat")
 def ask(body: Ask, user: dict = Depends(login_required)):   # 로그인 필요. 동기 함수 → FastAPI가 스레드에서 실행 (탐지·임베딩·DB가 블로킹)
+    request_id = audit.new_request_id()
+    started = time.perf_counter()
     try:
         res = chat.answer(body.query.strip(), body.k)
     except Exception as exc:           # 원문이 들어갈 수 있는 예외 메시지는 그대로 내보내지 않는다
+        audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
+    audit.record(audit.build_row(request_id, user, result=res, latency_ms=_elapsed_ms(started)))
     docs = [{"doc_id": d["doc_id"], "snippet": d["masked_text"][:180]} for d in res["docs"]]
-    return {"masked_query": res["masked_query"], "query_tokens": res["query_tokens"],
-            "docs": docs, "answer": res["answer"], "state": _state(res["docs"], res["answer"])}
+    return {"request_id": request_id, "masked_query": res["masked_query"], "query_tokens": res["query_tokens"],
+            "docs": docs, "answer": res["answer"], "state": _ui_state(res["state"])}
