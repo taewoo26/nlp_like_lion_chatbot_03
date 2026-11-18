@@ -19,6 +19,8 @@
   search(query, k, conn=None, with_meta=True) -> (masked_query, query_tokens, docs, meta)
   docs: [{"doc_id", "chunk_id", "masked_text", "tokens", "score"}, ...]  순위 순서
   meta: {"regions", "ask_region", "roles", "excluded", "person_candidates"}
+  가명처리 뒤 단계(임베딩·DB)에서 예외가 나면 예외 객체에 masked_query, query_tokens 를 붙여
+  다시 올린다 (감사 로그가 원문 대신 가명 질의를 남길 수 있게). 가명처리 중 예외에는 붙지 않는다.
 검색 단계는 rag_user 계정만 씁니다 (매핑 테이블 접근 없음).
 
 메타데이터 (종합, 기본 off. 켜도 SEARCH_MODE=and 경로에만 적용)
@@ -146,7 +148,25 @@ def search(query, k=10, conn=None, with_meta=False, reg_id=None):
     else:
         masked_q, q_tokens = mask_query(query)
         q_records = []
-    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {}, "ask_person": False, "person_scope": "registry" if reg_id else "name_role"}
+    try:
+        return _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id)
+    except Exception as exc:
+        tag_masked(exc, masked_q, q_tokens)
+        raise
+
+
+def tag_masked(exc, masked_q, q_tokens):
+    """예외에 가명 질의를 붙인다 (원문은 붙이지 않는다). 이미 붙어 있으면 그대로 둔다."""
+    if getattr(exc, "masked_query", None) is None:
+        try:
+            exc.masked_query, exc.query_tokens = masked_q, list(q_tokens)
+        except AttributeError:          # 속성을 붙일 수 없는 예외 타입이면 포기
+            pass
+
+
+def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None):
+    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {},
+            "ask_person": False, "person_scope": "registry" if reg_id else "name_role"}
     if config.meta_on("REGION_META"):
         meta["regions"], meta["ask_region"] = address.query_regions(query)
         if meta["ask_region"]:                  # '중구 고객' → 검색하지 않고 되묻기 (REG-33)

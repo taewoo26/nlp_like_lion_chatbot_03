@@ -115,6 +115,13 @@ docker compose -p pii_starter --env-file .env -f infra/compose.yaml ps
 docker compose -p pii_starter --env-file .env -f infra/compose.yaml exec db psql -U admin -d pii_rag -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
+**웹 데모 로그인**
+
+- 계정 테이블(`policy.teams`, `policy.users`)과 시연 계정은 `infra/init/04_policy.sql`, `07_seed_demo_users.sql`이 새 DB를 만들 때 자동으로 넣습니다.
+- 시연 계정: 사번 `SB260001`~`SB260010`, 비밀번호 `qwer0001`~`qwer0010` (`SB260010`은 비활성 계정)
+- 로그인 판정은 지금 관리자 계정(`POSTGRES_USER`)으로 DB에 접속합니다. 고도화 때 `06_grants.sh`의 `app_search`로 바꿀 예정입니다
+- 웹 데모(`uvicorn service.app:app`)를 켜려면 `.env`에 `SESSION_SECRET`(16자 이상)이 필요합니다
+
 ### 5-4. 실행
 
 탐지기 설치·실행은 [팀 사용 안내](docs/detector_handoff.md), 판정 기준·최신 결과·오류 분석은 [평가 보고서](docs/탐지%20모델%20코드%20최종%20보고서.md), 개선 전 후보 비교는 [초기 비교표](docs/%ED%83%90%EC%A7%80%20%EB%AA%A8%EB%8D%B8%20%EC%BD%94%EB%93%9C%20%EC%B5%9C%EC%A2%85%20%EB%B3%B4%EA%B3%A0%EC%84%9C.md#initial-comparison)를 참고하세요.
@@ -160,6 +167,7 @@ uvicorn service.app:app --reload
 | `DB_HOST`, `DB_PORT`, `POSTGRES_DB` | 실전 2 DB 접속 대상 |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | 초기화 관리자 계정 |
 | `RAG_PASSWORD`, `VAULT_PASSWORD` | 검색용·매핑용 분리 계정 비밀번호 |
+| `SESSION_SECRET` | 웹 데모 로그인 쿠키 서명 키 (16자 이상, **필수**). 비어 있으면 웹 서버가 시작되지 않습니다 |
 | `HMAC_KEY` | 가명처리 토큰 생성 키 (**필수**, 팀 공통 값). 비어 있으면 실행이 멈춥니다. 바꾸면 다시 적재해야 합니다 |
 
 **임베딩**

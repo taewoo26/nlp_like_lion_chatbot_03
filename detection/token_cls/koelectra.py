@@ -74,6 +74,8 @@ class KoElectraDetector(BaseDetector):
     name = 'koelectra'
 
     def __init__(self, threads=2):
+        from detection.moai.runtime import prepare_runtime
+        prepare_runtime()
         import onnxruntime as ort
         from transformers import AutoTokenizer
         if threads < 1:

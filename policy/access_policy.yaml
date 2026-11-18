@@ -1,0 +1,130 @@
+# 권한 정책 초기값(시드)
+# 운영 중 정책의 원본은 DB 정책 테이블(policy.*)이며 관리자 화면에서 편집합니다.
+# 이 파일은 새 DB에 처음 한 번 넣는 값입니다: python -m policy.seed_sql → policy/draft/07_policy_seed.sql
+# 사람이 읽는 설명: docs/permission_policy_draft.md
+# 수정 시 version을 올리고, policy/test_access_policy.py를 다시 실행하세요.
+
+version: "v0.4"
+updated: "2026-11-10"
+status: "팀 검토 전"
+
+levels:
+  0: { name: "일반 조회자", description: "전 직원 공개 문서 열람" }
+  1: { name: "상담원·민원 담당자", description: "직원 개인 문서(Lv2 전용)를 제외한 모든 문서를 토큰 상태로 열람" }
+  2: { name: "관리자·준법 담당자", description: "전체 문서 열람, 실명 복원, 감사 로그 열람" }
+
+# 계층형: 상위 레벨은 하위 레벨 권한을 포함합니다(Lv2 ⊇ Lv1 ⊇ Lv0).
+hierarchical: true
+
+defaults:
+  unregistered_min_level: 2   # 정책에 없는 doc_type은 Lv2 전용(기본 거부)
+
+# category: 판정 질문(위에서부터 처음 해당하는 것)의 결과. 정책서 3절 참고
+#  (질문 1 미등록 -> Lv2: 정책에 없는 유형이라 이 목록에 행이 없음)
+#  직원개인: 직원 개인에 관한 인사·채용·감사·비용 소명 문서 -> Lv2
+#  고객업무: 고객 정보 포함 또는 고객 업무 처리 기록(심사·분쟁 포함) -> Lv1
+#  내부업무: 직원 간 업무 소통·회의·보고·회사 운영 문서(계약·권한 신청 포함) -> Lv1
+#  공개: 전 직원 공개 공지·안내 또는 PII 없는 내부 현황 집계 -> Lv0
+doc_types:
+  # ---- Lv0 ----
+  공지: { min_level: 0, category: 공개, rationale: "전사 공지, PII 없음" }
+  상품안내: { min_level: 0, category: 공개, rationale: "대외 상품 안내, PII 없음" }
+  경조사공지: { min_level: 0, category: 공개, rationale: "전사 공지 성격. 직원 가족 정보가 있어도 Lv0 유지로 결정" }
+  민원현황: { min_level: 0, category: 공개, rationale: "PII 없는 내부 현황 집계" }
+  # ---- Lv1 ----
+  회의록: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 회의. [계획서와 차이: 계획서는 Lv2 예시]" }
+  업무메일: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 소통" }
+  사내메신저: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 소통" }
+  영문혼용메일: { min_level: 1, category: 내부업무, rationale: "대외 협력 업무 메일" }
+  출장보고: { min_level: 1, category: 내부업무, rationale: "내부 업무 보고" }
+  VOC요약: { min_level: 1, category: 고객업무, rationale: "고객 의견 요약" }
+  녹취요약: { min_level: 1, category: 고객업무, rationale: "고객 통화 요약" }
+  고객편지: { min_level: 1, category: 고객업무, rationale: "고객 접수 의견" }
+  대출상담: { min_level: 1, category: 고객업무, rationale: "고객 상담 기록" }
+  민원처리: { min_level: 1, category: 고객업무, rationale: "고객 민원 처리" }
+  이상거래탐지: { min_level: 1, category: 고객업무, rationale: "고객 통화 기록" }
+  카드분실상담: { min_level: 1, category: 고객업무, rationale: "고객 상담 기록" }
+  고객정보변경: { min_level: 1, category: 고객업무, rationale: "고객 정보 처리" }
+  연체안내: { min_level: 1, category: 고객업무, rationale: "고객 통화 기록" }
+  가맹점변경: { min_level: 1, category: 고객업무, rationale: "가맹점 요청서" }
+  피해접수: { min_level: 1, category: 고객업무, rationale: "보이스피싱 피해 접수" }
+  대리인위임확인: { min_level: 1, category: 고객업무, rationale: "위임 확인서" }
+  우편반송처리: { min_level: 1, category: 고객업무, rationale: "반송 처리 기록" }
+  자동이체신청서: { min_level: 1, category: 고객업무, rationale: "고객 신청서" }
+  해외송금접수: { min_level: 1, category: 고객업무, rationale: "송금 접수 기록" }
+  한도심사결과: { min_level: 1, category: 고객업무, rationale: "고객 한도 심사 결과" }
+  카드발급심사: { min_level: 1, category: 고객업무, rationale: "고객 카드 발급 심사 메모" }
+  분쟁조정: { min_level: 1, category: 고객업무, rationale: "고객 분쟁 조정 검토 의견서" }
+  권한신청: { min_level: 1, category: 내부업무, rationale: "시스템 접근 권한 신청, 회사 운영 문서" }
+  용역계약서: { min_level: 1, category: 내부업무, rationale: "회사 용역 계약, 회사 운영 문서. [계획서와 차이: 계획서는 계약서를 Lv2 예시로 둠]" }
+  # ---- Lv2 ----
+  감사지적: { min_level: 2, category: 직원개인, rationale: "직원 대상 내부 감사 지적" }
+  법인카드소명: { min_level: 2, category: 직원개인, rationale: "직원 개인의 비용 소명" }
+  인사발령: { min_level: 2, category: 직원개인, rationale: "직원 인사 정보" }
+  채용메일: { min_level: 2, category: 직원개인, rationale: "채용 지원자 개인 정보" }
+
+# 복원 규칙: level -> label -> mode (none | full). partial(일부 복원)은 추후 논의.
+restore:
+  modes: [none, full]
+  default_mode: none          # 목록에 없는 라벨은 복원하지 않음
+  0:
+    person: none
+    phone_number: none
+    email: none
+    address: none
+    resident_registration_number: none
+    account_number: none
+    card_number: none
+  1:
+    person: none
+    phone_number: none
+    email: none
+    address: none
+    resident_registration_number: none
+    account_number: none
+    card_number: none
+  2:
+    person: full
+    phone_number: full
+    email: full
+    address: full
+    resident_registration_number: full
+    account_number: full
+    card_number: full
+
+# 감사 로그 열람 권한
+audit_log_read_min_level: 2
+
+# 팀 목록 (DB policy.teams의 초기값). 팀 코드 체계는 DEPT_<영문 대문자>
+# 팀 이름은 문서 본문에서 확인한 표기 그대로입니다(정책서 7.3절). 표기를 하나로 통일해 씁니다.
+teams:
+  DEPT_HR:          인사팀
+  DEPT_INFOSEC:     정보보호팀
+  DEPT_CUST_PROT:   고객보호팀
+  DEPT_COLLECTION:  채권관리팀
+  DEPT_CARD_OPS:    카드운영팀
+  DEPT_CREDIT:      여신심사팀
+  DEPT_RISK:        리스크관리팀
+  DEPT_CS_CENTER:   고객센터
+  DEPT_IT_OPS:      IT운영팀
+  DEPT_DIGITAL:     디지털전략팀
+
+# 사용자 레벨 규칙 (DB policy.team_level의 초기값). 근거: docs/permission_policy_draft.md 7절
+# 팀 코드(team_cd)와 직책(position) 조합으로 계정의 기본 레벨을 정합니다. 직급(grade)은 판정에 쓰지 않습니다.
+# 계정을 만들 때만 씁니다(팀·직책이 바뀌어도 자동 재계산 없음). 검색은 계정의 access_level만 봅니다.
+# - 칸을 생략하면 "모두"(DB에서는 NULL). 팀·직책 중 하나는 있어야 합니다.
+# - Lv2 규칙은 팀이 필수입니다(직책만으로 실명 열람 권한을 주지 않음).
+# - 판정: 맞는 규칙 중 더 구체적인 것(팀+직책 > 팀만 = 직책만), 같으면 낮은 레벨, 없으면 Lv0.
+# - team_cd는 위 teams의 코드여야 합니다(DB 외래키 team_level.team_cd → teams.team_cd).
+# 지금은 팀 규칙만 있습니다. 직책 규칙 예: { team_cd: DEPT_IT_OPS, position: 팀장, level: 1, rationale: "..." }
+team_levels:
+  - { team_cd: DEPT_HR,         level: 2, rationale: "인사발령·채용 문서 담당" }
+  - { team_cd: DEPT_INFOSEC,    level: 2, rationale: "개인정보 보호·권한 신청(보안 통제) 담당, 준법 역할 가정" }
+  - { team_cd: DEPT_CUST_PROT,  level: 1, rationale: "고객 민원·상담 업무" }
+  - { team_cd: DEPT_COLLECTION, level: 1, rationale: "고객 채권 업무" }
+  - { team_cd: DEPT_CARD_OPS,   level: 1, rationale: "카드 고객 업무" }
+  - { team_cd: DEPT_CREDIT,     level: 1, rationale: "고객 심사 업무" }
+  - { team_cd: DEPT_RISK,       level: 1, rationale: "고객 사고(이상거래·피해 접수) 처리" }
+  - { team_cd: DEPT_CS_CENTER,  level: 1, rationale: "상담 조직(대표 연락처 표기와 구분)" }
+  - { team_cd: DEPT_IT_OPS,     level: 0, rationale: "고객 문서가 업무에 필수 아님" }
+  - { team_cd: DEPT_DIGITAL,    level: 0, rationale: "고객 문서가 업무에 필수 아님" }

@@ -41,6 +41,8 @@ class VeilDetector(BaseDetector):
         expected = SOURCE_SHA256
         if hashlib.sha256(source.read_bytes()).hexdigest() != expected:
             raise ValueError('Veil 실행 코드가 검토한 버전과 다릅니다.')
+        from detection.moai.runtime import prepare_runtime
+        prepare_runtime()
         spec = importlib.util.spec_from_file_location('_reviewed_veil_runtime', source)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
