@@ -19,6 +19,11 @@
   chat.answer()의 state(감사 로그용 6개 값)를 UI_STATE 로 바꿔 보낸다. answered→found, search_only→nollm, 나머지→sorry
 - 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
   기록에 실패해도 답변은 그대로 돌려준다 (outputs/audit_fallback.jsonl, outputs/server_error.log 에 남김).
+- 실명 복원(Lv2 + 2차 인증): POST /api/verify-password {"password"} → 세션에 restore_verified
+        POST /api/restore-tokens {"request_id", "tokens": [...]} → {"map": {토큰: 원문}}
+  복원은 vault.restore_token()으로만 한다. 토큰마다 audit.restore_log 1행이 남고 request_id 로 query_log 와 이어진다.
+  기록에 실패하면 복원도 실패한다(화면에는 토큰 그대로). query_log 와 달리 실명이 나가는 쪽이라 기록 없는 복원은 하지 않는다.
+  DB 접속은 db.restore_conn() (지금 관리자 계정, 권한 정리 때 pii_search 로 교체).
 """
 import logging
 import re
@@ -27,6 +32,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,7 +40,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from service import audit, auth
-from starter import chat, config, pii_pipeline
+from starter import chat, config, db, pii_pipeline
 
 STATIC = Path(__file__).with_name("static")
 UI_STATE = {"answered": "found", "search_only": "nollm"}   # 그 밖의 state 는 화면에서 sorry
@@ -101,6 +107,7 @@ class VerifyPassword(BaseModel):
 
 
 class RestoreTokens(BaseModel):
+    request_id: str = Field(pattern=r"^req_[0-9]{8}_[0-9a-f]{12}$")   # /api/chat 응답의 request_id. 없거나 형식이 틀리면 422
     tokens: list[str] = Field(min_length=1, max_length=200)
 
 
@@ -168,8 +175,14 @@ def restore_tokens(body: RestoreTokens, request: Request, user: dict = Depends(l
         raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
     if not request.session.get("restore_verified"):
         raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
-    valid = [t for t in body.tokens if _TOKEN_RE.fullmatch(t)]
-    token_map = _fetch_originals(set(valid))
+    try:
+        token_map = _fetch_originals(body.tokens, body.request_id, user["user_id"])
+    except psycopg.errors.InsufficientPrivilege as exc:     # DB 함수가 레벨 2 아님으로 거절 (42501)
+        _log_restore_error(body.request_id, exc)
+        raise HTTPException(status_code=403, detail="복원 권한이 없습니다.") from None
+    except Exception as exc:                                # 기록 실패 포함: 기록 없는 복원은 하지 않는다
+        _log_restore_error(body.request_id, exc)
+        raise HTTPException(status_code=503, detail=f"복원 처리 중 오류: {type(exc).__name__}") from None
     return {"map": token_map}
 
 
@@ -189,15 +202,33 @@ def _restore_all(texts: list[str], token_map: dict[str, str]) -> list[str]:
     return [_TOKEN_RE.sub(_replace, t) if t else t for t in texts]
 
 
-def _fetch_originals(tokens: set[str]) -> dict[str, str]:
-    """vault.token_map에서 토큰 → 원문(첫 번째 표기) 매핑을 가져온다."""
-    if not tokens:
+# 복원 대상 토큰 형식. audit.restore_log 의 CHECK(token ~ '^<[A-Z_]+_[0-9a-f]+>$')와 같다.
+# 화면 치환용 _TOKEN_RE(대소문자 hex 허용)와 다르며, 형식이 다른 토큰은 DB를 부르기 전에 뺀다.
+_RESTORE_TOKEN_RE = re.compile(r"<[A-Z_]+_[0-9a-f]+>")
+_RESTORE_SQL = "SELECT t, vault.restore_token(%s, %s, t) FROM unnest(%s::text[]) AS t"
+
+
+def _fetch_originals(tokens, request_id: str, user_id: str) -> dict[str, str]:
+    """vault.restore_token()으로 토큰 → 원문(첫 번째 표기) 매핑을 가져온다.
+
+    DB 함수가 토큰마다 레벨 2 확인 → audit.restore_log 기록 → 원문 배열 반환을 한다.
+    vault.token_map 에 없는 토큰은 NULL(기록 없음)이라 결과에서 빠진다.
+    한 트랜잭션이라 하나라도 실패하면(권한 없음 42501, 기록 실패 등) 전부 롤백되고 예외가 올라간다.
+    """
+    valid = sorted({t for t in tokens if _RESTORE_TOKEN_RE.fullmatch(t)})
+    if not valid:
         return {}
-    from starter import db
-    with db.vault_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT token, originals[1] FROM vault.token_map WHERE token = ANY(%s)",
-                    (sorted(tokens),))
-        return {row[0]: row[1] for row in cur.fetchall() if row[1]}
+    with db.restore_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_RESTORE_SQL, (request_id, user_id, valid))
+            rows = cur.fetchall()
+        conn.commit()
+    return {t: orig[0] for t, orig in rows if orig and orig[0]}
+
+
+def _log_restore_error(request_id, exc):
+    """복원 실패 사실만 남긴다 (outputs/server_error.log + 터미널). 예외 메시지·토큰·원문은 남기지 않는다."""
+    audit._log_error("실명 복원 실패 request_id=%s error=%s", request_id, type(exc).__name__)
 
 
 @app.post("/api/chat")
@@ -225,7 +256,11 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
         tokens_found = set()
         for t in all_text:
             tokens_found.update(_TOKEN_RE.findall(t))
-        token_map = _fetch_originals(tokens_found)
+        try:
+            token_map = _fetch_originals(tokens_found, request_id, user["user_id"])
+        except Exception as exc:         # 복원·기록 실패 → 토큰 그대로 돌려준다 (답변은 막지 않음)
+            _log_restore_error(request_id, exc)
+            token_map = {}
         if token_map:
             results = _restore_all(all_text, token_map)
             answer_text = results[0] or answer_text
