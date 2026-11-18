@@ -181,6 +181,22 @@ def test_no_result_is_not_rechecked(fake, monkeypatch):
     assert chat.answer("질문")["recheck"] is None
 
 
+def test_clarify_rechecks_snippets_only(fake, monkeypatch):
+    fake({"김철수": "person", "후보": "person"})
+    docs = [{"doc_id": "H0001", "masked_text": "담당 김철수"}]
+    monkeypatch.setattr(chat, "search", lambda *a, **kw: (f"{TOK} 한도", [TOK], docs, dict(NO_META, ask_person=True)))
+    res = chat.answer("질문")                                   # 인물 되묻기는 문서 목록을 함께 돌려준다
+    assert res["state"] == "clarify" and res["recheck"]["labels"] == {"person": 1}   # 되묻기 문구('후보')는 안 봄
+    assert "김철수" not in res["docs"][0]["masked_text"] and "후보가 여러 명" in res["answer"]
+
+
+def test_clarify_without_docs_is_not_rechecked(fake, monkeypatch):
+    fake({"중구": "address"})
+    monkeypatch.setattr(chat, "search", lambda *a, **kw: ("중구 한도", [], [], dict(NO_META, ask_region="중구")))
+    res = chat.answer("질문")
+    assert res["state"] == "clarify" and res["recheck"] is None
+
+
 def test_recheck_error_fails_closed(fake, monkeypatch):
     monkeypatch.setattr(recheck, "_detector", Mock(side_effect=RuntimeError("model down")))
     _search(monkeypatch, [{"doc_id": "H0001", "masked_text": "담당 김철수"}])

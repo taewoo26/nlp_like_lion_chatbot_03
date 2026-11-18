@@ -2,8 +2,11 @@
 
 기준: docs/permission_schema.md ⑥ 단계, 4.1절(recheck_*). chat.answer() 가 LLM 응답 직후(실명 복원 전)에 부른다.
 
-- 대상: 결과의 answer 와 docs[*].masked_text. search_only(LLM 없음)도 포함한다 (문서 조각이 화면에 나가므로).
-  no_result·clarify 는 내보내는 문서가 없어 재검사하지 않는다 (query_log 의 recheck_* NULL).
+- 대상: 화면으로 나가는 글 = LLM 답변 + docs[*].masked_text(문서 조각). state 와 상관없이 문서가 나가면 검사한다.
+    answered·withheld : 답변 + 문서 조각
+    search_only       : 문서 조각 (LLM 답변 없음)
+    clarify           : 문서 조각만 (되묻기 문구는 시스템 고정 문장). 인물 되묻기(ask_person)는 문서를 함께 돌려준다.
+    no_result, 문서 없는 clarify : 재검사하지 않음 (query_log 의 recheck_* NULL)
 - 탐지: RECHECK_DETECTOR = split_v3(기본, 적재와 같은 탐지기) | union(재현율 우선, 같은 모델의 결과를 모두 합침).
   행정구역 이름 오탐 제거(pii_pipeline.drop_region_names)는 적재와 같다.
 - 이미 가린 구간(가명 토큰 <LABEL_hex>, [운전면허번호 비공개], [개인정보])과 겹치는 탐지는 버린다.
@@ -87,12 +90,12 @@ def find(text):
             and not (s["label"] == "address" and _region_only(text, s))]
 
 
-def check(result):
-    """chat.answer() 결과의 answer·docs 를 제자리에서 고친다.
+def check(result, check_answer=True):
+    """chat.answer() 결과의 answer·docs 를 제자리에서 고친다. check_answer=False 면 답변(시스템 문구)은 보지 않는다.
     반환: {"action", "labels", "detector"}. RECHECK=off 면 None (아무것도 바꾸지 않음)."""
     if not enabled():
         return None
-    answer_spans = find(result.get("answer"))
+    answer_spans = find(result.get("answer")) if check_answer else []
     doc_spans = [find(d.get("masked_text")) for d in result["docs"]]
     labels = Counter(s["label"] for s in answer_spans)
     for spans in doc_spans:

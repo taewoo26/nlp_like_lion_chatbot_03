@@ -7,13 +7,14 @@
 # 표의 소유자는 지금처럼 rag_user로 둔다. 기존 코드는 그대로 동작한다.
 # 아래 계정은 앱이 접속 계정을 바꿀 때부터 효과가 있다.
 #   app_ingest  적재 파이프라인   : rag·vault 쓰기 (토큰 삭제 불가)
+#   app_reset   전체 재적재      : 적재 권한 + 명시된 5개 테이블만 TRUNCATE
 #   app_search  챗봇 검색 서비스  : rag·정책 읽기, query_log 추가, 복원은 vault.restore_token()으로만
 #   app_read    읽기 전용 조회    : rag·정책 읽기 (비밀번호 해시 제외)
 #   app_admin   관리자 화면       : 정책 편집, vault·감사 로그 열람
 # 감사 로그(audit.*)는 어느 계정에도 UPDATE·DELETE를 주지 않는다.
 #
 # 비밀번호는 compose의 env_file(.env)에서 받는다. 값이 없는 계정은 로그인 없이 만든다.
-#   APP_INGEST_PASSWORD, APP_SEARCH_PASSWORD, APP_READ_PASSWORD, APP_ADMIN_PASSWORD
+#   APP_INGEST_PASSWORD, APP_RESET_PASSWORD, APP_SEARCH_PASSWORD, APP_READ_PASSWORD, APP_ADMIN_PASSWORD
 set -eo pipefail   # -u는 쓰지 않음: 실행 권한 없이 source될 때 엔트리포인트까지 영향을 줌
 
 psql -v ON_ERROR_STOP=1 --quiet \
@@ -22,11 +23,13 @@ psql -v ON_ERROR_STOP=1 --quiet \
      -v pw_ingest="${APP_INGEST_PASSWORD:-}" \
      -v pw_search="${APP_SEARCH_PASSWORD:-}" \
      -v pw_read="${APP_READ_PASSWORD:-}" \
+     -v pw_reset="${APP_RESET_PASSWORD:-}" \
      -v pw_admin="${APP_ADMIN_PASSWORD:-}" <<'EOSQL'
 
 -- 비밀번호를 세션 설정으로 넘겨 DO 블록에서 쓴다 (트랜잭션이 끝나면 사라짐)
 BEGIN;
 SELECT set_config('init.pw_ingest', :'pw_ingest', true),
+       set_config('init.pw_reset',  :'pw_reset', true),
        set_config('init.pw_search', :'pw_search', true),
        set_config('init.pw_read',   :'pw_read',   true),
        set_config('init.pw_admin',  :'pw_admin',  true) \gset
@@ -39,10 +42,12 @@ DECLARE
 BEGIN
     FOR r IN SELECT * FROM (VALUES
         ('pii_ingest', NULL,          NULL),
+        ('pii_reset',  NULL,          NULL),
         ('pii_search', NULL,          NULL),
         ('pii_read',   NULL,          NULL),
         ('pii_admin',  NULL,          NULL),
         ('app_ingest', 'pii_ingest',  'init.pw_ingest'),
+        ('app_reset',  'pii_reset',   'init.pw_reset'),
         ('app_search', 'pii_search',  'init.pw_search'),
         ('app_read',   'pii_read',    'init.pw_read'),
         ('app_admin',  'pii_admin',   'init.pw_admin')
@@ -64,7 +69,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    EXECUTE format('GRANT CONNECT ON DATABASE %I TO pii_ingest, pii_search, pii_read, pii_admin',
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO pii_ingest, pii_reset, pii_search, pii_read, pii_admin',
                    current_database());
 END
 $$;
@@ -88,6 +93,12 @@ GRANT SELECT                         ON rag.role_master        TO pii_ingest;
 GRANT SELECT, INSERT                 ON vault.token_map         TO pii_ingest;   -- 토큰은 지우지 않음
 GRANT UPDATE (originals)             ON vault.token_map         TO pii_ingest;   -- 새 표기 추가만
 GRANT SELECT, INSERT, UPDATE, DELETE ON vault.person_info, vault.person_registry TO pii_ingest;
+
+-- 전체 초기화 전용. 재적재도 같은 트랜잭션에서 수행하기 위해 적재 권한을 상속한다.
+-- 일반 적재·검색 계정은 이 역할을 상속하지 않는다. 감사·정책 표는 초기화 대상이 아니다.
+GRANT pii_ingest TO pii_reset;
+GRANT TRUNCATE ON rag.chunks, rag.look_up, vault.token_map,
+                  vault.person_info, vault.person_registry TO pii_reset;
 
 -- 4. 검색 서비스: vault 표는 직접 못 읽음
 GRANT USAGE ON SCHEMA rag, policy, audit, vault TO pii_search;

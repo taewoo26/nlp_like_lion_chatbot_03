@@ -25,11 +25,11 @@
 - 토큰 충돌 검사, 임베딩, DB 저장, 체크포인트는 이 프로세스에서 문서·배치 순서대로 하므로 결과는 --workers 1 과 같습니다.
 - 워커마다 탐지 모델을 따로 읽으므로 메모리를 N배 가까이 씁니다. 기본값은 1 (병렬 없음).
 
-인물 사전 (PERSON_DICT=on, 기본 off = 지금과 같음)
-- 이름 토큰을 사람 단위 토큰으로 바꿉니다. 같은 사람인지는 문서 전체를 봐야 알 수 있으므로
-  --reset 전체 적재에서만 켤 수 있습니다 (사람 번호가 실행마다 새로 만들어짐).
-- 순서: 전체 문서 탐지·가명처리(--workers 사용) → 인물 사전 만들기 → 토큰 교체 → 청크·메타데이터 → 저장.
-- vault 저장 순서는 외래키 때문에 person_registry → token_map(person_id) → identifier·merge_log 입니다.
+인물 사전 (PERSON_DICT=on)
+- person_candidates → person_resolve → person_info / person_registry / look_up 순서로 연결합니다.
+- 이름 HMAC과 본문은 유지합니다. 전용 INGEST_DSN으로 한 트랜잭션에 저장합니다.
+- 새 문서는 증분 적재합니다. 기존 문서 전체 교체는 --reset을 사용하며 --resume은 지원하지 않습니다.
+- PERSON_DICT=off --reset은 RESET_DSN(app_reset) 한 연결에서 관련 5개 테이블을 초기화·재적재합니다.
 
 한계 (후속 과제)
 - 수정된 문서만 골라 다시 넣는 기능은 없습니다. --resume 없이 실행하면 지금처럼 전체를 다시 처리합니다.
@@ -44,7 +44,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import address, config, db, person_dict, pii_pipeline
+from . import address, config, db, pii_pipeline
 from .embed import embed
 from .person_role_mapping import persons_by_chunk
 from .roles import load_rules
@@ -88,33 +88,19 @@ def collect_mapping(mapping, record):
     current['originals'].add(record['original'])
 
 
-def save_mappings(cur, mapping, person_ids=None):
-    """person_ids={토큰: person_id} 를 주면 확정 인물 토큰에 person_id 도 넣는다 (03_person_dict.sql 열)."""
+def save_mappings(cur, mapping):
+    """이름 토큰은 인물 ID와 분리해 기존 HMAC 그대로 저장한다."""
     for token, value in mapping.items():
-        if person_ids is None:
-            cur.execute(
-                """INSERT INTO vault.token_map (token, label, normalized, originals)
-                   VALUES (%s, %s, %s, %s)
-                   ON CONFLICT (token) DO UPDATE SET originals =
-                       ARRAY(SELECT DISTINCT unnest(vault.token_map.originals || EXCLUDED.originals))
-                   WHERE vault.token_map.label = EXCLUDED.label
-                     AND vault.token_map.normalized = EXCLUDED.normalized
-                   RETURNING token""",
-                (token, value['label'], value['normalized'], sorted(value['originals'])),
-            )
-        else:
-            cur.execute(
-                """INSERT INTO vault.token_map (token, label, normalized, originals, person_id)
-                   VALUES (%s, %s, %s, %s, %s)
-                   ON CONFLICT (token) DO UPDATE SET originals =
-                       ARRAY(SELECT DISTINCT unnest(vault.token_map.originals || EXCLUDED.originals)),
-                       person_id = COALESCE(EXCLUDED.person_id, vault.token_map.person_id)
-                   WHERE vault.token_map.label = EXCLUDED.label
-                     AND vault.token_map.normalized = EXCLUDED.normalized
-                   RETURNING token""",
-                (token, value['label'], value['normalized'], sorted(value['originals']),
-                 person_ids.get(token)),
-            )
+        cur.execute(
+            """INSERT INTO vault.token_map (token, label, normalized, originals)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (token) DO UPDATE SET originals =
+                   ARRAY(SELECT DISTINCT unnest(vault.token_map.originals || EXCLUDED.originals))
+               WHERE vault.token_map.label = EXCLUDED.label
+                 AND vault.token_map.normalized = EXCLUDED.normalized
+               RETURNING token""",
+            (token, value['label'], value['normalized'], sorted(value['originals'])),
+        )
         if cur.fetchone() is None:
             raise ValueError('기존 Vault 매핑과 토큰 충돌')
 
@@ -219,15 +205,12 @@ def detect_doc(d):
     return spans, masked, records
 
 
-def process_doc(d, max_chars, region_on, role_on, rules, detected=None, mentions=None):
+def process_doc(d, max_chars, region_on, role_on, rules, detected=None):
     """문서 1건: 탐지 → 가명처리 → 청크 → 메타데이터. 다른 문서와 공유하는 상태가 없어 워커에서 돌려도 된다.
 
-    인물 사전을 켜면 detected(이미 탐지한 결과)와 mentions(사람 토큰)를 받아
-    이름 토큰을 사람 토큰으로 바꾼 뒤 청크·메타데이터를 만든다.
+    detected가 있으면 탐지 결과를 재사용하며 이름 토큰은 그대로 유지한다.
     """
     spans, masked, records = detected or detect_doc(d)
-    if mentions is not None:
-        masked, records = person_dict.retokenize(masked, records, mentions, d["id"])
     parts = chunk(masked, max_chars)
     regions = doc_regions(d["text"], spans) if region_on else []
     persons = (persons_by_chunk(d["id"], d["text"], masked, records, parts, rules,
@@ -244,7 +227,7 @@ def process_doc(d, max_chars, region_on, role_on, rules, detected=None, mentions
                      "regions": regions})
     pseudo = {"id": d["id"], "entities": [
         {k: r[k] for k in ("label", "start", "end", "token")} for r in records]}
-    return {"id": d["id"], "rows": rows, "records": records, "pseudo": pseudo}
+    return {"id": d["id"], "rows": rows, "records": records, "pseudo": pseudo, "masked_text": masked}
 
 
 # 워커 프로세스 상태: 프로세스마다 한 번 만들고 문서마다 다시 만들지 않는다
@@ -280,27 +263,11 @@ def make_pool(workers, a, region_on, role_on, rules):
         workers, initializer=_init_worker, initargs=(a.max_chars, region_on, role_on, rules))
 
 
-def build_person_dict(docs, rules, pool=None):
-    """인물 사전: 전체 문서를 탐지·가명처리한 뒤(워커 사용 가능) 사전을 만든다.
-    반환: (사전, {doc_id: 탐지 결과})  탐지 결과는 prepare 에서 다시 탐지하지 않도록 넘긴다."""
-    found = pool.map(_worker_detect, docs, chunksize=1) if pool is not None else [detect_doc(d) for d in docs]
-    detected = {d["id"]: f for d, f in zip(docs, found)}
-    id_values = {r["token"]: r["normalized"] for _, _, records in found for r in records
-                 if r["label"] in person_dict.STRONG_LABELS}
-    dictionary = person_dict.build_dictionary(
-        [{"id": d["id"], "text": d["text"], "spans": detected[d["id"]][0]} for d in docs], rules, id_values)
-    return dictionary, detected
-
-
-def prepare(docs, a, region_on, role_on, rules, pool=None, person=None):
+def prepare(docs, a, region_on, role_on, rules, pool=None):
     """배치 문서의 탐지 → 가명처리 → 청크 → 메타데이터. pool 이 있으면 문서를 워커에 나눠 맡기고,
     결과는 항상 문서 순서대로 받아 토큰 충돌 검사·조립은 이 프로세스에서 순서대로 한다.
-    person=(사전, 탐지 결과) 이면 탐지는 이미 끝났으므로 토큰 교체·청크만 이 프로세스에서 한다."""
-    if person is not None:
-        dictionary, detected = person
-        results = [process_doc(d, a.max_chars, region_on, role_on, rules, detected[d["id"]], dictionary["mentions"])
-                   for d in docs]
-    elif pool is None:
+    """
+    if pool is None:
         results = [process_doc(d, a.max_chars, region_on, role_on, rules) for d in docs]
     else:
         results = pool.map(_worker_process, docs, chunksize=1)
@@ -314,34 +281,6 @@ def prepare(docs, a, region_on, role_on, rules, pool=None, person=None):
     return rows, mapping, pseudo, counts
 
 
-def save_person_dict(vault_cur, rows):
-    """vault 인물 사전: registry·alias. token_map 이 person_id 로 registry 를 가리키므로 token_map 보다 먼저."""
-    vault_cur.executemany(
-        """INSERT INTO vault.person_registry (person_id, status, gender)
-           VALUES (%(person_id)s, %(status)s, %(gender)s)""", rows["registry"])
-    vault_cur.executemany(
-        """INSERT INTO vault.person_alias (name_hmac, person_id, kind, rule_id)
-           VALUES (%(name_hmac)s, %(person_id)s, %(kind)s, %(rule_id)s)""", rows["aliases"])
-
-
-def save_person_links(vault_cur, rows):
-    """vault 인물 사전: identifier·merge_log. identifier 가 token_map 토큰을 가리키므로 token_map 다음에."""
-    vault_cur.executemany(
-        """INSERT INTO vault.person_identifier (id_token, person_id, first_doc_id, linkable)
-           VALUES (%(id_token)s, %(person_id)s, %(first_doc_id)s, %(linkable)s)""", rows["identifiers"])
-    vault_cur.executemany(
-        """INSERT INTO vault.person_merge_log (action, to_person_id, from_token, to_token, mentions, rule_id)
-           VALUES (%(action)s, %(to_person_id)s, %(from_token)s, %(to_token)s, %(mentions)s::jsonb, %(rule_id)s)""",
-        [r | {"mentions": json.dumps(r["mentions"], ensure_ascii=False)} for r in rows["logs"]])
-
-
-def save_lookup(cur, rows):
-    """rag.person_lookup: 이름 HMAC → 후보 토큰 (검색 계정이 쓰는 유일한 인물 표)."""
-    cur.executemany(
-        """INSERT INTO rag.person_lookup (name_hmac, token, status, roles, doc_count)
-           VALUES (%(name_hmac)s, %(token)s, %(status)s, %(roles)s, %(doc_count)s)""", rows)
-
-
 INSERT_SQL = """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, masked_text, tokens, embedding,
                                        persons, regions)
                VALUES (%(chunk_id)s, %(doc_id)s, %(chunk_idx)s, %(doc_type)s, %(masked_text)s, %(tokens)s,
@@ -351,11 +290,36 @@ INSERT_SQL = """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, m
                    persons = EXCLUDED.persons, regions = EXCLUDED.regions"""
 
 
+def reset_and_ingest(docs, args, rules, pseudo_path):
+    """전체 초기화와 재적재를 한 연결에서 커밋한다. 실패하면 초기화도 롤백된다."""
+    from .person_ingest import lock_resolution
+    region_on, role_on = config.meta_on('REGION_META'), config.meta_on('ROLE_META')
+    pool = make_pool(args.workers, args, region_on, role_on, rules)
+    try:
+        rows, mapping, pseudo, _ = prepare(docs, args, region_on, role_on, rules, pool)
+        vectors = embed([pii_pipeline.embedding_text(r['masked_text']) for r in rows]) if rows else []
+        if len(vectors) != len(rows):
+            raise ValueError('임베딩 개수가 청크 개수와 다릅니다.')
+        with db.reset_conn() as conn, conn.cursor() as cur:
+            lock_resolution(cur)
+            cur.execute("SET LOCAL lock_timeout = '10s'")
+            cur.execute('''TRUNCATE TABLE rag.look_up, rag.chunks,
+                           vault.person_info, vault.person_registry, vault.token_map''')
+            cur.executemany(INSERT_SQL, [r | {'embedding': v} for r, v in zip(rows, vectors)])
+            save_mappings(cur, mapping)
+    finally:
+        if pool is not None:
+            pool.terminate()
+            pool.join()
+    write_pseudo(pseudo_path, pseudo)
+    print(f'전체 재적재 완료: 문서 {len(docs)}건, 청크 {len(rows)}개 (초기화와 적재를 함께 커밋)')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(config.DATA_DIR / "holdout_labeled.jsonl"))
     ap.add_argument("--reset", action="store_true",
-                    help="기존 rag.chunks / vault.token_map 비우고 시작 (한 트랜잭션, 배치 커밋 안 함)")
+                    help="전체 재적재. off: RESET_DSN으로 토큰·인물사전 포함 초기화 / on: 토큰 매핑 보존")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--max-chars", type=int, default=600)
     ap.add_argument("--batch-size", type=int, default=int(config.env("INGEST_BATCH", "30")),
@@ -384,12 +348,20 @@ def main():
 
     region_on, role_on = config.meta_on("REGION_META"), config.meta_on("ROLE_META")
     dict_on = config.meta_on("PERSON_DICT")
-    if dict_on and not a.reset:
-        raise SystemExit("PERSON_DICT=on 은 지금은 --reset 전체 적재만 지원합니다.")
+    if dict_on:
+        from .person_ingest import run
+        run(docs, a, pseudo_path)
+        return
     rules = None
     if role_on or dict_on:
         with db.rag_conn() as conn, conn.cursor() as cur:
             rules = load_rules(cur)
+
+    if a.reset:
+        reset_and_ingest(docs, a, rules, pseudo_path)
+        part_path.unlink(missing_ok=True)
+        ckpt_path.unlink(missing_ok=True)
+        return
 
     settings = run_settings(a, region_on, role_on)
     done = {}
@@ -424,19 +396,12 @@ def main():
     batches = [todo[i:i + size] for i in range(0, len(todo), size)]
     t_mask = t_embed = 0.0
     n_chunks, tokens_seen, n_batches = 0, set(), 0
-    person, dictionary = None, None
 
     pool = make_pool(a.workers if batches else 1, a, region_on, role_on, rules)
     try:
         # 첫 배치는 DB 를 열기 전에 준비한다: 문서 간 토큰 충돌이면 임베딩·DB 전에 멈춘다 (기존 동작)
         t0 = time.perf_counter()
-        if dict_on and batches:             # 인물 사전: 전체 문서를 먼저 탐지해야 같은 사람인지 정할 수 있다
-            person = build_person_dict(todo, rules, pool)
-            dictionary = person[0]
-        if person is None:
-            first = prepare(batches[0], a, region_on, role_on, rules, pool) if batches else None
-        else:
-            first = prepare(batches[0], a, region_on, role_on, rules, pool, person)
+        first = prepare(batches[0], a, region_on, role_on, rules, pool) if batches else None
         t_mask += time.perf_counter() - t0
 
         if batches:
@@ -450,9 +415,7 @@ def main():
                             rows, mapping, pseudo, counts = first
                         else:
                             t0 = time.perf_counter()
-                            rows, mapping, pseudo, counts = (
-                                prepare(batch, a, region_on, role_on, rules, pool) if person is None
-                                else prepare(batch, a, region_on, role_on, rules, pool, person))
+                            rows, mapping, pseudo, counts = prepare(batch, a, region_on, role_on, rules, pool)
                             t_mask += time.perf_counter() - t0
 
                         t1 = time.perf_counter()
@@ -460,24 +423,8 @@ def main():
                         vecs = embed([pii_pipeline.embedding_text(r["masked_text"]) for r in rows])
                         t_embed += time.perf_counter() - t1
 
-                        if a.reset:
-                            rag_cur.execute("TRUNCATE rag.chunks, rag.person_lookup CASCADE")
                         rag_cur.executemany(INSERT_SQL, [r | {"embedding": v} for r, v in zip(rows, vecs)])
-                        if dictionary:
-                            save_lookup(rag_cur, person_dict.lookup_rows(dictionary))
-                        if a.reset:
-                            # 인물 사전 표가 token_map 을 외래키로 가리키므로 함께 비운다 (03_person_dict.sql)
-                            vault_cur.execute("TRUNCATE vault.token_map, vault.person_identifier, vault.person_alias, "
-                                              "vault.person_merge_log, vault.person_registry CASCADE")
-                        if dictionary:
-                            person_rows = person_dict.vault_rows(dictionary)
-                            save_person_dict(vault_cur, person_rows)
-                            save_mappings(vault_cur, mapping,
-                                          {p["token"]: p["person_id"] for p in dictionary["persons"]
-                                           if p["status"] == "confirmed"})
-                            save_person_links(vault_cur, person_rows)
-                        else:
-                            save_mappings(vault_cur, mapping)
+                        save_mappings(vault_cur, mapping)
                         vault.commit()       # 1) vault 먼저
                         rag.commit()         # 2) 그다음 rag
                         append_pseudo(part_path, pseudo)                                      # 3) pseudo 줄
@@ -506,10 +453,6 @@ def main():
     if todo:
         print(f"탐지+가명처리 {t_mask * 1000 / len(todo):.1f} ms/문서 (워커 {a.workers}개), "
               f"임베딩 {t_embed * 1000 / len(todo):.1f} ms/문서 ({config.EMBED_PROVIDER})")
-    if dictionary:
-        confirmed = sum(1 for p in dictionary["persons"] if p["status"] == "confirmed")
-        print(f"인물 사전: 인물 {len(dictionary['persons'])}명 (확정 {confirmed}, 임시 "
-              f"{len(dictionary['persons']) - confirmed}), 공유 식별자 {len(dictionary['unlinkable'])}개")
     print(f"가명처리 결과: {pseudo_path}")
 
 
