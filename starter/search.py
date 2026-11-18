@@ -31,16 +31,17 @@
                    남은 문서의 순서는 기존 점수 그대로 (등급 1·2로 순서를 바꾸면 같은 사람의
                    다른 문서가 올라와 이름 질문 점수가 떨어졌다: holdout 6문항)
 
-인물 사전 (PERSON_DICT=on, 기본 off. SEARCH_MODE=and 경로에만 적용)
-  질문 속 이름 → rag.person_lookup 에서 그 이름의 후보 토큰(확정 인물 토큰 + 임시 이름 토큰)을 찾는다.
-  같은 이름의 후보 토큰은 '하나라도' 가진 문서를 통과시키고, 서로 다른 조건끼리는 지금처럼 '모두' 만족.
-  동명이인이면 후보가 여러 개라 두 사람 문서가 함께 나오고, ROLE_META=on 이면 역할이 다른 쪽이 빠진다.
-  vault 는 보지 않는다 (person_lookup 에는 이름 HMAC·토큰·역할·문서 수만 있다).
+인물 사전 (PERSON_DICT=on)
+  이름·역할 검색은 rag.look_up에서 미확정 후보도 포함한다 (설계서 7.4, 8.1).
+  특정 개인의 전체 문서는 명시적인 reg_id로 검색한다. 이름만으로 범위를 확장하지 않는다.
+  후보가 여러 명이어도 검색 결과는 유지하며, 동일인으로 단정하는 답변은 보류한다.
+  등록된 청크가 없으면 빈 결과를 반환한다. vault는 조회하지 않는다.
+
 """
 import argparse
 import re
 
-from . import address, config, db, person_dict, pii_pipeline
+from . import address, config, db, pii_pipeline
 from .embed import embed
 from .roles import load_rules, query_name_roles, query_roles
 
@@ -57,42 +58,44 @@ def mask_query(query, with_records=False):
     return (masked, tokens, records) if with_records else (masked, tokens)
 
 
-def person_candidates(cur, records):
-    """질문 속 이름 토큰 → 같은 이름의 후보 토큰 묶음 {질문 토큰: [후보 토큰]} (PERSON_DICT=on).
-
-    후보에는 질문 토큰(= 임시 인물 이름 토큰)도 항상 넣는다. 사전에 없는 이름이면 지금과 같다.
-    """
+def person_candidates(cur, records, roles=(), meta=None):
+    """이름 토큰 → 검색 가능한 chunk_id 목록. 빈 후보는 이름 토큰 검색으로 대체하지 않는다."""
     out = {}
     for r in records:
-        if r["label"] != "person" or r["token"] in out:
+        token = r['token']
+        if r['label'] != 'person' or token in out:
             continue
-        cur.execute("SELECT token FROM rag.person_lookup WHERE name_hmac = %s ORDER BY token",
-                    (person_dict.name_hmac(r["normalized"]),))
-        out[r["token"]] = sorted({r["token"]} | {row[0] for row in cur.fetchall()})
+        cur.execute("""SELECT DISTINCT COALESCE(reg_id, person_id), chunk_id
+            FROM rag.look_up
+            WHERE token = %s AND (%s::text[] = '{}' OR role = ANY(%s::text[]))
+            ORDER BY 1, 2""", (token, list(roles), list(roles)))
+        rows = cur.fetchall()
+        identities = {row[0] for row in rows}
+        if meta is not None:
+            meta['person_candidates'][token] = len(identities)
+            if len(identities) > 1:
+                meta['ask_person'] = True
+        out[token] = sorted({row[1] for row in rows})
     return out
 
 
 def token_conditions(q_tokens, candidates):
-    """문서 통과 조건: 질문 토큰마다 '그 토큰(또는 같은 이름 후보 중 하나)을 가진 청크가 같은 문서에 있다'.
-
-    반환: (WHERE 조각 목록, 파라미터 목록). 후보가 없으면 실전 2와 같은 '모두 포함' 조건 하나.
-    """
-    if not any(len(candidates.get(t, [t])) > 1 for t in q_tokens):
+    """인물은 연결표에서 얻은 실제 청크, 그 외 토큰은 같은 문서 내 존재로 제한한다."""
+    if not candidates:
         return ["""NOT EXISTS (
-                        SELECT 1 FROM unnest(%s::text[]) AS q(token)
-                        WHERE NOT EXISTS (
-                            SELECT 1 FROM rag.chunks AS matched
-                            WHERE matched.doc_id = chunks.doc_id
-                              AND matched.tokens @> ARRAY[q.token]
-                        )
-                    )"""], [list(q_tokens)]
+            SELECT 1 FROM unnest(%s::text[]) AS q(token)
+            WHERE NOT EXISTS (SELECT 1 FROM rag.chunks AS matched
+                WHERE matched.doc_id = chunks.doc_id AND matched.tokens @> ARRAY[q.token])
+        )"""], [list(q_tokens)]
     where, params = [], []
-    for t in q_tokens:
-        where.append("""EXISTS (
-                        SELECT 1 FROM rag.chunks AS matched
-                        WHERE matched.doc_id = chunks.doc_id AND matched.tokens && %s::text[]
-                    )""")
-        params.append(candidates.get(t, [t]))
+    for token in q_tokens:
+        if token in candidates:
+            where.append('chunks.chunk_id = ANY(%s::text[])')
+            params.append(candidates[token])
+        else:
+            where.append("""EXISTS (SELECT 1 FROM rag.chunks AS matched
+                         WHERE matched.doc_id = chunks.doc_id AND matched.tokens @> %s::text[])""")
+            params.append([token])
     return where, params
 
 
@@ -136,15 +139,17 @@ def _doc_persons(cur, doc_ids):
     return out
 
 
-def search(query, k=10, conn=None, with_meta=False):
+def search(query, k=10, conn=None, with_meta=False, reg_id=None):
     dict_on = config.meta_on("PERSON_DICT")
+    if reg_id and not dict_on:
+        raise ValueError("reg_id 검색은 PERSON_DICT=on에서 사용하세요.")
     if dict_on:
         masked_q, q_tokens, q_records = mask_query(query, with_records=True)
     else:
         masked_q, q_tokens = mask_query(query)
         q_records = []
     try:
-        return _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records)
+        return _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id)
     except Exception as exc:
         tag_masked(exc, masked_q, q_tokens)
         raise
@@ -159,8 +164,9 @@ def tag_masked(exc, masked_q, q_tokens):
             pass
 
 
-def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records):
-    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {}}
+def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None):
+    meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {},
+            "ask_person": False, "person_scope": "registry" if reg_id else "name_role"}
     if config.meta_on("REGION_META"):
         meta["regions"], meta["ask_region"] = address.query_regions(query)
         if meta["ask_region"]:                  # '중구 고객' → 검색하지 않고 되묻기 (REG-33)
@@ -169,6 +175,8 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
     person_tokens = [t for t in q_tokens if t.startswith("<PERSON_")]
     vec = embed([pii_pipeline.embedding_text(masked_q)], kind="query")[0]
     mode = _mode()
+    if dict_on and mode == "boost":
+        raise ValueError("PERSON_DICT=on은 인물 조건을 유지하기 위해 SEARCH_MODE=and만 지원합니다.")
     own = conn is None
     conn = conn or db.rag_conn()
     try:
@@ -177,17 +185,36 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 docs = rerank_top(masked_q, _search_boost(cur, vec, q_tokens, k))
                 return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
             wanted, groups = set(), {}
-            if config.meta_on("ROLE_META") and (len(person_tokens) == 1 or (not person_tokens and regions)):
+            if (dict_on or config.meta_on("ROLE_META")) and (len(person_tokens) == 1 or (not person_tokens and regions)):
                 rules = _rules(cur)
                 groups = rules.role_group
                 wanted = (query_name_roles(masked_q, person_tokens[0], rules) if person_tokens
                           else query_roles(query, rules))
             meta["roles"] = sorted(wanted)
-            candidates = person_candidates(cur, q_records) if dict_on else {}
-            meta["person_candidates"] = {t: len(c) for t, c in candidates.items()}
-            allowed = {c for t in person_tokens for c in candidates.get(t, [t])}
+            candidate_roles = {role for role, group in groups.items()
+                               if role in wanted or (group and group != 'unknown' and group in {groups.get(w) for w in wanted})}
+            selected_chunks = None
+            if reg_id:
+                # 7.4: 명시적으로 선택한 확정 인물은 문서별 역할과 무관하게 조회한다.
+                if len(person_tokens) > 1:
+                    raise ValueError("reg_id 검색에는 이름을 하나만 지정하세요.")
+                cur.execute("SELECT DISTINCT chunk_id FROM rag.look_up WHERE reg_id = %s", (reg_id,))
+                selected_chunks = sorted({row[0] for row in cur.fetchall()})
+                candidates = {token: selected_chunks for token in person_tokens}
+                meta['person_candidates'] = {token: int(bool(selected_chunks)) for token in person_tokens}
+                if not selected_chunks:
+                    return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
+            else:
+                candidates = person_candidates(cur, q_records, candidate_roles, meta) if dict_on else {}
+            # 후보가 없을 때만 종료한다. 여러 후보의 검색 결과는 유지하고 답변 단계에서 보류한다.
+            if dict_on and any(not c for c in candidates.values()):
+                return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
+            allowed = set(person_tokens)
             pool = max(k * 3, ROLE_POOL) if wanted else k * 3
             where, params = [], [vec]
+            if selected_chunks is not None:
+                where.append('chunks.chunk_id = ANY(%s::text[])')
+                params.append(selected_chunks)
             if q_tokens:
                 # 토큰 후보를 먼저 확정(MATERIALIZED)한 뒤 그 안에서만 거리 순으로 정렬한다.
                 # 필터를 바깥 쿼리에 두면 k가 작을 때 DB가 HNSW 근사 인덱스를 골라
@@ -215,7 +242,7 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
             params.append(pool)
             cur.execute(sql, tuple(params))
             hits = cur.fetchall()
-            persons = _doc_persons(cur, sorted({h[0] for h in hits})) if wanted else {}
+            persons = _doc_persons(cur, sorted({h[0] for h in hits})) if wanted and not reg_id and (not dict_on or not person_tokens) else {}
     finally:
         if own:
             conn.close()
@@ -225,7 +252,7 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
             best[doc_id] = {"doc_id": doc_id, "chunk_id": chunk_id, "masked_text": text,
                             "tokens": tokens, "score": 1 - float(dist)}
     docs = list(best.values())
-    if wanted:
+    if wanted and not reg_id and (not dict_on or not person_tokens):
         # 모순(3) 문서는 k개로 자르기 전에 뺀다. 남은 문서는 기존 순서(거리 → 재정렬) 그대로.
         kept = []
         for d in docs:
@@ -310,11 +337,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("query")
     ap.add_argument("-k", type=int, default=5)
+    ap.add_argument("--reg-id", help="선택한 확정 인물의 전체 문서 검색 (이름·역할 조건 검색과 구분)")
     a = ap.parse_args()
-    masked_q, q_tokens, docs, meta = search(a.query, a.k, with_meta=True)
+    masked_q, q_tokens, docs, meta = search(a.query, a.k, with_meta=True, reg_id=a.reg_id)
     print(f"질의(가명처리): {masked_q}\n질의 토큰: {q_tokens or '없음'}")
     print(f"지역 조건: {meta['regions'] or '없음'}  역할 조건: {meta['roles'] or '없음'}  "
-          f"역할이 달라 제외: {meta['excluded']}건  이름 후보 토큰 수: {meta['person_candidates'] or '없음'}\n")
+          f"역할이 달라 제외: {meta['excluded']}건  인물 후보 수: {meta['person_candidates'] or '없음'}\n")
+    if meta.get("ask_person"):
+        print("조건에 맞는 문서는 찾았지만 동일인 여부가 불분명한 후보가 여러 명입니다. 답변하려면 추가 단서가 필요합니다.")
     if meta["ask_region"]:
         print(f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요.")
     for i, d in enumerate(docs, 1):

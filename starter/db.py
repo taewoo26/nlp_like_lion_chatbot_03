@@ -25,6 +25,26 @@ def vault_conn():
     return psycopg.connect(config.VAULT_DSN, autocommit=False)
 
 
+def ingest_conn():
+    """rag·vault를 함께 갱신할 전용 연결. 두 스키마의 쓰기 권한이 필요하다."""
+    dsn = config.env("INGEST_DSN")
+    if not dsn:
+        raise ValueError("PERSON_DICT=on 적재에는 INGEST_DSN을 설정하세요 (app_ingest 계정).")
+    conn = psycopg.connect(dsn, autocommit=False)
+    register_vector(conn)
+    return conn
+
+
+def reset_conn():
+    """전체 초기화·재적재 전용 계정. 일반 검색/적재 계정에 TRUNCATE를 부여하지 않는다."""
+    dsn = config.env('RESET_DSN')
+    if not dsn:
+        raise ValueError('PERSON_DICT=off --reset에는 RESET_DSN을 설정하세요 (app_reset 계정).')
+    conn = psycopg.connect(dsn, autocommit=False)
+    register_vector(conn)
+    return conn
+
+
 def auth_conn():
     return psycopg.connect(config.AUTH_DSN, autocommit=False)
 

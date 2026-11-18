@@ -13,7 +13,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-pii_rag}
       RAG_PASSWORD: ${RAG_PASSWORD:?set RAG_PASSWORD in .env}
       VAULT_PASSWORD: ${VAULT_PASSWORD:?set VAULT_PASSWORD in .env}
-      EMBED_DIM: ${EMBED_DIM:-1536}
+      EMBED_DIM: ${EMBED_DIM:-384}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:

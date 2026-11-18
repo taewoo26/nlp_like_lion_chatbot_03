@@ -1,57 +1,100 @@
-"""검색 단계 인물 사전 연결 (PERSON_DICT=on): 이름 → rag.person_lookup 후보 토큰."""
-import pytest
-
-from starter import person_dict as pd
-from starter import pii_pipeline as pii
+"""새 look_up 검색: 미확정 후보도 이름·역할 검색에 포함하고 동일인으로 합치지 않는다."""
 from starter.search import person_candidates, token_conditions
 
-NAME = "<PERSON_aaaaaaaaaaaa>"
-STAFF = "<PERSON_bbbbbbbbbbbb>"
-PHONE = "<PHONE_NUMBER_cccccccccccc>"
+NAME = '<PERSON_aaaaaaaaaaaa>'
+PHONE = '<PHONE_NUMBER_cccccccccccc>'
 
 
-@pytest.fixture(autouse=True)
-def synthetic_key(monkeypatch):
-    monkeypatch.setattr(pii.config, "HMAC_KEY", "person-search-test-key-not-for-production")
-    pii._key.cache_clear()
-    yield
-    pii._key.cache_clear()
-
-
-class FakeCursor:
-    """rag.person_lookup 만 흉내 낸다. 받은 SQL·파라미터를 기록한다."""
-
-    def __init__(self, table):
-        self.table, self.calls, self.rows = table, [], []
+class Cursor:
+    def __init__(self, rows):
+        self.rows, self.calls = rows, []
 
     def execute(self, sql, params):
         self.calls.append((sql, params))
-        self.rows = [(t,) for t in self.table.get(params[0], [])]
 
     def fetchall(self):
         return self.rows
 
 
-def test_candidates_include_query_token_and_lookup_tokens():
-    cur = FakeCursor({pd.name_hmac("김민준"): [STAFF, NAME]})
-    records = [{"label": "person", "token": NAME, "normalized": "김민준"},
-               {"label": "phone_number", "token": PHONE, "normalized": "01000011001"}]
-    assert person_candidates(cur, records) == {NAME: sorted([NAME, STAFF])}
-    assert len(cur.calls) == 1                                          # 전화번호는 조회하지 않음
-    assert "김민준" not in str(cur.calls)                               # 원문 이름은 DB로 보내지 않음
+def records():
+    return [{'label': 'person', 'token': NAME, 'normalized': '김민준'},
+            {'label': 'phone_number', 'token': PHONE, 'normalized': '01000011001'}]
 
 
-def test_unknown_name_keeps_only_query_token():
-    assert person_candidates(FakeCursor({}), [{"label": "person", "token": NAME, "normalized": "박서준"}]) == \
-        {NAME: [NAME]}
+def test_name_role_lookup_returns_matching_chunks_without_plaintext():
+    cur = Cursor([('reg_a', 'A#0'), ('reg_a', 'B#0')])
+    assert person_candidates(cur, records()) == {NAME: ['A#0', 'B#0']}
+    assert len(cur.calls) == 1 and '김민준' not in str(cur.calls)
+    assert 'rag.look_up' in cur.calls[0][0] and 'vault.' not in cur.calls[0][0]
 
 
-def test_without_candidates_condition_is_todays_and_filter():
-    where, params = token_conditions([NAME, PHONE], {NAME: [NAME]})
-    assert len(where) == 1 and "@> ARRAY[q.token]" in where[0] and params == [[NAME, PHONE]]
+def test_unknown_name_has_no_fallback():
+    assert person_candidates(Cursor([]), records()) == {NAME: []}
+    where, params = token_conditions([NAME], {NAME: []})
+    assert params == [[]] and 'chunk_id' in where[0]
 
 
-def test_candidates_become_or_within_name_and_across_conditions():
-    where, params = token_conditions([NAME, PHONE], {NAME: [NAME, STAFF]})
-    assert len(where) == 2 and all("&&" in w for w in where)
-    assert params == [[NAME, STAFF], [PHONE]]
+def test_distinct_unresolved_candidates_request_clarification():
+    meta = {'person_candidates': {}, 'ask_person': False}
+    assert person_candidates(Cursor([('tmp_a', 'A#0'), ('tmp_b', 'B#0')]), records(), meta=meta) == {NAME: ['A#0', 'B#0']}
+    assert meta['ask_person'] and meta['person_candidates'][NAME] == 2
+
+
+def test_name_filters_actual_chunks_and_phone_filters_document():
+    where, params = token_conditions([NAME, PHONE], {NAME: ['A#0']})
+    assert 'chunks.chunk_id' in where[0] and 'matched.doc_id = chunks.doc_id' in where[1]
+    assert params == [['A#0'], [PHONE]]
+
+
+def test_lookup_does_not_expand_to_other_name_tokens():
+    cur = Cursor([('reg_a', 'A#0')])
+    person_candidates(cur, records(), roles=['customer'])
+    sql, args = cur.calls[0]
+    assert 'JOIN' not in sql and 'token = %s' in sql
+    assert args == (NAME, ['customer'], ['customer'])
+
+
+def fake_search(monkeypatch, results):
+    from starter import search as module
+    from unittest.mock import MagicMock
+    monkeypatch.setenv('PERSON_DICT', 'on')
+    monkeypatch.setenv('SEARCH_MODE', 'and')
+    monkeypatch.setenv('RERANK_TOP', '0')
+    monkeypatch.setattr(module, 'mask_query', lambda *a, **kw: (NAME, [NAME], records()[:1]))
+    monkeypatch.setattr(module, 'embed', lambda *a, **kw: [[1., 0., 0.]])
+    from starter.roles import default_rules
+    monkeypatch.setattr(module, '_rules', lambda cur: default_rules())
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchall.side_effect = results
+    return module, conn, cur
+
+
+def test_search_keeps_documents_for_multiple_unresolved_candidates(monkeypatch):
+    module, conn, cur = fake_search(monkeypatch, [
+        [('tmp_a', 'A#0'), ('tmp_b', 'B#0')],
+        [('A', 'A#0', NAME, [NAME], 0.1), ('B', 'B#0', NAME, [NAME], 0.2)],
+    ])
+    _, _, docs, meta = module.search('가명 질문', conn=conn, with_meta=True)
+    assert [d['doc_id'] for d in docs] == ['A', 'B']
+    assert meta['ask_person'] and meta['person_candidates'][NAME] == 2
+    assert cur.execute.call_count == 2  # 후보가 여러 명이어도 벡터 검색 실행
+
+
+def test_search_does_not_fallback_for_missing_or_pending_candidates(monkeypatch):
+    module, conn, cur = fake_search(monkeypatch, [[]])
+    assert module.search('가명 질문', conn=conn)[2] == []
+    assert cur.execute.call_count == 1
+
+
+def test_explicit_registry_search_uses_registry_without_name_or_role_filter(monkeypatch):
+    module, conn, cur = fake_search(monkeypatch, [
+        [('A#0',), ('C#0',)],
+        [('A', 'A#0', NAME, [NAME], 0.1), ('C', 'C#0', '<PERSON_other>', [], 0.2)],
+    ])
+    _, _, docs, meta = module.search('가명 질문', conn=conn, with_meta=True, reg_id='reg_selected')
+    sql, args = cur.execute.call_args_list[0].args
+    assert 'WHERE reg_id = %s' in sql and args == ('reg_selected',)
+    assert 'token =' not in sql and 'role =' not in sql
+    assert [d['doc_id'] for d in docs] == ['A', 'C']
+    assert not meta['ask_person'] and meta['person_scope'] == 'registry'
