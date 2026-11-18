@@ -45,6 +45,8 @@ def test_ingest_search_rollback_and_permissions(tmp_path, monkeypatch):
                     CREATE ROLE app_reset LOGIN PASSWORD 'integration-only';
                 END IF;
                 END $$""")
+            # 06_grants.sh 가 비밀번호 없이(NOLOGIN) 미리 만들어 두므로 다른 계정처럼 항상 설정한다
+            cur.execute("ALTER ROLE app_reset LOGIN PASSWORD 'integration-only'")
             cur.execute('GRANT pii_ingest TO app_reset')
             cur.execute('GRANT TRUNCATE ON rag.chunks, rag.look_up, vault.token_map, vault.person_info, vault.person_registry TO app_reset')
     ingest_dsn = make_conninfo(DSN, user='app_ingest', password='integration-only')
