@@ -401,6 +401,7 @@ async function ask(q){
   const wait = 1300 - (performance.now() - started); if (wait > 0) await sleep(wait);   // 생각하는 모습을 잠깐은 보여주기
   setState(res.state === "sorry" ? "sorry" : "found");
   if (res.state === "sorry") bot.classList.add("sorry");
+  if (res.request_id) bot.dataset.requestId = res.request_id;   // 원복 요청에 함께 보낸다 (복원 기록 ↔ 질의 기록)
   const answer = res.answer || "참고 문서를 찾았어요. (LLM 키가 없어 문서 목록만 보여드려요)";
   bot.innerHTML = `<div class="who">🐻 도장곰 주임 ${res.state === "sorry" ? "· 확인 불가" : "· 아하!"}</div><div class="ans"></div>`;
   await typeInto(bot.querySelector(".ans"), answer);
@@ -495,23 +496,23 @@ const restoreModal = $("#restoreModal");
 const savedTokHtml = {};
 
 async function applyRestore(){
-  const chips = log.querySelectorAll(".tok");
-  if (!chips.length) return;
-  const tokenSet = new Set();
-  chips.forEach(el => {
+  // 답변 메시지(request_id)별로 묶어 보낸다. request_id 가 없는 메시지(데모·오류 응답)는 복원하지 않는다.
+  const groups = new Map();   // request_id → {chips:[[칩, 토큰]], tokens:Set}
+  log.querySelectorAll(".tok").forEach(el => {
     const t = el.getAttribute("title");
-    if (t) tokenSet.add("<" + t.replace("가명 토큰 ", "") + ">");
+    const rid = el.closest(".msg.bot")?.dataset.requestId;
+    if (!t || !rid) return;
+    const token = "<" + t.replace("가명 토큰 ", "") + ">";
+    if (!groups.has(rid)) groups.set(rid, {chips:[], tokens:new Set()});
+    groups.get(rid).chips.push([el, token]);
+    groups.get(rid).tokens.add(token);
   });
-  if (!tokenSet.size) return;
-  try {
+  for (const [rid, g] of groups) { try {
     const r = await fetch("/api/restore-tokens", {method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({tokens:[...tokenSet]})});
-    if (!r.ok) return;
+      body:JSON.stringify({request_id:rid, tokens:[...g.tokens]})});
+    if (!r.ok) continue;   // 권한 없음·기록 실패: 토큰 그대로 둔다
     const {map} = await r.json();
-    chips.forEach(el => {
-      const t = el.getAttribute("title");
-      if (!t) return;
-      const token = "<" + t.replace("가명 토큰 ", "") + ">";
+    g.chips.forEach(([el, token]) => {
       const original = map[token];
       if (!original) return;
       if (!savedTokHtml[token]) savedTokHtml[token] = el.outerHTML;
@@ -521,7 +522,7 @@ async function applyRestore(){
       restored.dataset.token = token;
       el.replaceWith(restored);
     });
-  } catch {}
+  } catch {} }
 }
 
 function undoRestore(){
