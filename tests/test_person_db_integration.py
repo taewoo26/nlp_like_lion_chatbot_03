@@ -27,6 +27,14 @@ def detect(text):
     return sorted(out, key=lambda s: s['start'])
 
 
+def mid_linked(cur, doc_x, doc_y):
+    """doc_x 후보와 doc_y 후보가 추정 연결(evidence.mid_matched)로 서로 이어져 있는가."""
+    cur.execute("""SELECT bool_and((x.evidence->'mid_matched') ? y.person_id AND (y.evidence->'mid_matched') ? x.person_id)
+                   FROM vault.person_info x, vault.person_info y
+                   WHERE x.doc_id = ARRAY[%s] AND y.doc_id = ARRAY[%s]""", (doc_x, doc_y))
+    return bool(cur.fetchone()[0])
+
+
 def test_ingest_search_rollback_and_permissions(tmp_path, monkeypatch):
     # 환경의 기존 DB를 실수로 사용하지 않도록 이름과 비어 있는지 모두 검사한다.
     from psycopg.conninfo import conninfo_to_dict, make_conninfo
@@ -82,7 +90,11 @@ def test_ingest_search_rollback_and_permissions(tmp_path, monkeypatch):
             rows = cur.fetchall()
             assert len(rows) == 5
             assert rows[0][0] == ['A'] and rows[1][0] == ['B']
-            assert rows[0][1] == rows[1][1] and rows[0][1]
+            # A·B 는 같은 전화(M1, mid) → reg_id 없이 추정 연결. 확정 인물은 high 근거로만 만든다
+            assert rows[0][1] is None and rows[1][1] is None and rows[0][2] == rows[1][2] == 'unresolved'
+            assert mid_linked(cur, 'A', 'B')
+            cur.execute('SELECT count(*) FROM vault.person_registry')
+            assert cur.fetchone()[0] == 0
             cur.execute("SELECT count(*) FROM rag.look_up WHERE chunk_id = 'A#1'")
             assert cur.fetchone()[0] == 0  # 이름이 없는 후속 청크는 연결하지 않는다
             cur.execute("SELECT DISTINCT token FROM vault.person_info WHERE doc_id && ARRAY['A','B','C']")
@@ -120,8 +132,10 @@ def test_ingest_search_rollback_and_permissions(tmp_path, monkeypatch):
             cur.execute('SELECT person_id, created_at FROM vault.person_info WHERE person_id = ANY(%s) ORDER BY person_id',
                         ([p[0] for p in original_people],))
             assert cur.fetchall() == original_people
-            cur.execute("SELECT reg_id FROM vault.person_info WHERE doc_id && ARRAY['A','B','E']")
-            assert len({r[0] for r in cur.fetchall()}) == 1
+            # 추가 문서 E(같은 전화)는 기존 A·B 추정 묶음에 이어진다 (A·B 를 1명으로 세므로 검토로 빠지지 않음)
+            assert mid_linked(cur, 'E', 'A') or mid_linked(cur, 'E', 'B')
+            cur.execute("SELECT count(*) FROM vault.person_info WHERE reg_id IS NOT NULL")
+            assert cur.fetchone()[0] == 0
             # F와 직원 C는 none이다. 새 근거로 다른 고객과 이어져도 C와는 분리해야 한다.
             cur.execute("""UPDATE vault.person_info SET info_label=(
                            SELECT info_label FROM vault.person_info WHERE doc_id=ARRAY['A'])
@@ -138,8 +152,11 @@ def test_ingest_search_rollback_and_permissions(tmp_path, monkeypatch):
         with psycopg.connect(DSN) as conn, conn.cursor() as cur:
             cur.execute('SELECT chunk_id, masked_text, embedding::text FROM rag.chunks ORDER BY chunk_id')
             assert cur.fetchall() == before_rejudge
-            cur.execute("SELECT reg_id FROM vault.person_info WHERE doc_id && ARRAY['A','F']")
-            assert len({r[0] for r in cur.fetchall()}) == 1
+            # 재판정으로 F 가 고객 김민준 추정 묶음(A·B·E)에 이어지고, 직원 C 와의 none 은 유지된다
+            assert any(mid_linked(cur, 'F', d) for d in ('A', 'B', 'E'))
+            cur.execute("""SELECT f.evidence->'not_same_as' ? c.person_id FROM vault.person_info f, vault.person_info c
+                           WHERE f.doc_id = ARRAY['F'] AND c.doc_id = ARRAY['C']""")
+            assert cur.fetchone()[0]
             cur.execute('SELECT count(*) FROM rag.look_up l JOIN vault.person_info p USING(person_id) WHERE l.reg_id IS DISTINCT FROM p.reg_id OR l.token <> p.token')
             assert cur.fetchone()[0] == 0
         with psycopg.connect(DSN) as conn, conn.cursor() as cur:

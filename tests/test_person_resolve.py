@@ -69,16 +69,41 @@ def nsa(r):
     return r["evidence"]["not_same_as"]
 
 
+def mids(r):
+    """evidence.mid_matched {상대: 규칙} — reg_id 없는 추정 연결(mid)"""
+    return r["evidence"].get("mid_matched", {})
+
+
+def mid_groups(rows):
+    """추정 연결(mid_matched)로 이어진 묶음들 (person_id 집합의 리스트)."""
+    ids = {r["person_id"] for r in rows}
+    seen, groups = set(), []
+    for r in rows:
+        if r["person_id"] in seen:
+            continue
+        stack, group = [r["person_id"]], set()
+        while stack:
+            pid = stack.pop()
+            if pid in group:
+                continue
+            group.add(pid)
+            stack.extend(p for p in mids(by(rows)[pid]) if p in ids)
+        seen |= group
+        groups.append(group)
+    return groups
+
+
 # ----------------------------------------------------------------- 설계안 7장 시나리오
 def test_design_example_four_documents():
     rows = [row("A", "H1", info=[PHONE_A]), row("B", "H2", role="employee", info=[PHONE_B]),
             row("C", "H3", info=[PHONE_A]), row("D", "H4")]
     out = run(rows)
     r = by(rows)
-    # A·C: 이름 + 전화 1개(M1) → 같은 reg 에 연결, 행은 그대로 3개 + 1개
-    assert r["A"]["reg_id"] == r["C"]["reg_id"] and r["A"]["reg_id"]
+    # A·C: 이름 + 전화 1개(M1, mid) → 추정 연결만. 확정 인물(reg_id)은 high 근거로만 만든다
+    assert r["A"]["reg_id"] is None and r["C"]["reg_id"] is None
+    assert mids(r["A"]) == {"C": "M1"} and mids(r["C"]) == {"A": "M1"}
     assert [level(r["A"]), level(r["C"])] == ["mid", "mid"]
-    assert r["A"]["evidence"]["rule"] == "M1" and r["A"]["resolution_status"] == "resolved"
+    assert r["A"]["evidence"]["rule"] == "M1" and r["A"]["resolution_status"] == "unresolved"
     # B: 역할 그룹이 달라(N4) A·C 와 다른 사람. 등록하지 않고 not_same_as 에 서로 기록
     assert r["B"]["resolution_status"] == "unresolved" and r["B"]["reg_id"] is None and level(r["B"]) == "none"
     assert nsa(r["B"]) == {"A": "N4", "C": "N4", "D": "N4"} and nsa(r["A"]) == {"B": "N4"} and nsa(r["C"]) == {"B": "N4"}
@@ -87,10 +112,10 @@ def test_design_example_four_documents():
     #    (설계안 7.2 는 D 를 hold 로 적었지만 정의서의 N4 는 번호 유무와 무관하게 B 와 none 이다)
     assert r["D"]["resolution_status"] == "unresolved" and r["D"]["reg_id"] is None
     assert level(r["D"]) == "none" and nsa(r["D"]) == {"B": "N4"}
-    assert len(out["registry"]) == 1
-    # look_up: 분석이 끝난 후보 전부, chunk 단위
+    assert out["registry"] == []                                               # high 근거가 없으므로 확정 인물 없음
+    # look_up: 분석이 끝난 후보 전부, chunk 단위 (확정 인물이 없으므로 reg_id 는 모두 NULL)
     assert sorted((x["chunk_id"], x["reg_id"]) for x in out["look_up"]) == \
-        [("H1#0", r["A"]["reg_id"]), ("H2#0", None), ("H3#0", r["A"]["reg_id"]), ("H4#0", None)]
+        [("H1#0", None), ("H2#0", None), ("H3#0", None), ("H4#0", None)]
 
 
 def test_pending_rows_are_not_in_look_up():
@@ -218,7 +243,8 @@ def test_m2_two_full_name_candidates_is_hold():
 def test_m2_when_full_name_row_arrives_later():
     b, a = row("B", "H201", token=SEON, info=[PHONE_A], status="unresolved"), row("A", "H135", token=YUN, info=[PHONE_A])
     run([b, a])
-    assert a["reg_id"] == b["reg_id"] and a["reg_id"]
+    assert mids(a) == {"B": "M2"} and mids(b) == {"A": "M2"}                  # 성명 행이 나중에 와도 M2 추정 연결
+    assert a["reg_id"] is None and b["reg_id"] is None and level(b) == "mid"
 
 
 def test_n7_role_conflict_marks_none_only_for_that_candidate():
@@ -303,7 +329,14 @@ def test_rejudge_hold_after_new_evidence():
     assert level(a) == "hold" and level(b) == "hold"
     b["info_label"] = [PHONE_A]
     PersonResolver([a, b], out["registry"], TOKEN_INFO, clock=lambda: "2026-11-17T00:00:00+00:00").resolve(rejudge_hold=True)
-    assert a["reg_id"] == b["reg_id"] and a["reg_id"]
+    assert mids(a) == {"B": "M1"} and level(a) == level(b) == "mid"           # 새 근거(M1)로 추정 연결
+    assert a["reg_id"] is None and b["reg_id"] is None
+    b["info_label"] = [PHONE_A, RRN_1]
+    a["info_label"] = [PHONE_A, RRN_1]
+    out = PersonResolver([a, b], out["registry"], TOKEN_INFO,
+                         clock=lambda: "2026-11-17T00:00:01+00:00").resolve(rejudge_unresolved=True)
+    assert a["reg_id"] == b["reg_id"] and a["reg_id"] and level(a) == "high"    # high(H1) 근거가 생기면 그때 확정
+    check_rows([a, b], out["registry"])
 
 
 # ----------------------------------------------------------------- 문서 안 후보 (H2·N6·M4)
@@ -452,43 +485,59 @@ def test_m4_links_in_document_but_does_not_create_registry():
     assert len(rows) == 2 and len(links) == 1 and links[0][2] == "M4"
     out = PersonResolver(rows, [], TOKEN_INFO, links=links, clock=lambda: "2026-11-17T00:00:00+00:00").resolve()
     assert rows[0]["reg_id"] is None and rows[1]["reg_id"] is None and out["registry"] == []
-    assert {r["evidence"]["level"] for r in rows} == {"hold"}
+    assert {r["evidence"]["level"] for r in rows} == {"mid"}                 # M4 는 mid → 추정 연결
+    assert mids(rows[1]) == {rows[0]["person_id"]: "M4"} and mids(rows[0]) == {rows[1]["person_id"]: "M4"}
     assert rows[1]["evidence"]["document_links"] == [rows[0]["person_id"]]
     check_rows(rows, out["registry"])
 
 
-def m4_doc_with_phone(doc_id, phone="01011111111"):
-    """'김민준(전화) … 민준' 문서: 성명 행과 이름만 행이 M4 로 이어진다."""
-    original, masked, records = make_doc(["상담원 ", ("person", "김민준"), " 연락처 ", ("phone_number", phone),
-                                          "\n", ("person", "민준"), " 상담원이 재확인함"])
+def m4_doc_with_phone(doc_id, phone="01011111111", card=None):
+    """'김민준(전화[, 카드]) … 민준' 문서: 성명 행과 이름만 행이 M4 로 이어진다. 카드까지 주면 문서 간 H4 가 가능."""
+    full_line = ["상담원 ", ("person", "김민준"), " 연락처 ", ("phone_number", phone)]
+    if card:
+        full_line += [" 카드 ", ("card_number", card)]
+    original, masked, records = make_doc(full_line + ["\n", ("person", "민준"), " 상담원이 재확인함"])
     return build_doc_candidates(doc_id, original, masked, records, [masked], RULES,
                                 id_factory=lambda p, c=itertools.count(1): f"{p}{doc_id}_{next(c)}",
                                 clock=lambda: "2026-11-17T00:00:00+00:00")
 
 
-def test_m4_partner_gets_registry_when_full_name_links_across_documents():
+def test_m4_and_m1_only_make_mid_group_without_registry():
+    # 두 문서의 성명 행이 같은 전화(M1, mid)로 이어져도 확정 인물은 없다. 네 행은 하나의 추정 묶음
     rows1, links1 = m4_doc_with_phone("D1")
     rows2, links2 = m4_doc_with_phone("D2")
-    full1, given1 = rows1
-    full2, given2 = rows2
     out = PersonResolver(rows1 + rows2, [], TOKEN_INFO, links=links1 + links2,
                          clock=lambda: "2026-11-17T00:00:00+00:00").resolve()
-    # 문서 간 근거(M1: 같은 전화)로 확정 인물 1명 → 두 문서의 '민준'도 같은 reg_id
-    assert full1["reg_id"] and len(out["registry"]) == 1
-    assert {r["reg_id"] for r in rows1 + rows2} == {full1["reg_id"]}
+    assert out["registry"] == [] and all(r["reg_id"] is None for r in rows1 + rows2)
+    assert mid_groups(rows1 + rows2) == [{r["person_id"] for r in rows1 + rows2}]
     check_rows(rows1 + rows2, out["registry"])
 
 
-def test_m4_partner_gets_registry_in_incremental_load():
-    # 1차 적재: 문서 1개뿐이라 등록 안 됨 → 2차 적재에서 같은 전화가 나오면 저장된 연결로 '민준'까지 등록
+def test_m4_partner_stays_mid_when_full_name_is_registered_by_high():
+    # 성명 행끼리 전화+카드(H4, high)로 확정 → 성명 행만 reg_id. '민준' 행은 M4(mid)라 reg_id 없이 추정 연결
+    rows1, links1 = m4_doc_with_phone("D1", card="4092571177774123")
+    rows2, links2 = m4_doc_with_phone("D2", card="4092571177774123")
+    (full1, given1), (full2, given2) = rows1, rows2
+    out = PersonResolver(rows1 + rows2, [], TOKEN_INFO, links=links1 + links2,
+                         clock=lambda: "2026-11-17T00:00:00+00:00").resolve()
+    assert len(out["registry"]) == 1 and full1["reg_id"] == full2["reg_id"] and full1["reg_id"]
+    assert level(full1) == level(full2) == "high" and full1["evidence"]["rule"] == "H4"
+    for given, full in ((given1, full1), (given2, full2)):
+        assert given["reg_id"] is None and level(given) == "mid" and mids(given) == {full["person_id"]: "M4"}
+    check_rows(rows1 + rows2, out["registry"])
+
+
+def test_m4_partner_stays_mid_in_incremental_load():
+    # 1차: 문서 1개 → 등록 없음(M4 추정 연결). 2차: 같은 전화+카드 문서 → 성명 행끼리 H4 로 확정, '민준'은 그대로 mid
     from starter.person_ingest import persisted_links
-    rows1, links1 = m4_doc_with_phone("D1")
+    rows1, links1 = m4_doc_with_phone("D1", card="4092571177774123")
     out1 = PersonResolver(rows1, [], TOKEN_INFO, links=links1, clock=lambda: "2026-11-17T00:00:00+00:00").resolve()
-    assert out1["registry"] == [] and all(r["reg_id"] is None for r in rows1)
-    rows2, links2 = m4_doc_with_phone("D2")
+    assert out1["registry"] == [] and all(r["reg_id"] is None and level(r) == "mid" for r in rows1)
+    rows2, links2 = m4_doc_with_phone("D2", card="4092571177774123")
     out2 = PersonResolver(rows1 + rows2, out1["registry"], TOKEN_INFO, links=persisted_links(rows1) + links2,
                           clock=lambda: "2026-11-17T00:00:01+00:00").resolve()
-    assert len(out2["registry"]) == 1 and {r["reg_id"] for r in rows1 + rows2} == {rows2[0]["reg_id"]}
+    assert len(out2["registry"]) == 1 and rows1[0]["reg_id"] == rows2[0]["reg_id"] and rows1[0]["reg_id"]
+    assert rows1[1]["reg_id"] is None and rows2[1]["reg_id"] is None
     check_rows(rows1 + rows2, out2["registry"])
 
 
@@ -517,17 +566,36 @@ def test_h3_same_internal_id_and_n3_different_internal_id():
     assert nsa(by(rows)["B"]) == {"A": "N3"} and by(rows)["B"]["reg_id"] is None
 
 
-def test_chain_level_is_weakest_link_for_whole_group():
-    """A–B 는 high(H4), B–C 는 mid(M1) 로 이어지면 묶음 전체(A·B·C)가 mid (정의서 0장)."""
+def test_mid_link_to_registered_person_stays_without_reg_id():
+    """A–B 는 high(H4)로 확정, C 는 B 와 mid(M1)로만 이어진다 → C 는 reg_id 없이 추정 연결, A·B 는 high 유지."""
     acct2 = reg("account_number", "Z", "999")
     a = row("A", "H1", info=[PHONE_A, ACCT_A])
     b = row("B", "H2", info=[PHONE_A, ACCT_A, acct2])
     out = run([a, b])
-    assert level(a) == level(b) == "high"
+    assert level(a) == level(b) == "high" and a["reg_id"] == b["reg_id"]
     c = row("C", "H3", info=[acct2])
-    run([a, b, c], registry=out["registry"])
-    assert a["reg_id"] == b["reg_id"] == c["reg_id"]
-    assert [level(a), level(b), level(c)] == ["mid", "mid", "mid"]
+    out = run([a, b, c], registry=out["registry"])
+    assert c["reg_id"] is None and c["resolution_status"] == "unresolved" and level(c) == "mid"
+    assert mids(c) == {"B": "M1"} and mids(b) == {"C": "M1"}
+    assert [level(a), level(b)] == ["high", "high"] and len(out["registry"]) == 1
+
+
+def test_mid_group_counts_as_one_person_for_next_candidate():
+    """A·B 가 같은 전화로 추정 연결된 뒤 C 가 같은 전화로 오면, A·B 를 1명으로 세서 C 도 추정 연결 (검토로 빠지지 않음)."""
+    a, b = row("A", "H1", info=[PHONE_A]), row("B", "H2", info=[PHONE_A])
+    out = run([a, b])
+    c = row("C", "H3", info=[PHONE_A])
+    out = run([a, b, c], registry=out["registry"])
+    assert out["review"] == [] and out["registry"] == []
+    assert mid_groups([a, b, c]) == [{"A", "B", "C"}]
+    assert {level(x) for x in (a, b, c)} == {"mid"}
+
+
+def test_resolved_mid_row_from_old_rule_is_rejected_with_reload_hint():
+    a = row("A", "H1", status="resolved")
+    a["reg_id"], a["evidence"]["level"], a["evidence"]["rule"] = "reg_old", "mid", "M1"
+    with pytest.raises(ValueError, match="--reset"):
+        check_rows([a], [{"reg_id": "reg_old", "reason": {}, "merged_into": None}])
 
 
 def test_h1_name_diff_is_recorded_in_registry_reason():
@@ -620,8 +688,16 @@ def test_rejudge_none_can_link_third_person_but_preserves_exclusion():
     b['info_label'] = [PHONE_A]
     resolver = PersonResolver([a, b, c], out['registry'], TOKEN_INFO)
     result = resolver.resolve(rejudge_unresolved=True)
-    assert b['reg_id'] == c['reg_id'] and b['reg_id']
-    assert a['reg_id'] is None and 'A' in nsa(b) and 'A' in nsa(c)
+    assert mids(b) == {'C': 'M1'} and mids(c) == {'B': 'M1'}                 # none 후보도 제3의 후보와는 추정 연결
+    assert b['reg_id'] is None and c['reg_id'] is None and level(b) == 'mid'  # mid 는 확정(reg_id)하지 않음
+    assert a['reg_id'] is None and 'A' in nsa(b)
+    check_rows(result['rows'], result['registry'])
+    # 제외는 유지: A 와 C 가 high(H1)로 이어지려 해도 C 의 추정 상대 B 가 A 와 다른 사람이라 막힌다 (N8)
+    a['info_label'] = c['info_label'] = [PHONE_A, RRN_1]
+    a['role'] = 'customer'
+    result = PersonResolver([a, b, c], result['registry'], TOKEN_INFO).resolve(rejudge_unresolved=True)
+    assert a['reg_id'] is None and c['reg_id'] is None
+    assert any(x['rule'] == 'N8' for x in result['review'])
     check_rows(result['rows'], result['registry'])
 
 
@@ -633,8 +709,14 @@ def test_document_links_survive_serialization_for_rejudge():
     restored = json.loads(json.dumps(rows + other))
     assert persisted_links(restored) == links + other_links
     result = PersonResolver(restored, token_info=TOKEN_INFO, links=persisted_links(restored)).resolve()
-    assert len({r['reg_id'] for r in restored}) == 1 and restored[0]['reg_id']   # 저장된 연결로 '민준'까지 같은 reg_id
+    # 저장된 연결(M4)과 같은 전화(M1)로 네 행이 하나의 추정 묶음. mid 뿐이라 확정 인물은 없다
+    assert mid_groups(restored) == [{r['person_id'] for r in restored}] and result['registry'] == []
     check_rows(restored, result['registry'])
+    # 다시 저장했다 읽어도 추정 연결이 유지되어 같은 묶음으로 센다
+    again = json.loads(json.dumps(restored))
+    result = PersonResolver(again, token_info=TOKEN_INFO, links=persisted_links(again)).resolve(rejudge_unresolved=True)
+    assert mid_groups(again) == [{r['person_id'] for r in again}] and result['review'] == []
+    check_rows(again, result['registry'])
 
 
 def test_n8_review_is_persisted_in_evidence():
