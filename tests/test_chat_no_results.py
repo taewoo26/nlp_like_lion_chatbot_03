@@ -27,7 +27,7 @@ def test_prompt_lists_query_tokens_and_documents(monkeypatch):
     monkeypatch.setattr(chat.requests, 'post', post)
     result = chat.answer('입력')
     messages = post.call_args.kwargs['json']['messages']
-    assert '같으면 같은 사람·같은 값' in messages[0]['content']
+    assert '이름 토큰만 같다고 같은 사람이라고 단정하지' in messages[0]['content']
     assert '[H0125]' in messages[1]['content'] and f'질문에 포함된 토큰: {tok}' in messages[1]['content']
     assert result['answer'] == '네, 1건 있습니다.'
 
@@ -76,3 +76,26 @@ def test_region_condition_is_explained_to_llm(monkeypatch):
     chat.answer('부산 사는 고객 한도 결과')
     user_msg = post.call_args.kwargs['json']['messages'][1]['content']
     assert '지역 조건은 검색 단계에서 이미 확인' in user_msg
+
+
+def test_ambiguous_person_does_not_call_llm(monkeypatch):
+    meta = dict(NO_META, ask_person=True, person_candidates={'<PERSON_a>': 2})
+    monkeypatch.setattr(chat, 'search', lambda *args, **kw: ('가명 질문', ['<PERSON_a>'], [], meta))
+    post = Mock()
+    monkeypatch.setattr(chat.requests, 'post', post)
+    result = chat.answer('입력')
+    assert '여러 명' in result['answer']
+    post.assert_not_called()
+
+
+def test_ambiguous_person_keeps_documents_but_does_not_call_llm(monkeypatch):
+    docs = [{'doc_id': 'A', 'masked_text': '<PERSON_a> 문의'},
+            {'doc_id': 'B', 'masked_text': '<PERSON_a> 재문의'}]
+    meta = dict(NO_META, ask_person=True, person_candidates={'<PERSON_a>': 2})
+    monkeypatch.setattr(chat, 'search', lambda *args, **kw: ('<PERSON_a>', ['<PERSON_a>'], docs, meta))
+    post = Mock()
+    monkeypatch.setattr(chat.requests, 'post', post)
+    result = chat.answer('입력')
+    assert result['docs'] == docs
+    assert '동일인 여부가 확정되지 않은' in result['answer']
+    post.assert_not_called()
