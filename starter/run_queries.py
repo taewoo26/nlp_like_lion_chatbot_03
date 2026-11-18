@@ -26,9 +26,10 @@ def main():
     t0 = time.perf_counter()
     with db.rag_conn() as conn, open(out, "w", encoding="utf-8") as f:
         for q in queries:
-            masked_q, q_tokens, docs = search(q["query"], a.k, conn)
+            masked_q, q_tokens, docs, meta = search(q["query"], a.k, conn, with_meta=True)
             f.write(json.dumps({"qid": q["qid"], "masked_query": masked_q, "query_tokens": q_tokens,
-                                "ranked_doc_ids": [d["doc_id"] for d in docs]}, ensure_ascii=False) + "\n")
+                                "ranked_doc_ids": [d["doc_id"] for d in docs],
+                                "meta": meta}, ensure_ascii=False) + "\n")
     ms = (time.perf_counter() - t0) * 1000 / len(queries)
     print(f"질의 {len(queries)}개 → {out}  ({ms:.1f} ms/질의)")
 

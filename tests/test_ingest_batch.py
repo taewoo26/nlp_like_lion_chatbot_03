@@ -28,6 +28,7 @@ def _setup(tmp_path, monkeypatch, n_docs, argv=()):
     vault.__enter__.return_value.commit.side_effect = lambda: calls.__setitem__('commit_vault', calls['commit_vault'] + 1)
     monkeypatch.setattr(ingest.db, 'rag_conn', lambda: rag)
     monkeypatch.setattr(ingest.db, 'vault_conn', lambda: vault)
+    monkeypatch.setattr(ingest.db, 'reset_conn', lambda: rag)
     return source, calls
 
 
@@ -52,7 +53,8 @@ def test_batch_size_from_env(tmp_path, monkeypatch):
 def test_reset_is_one_transaction(tmp_path, monkeypatch):
     _, calls = _setup(tmp_path, monkeypatch, 7, ['--reset', '--batch-size', '3'])
     ingest.main()
-    assert calls['embed'] == [7] and calls['commit_rag'] == 1
+    # 커밋은 한 reset 연결의 컨텍스트 종료에서 실행된다. 개별 rag/vault 커밋은 없다.
+    assert calls['embed'] == [7] and calls['commit_rag'] == calls['commit_vault'] == 0
 
 
 def test_failure_keeps_checkpoint_of_committed_batches(tmp_path, monkeypatch):
