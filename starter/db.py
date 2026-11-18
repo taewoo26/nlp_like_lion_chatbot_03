@@ -2,9 +2,12 @@
 
 - rag_conn()   : rag.chunks 읽기/쓰기. vault 스키마에는 접근할 수 없습니다.
 - vault_conn() : vault.token_map 읽기/쓰기. 적재(가명처리) 단계에서만 사용합니다.
-  검색·답변 단계 코드는 vault_conn() 을 쓰지 않아야 합니다. (실명 복원은 종합에서 다룸)
+  검색·답변 단계 코드는 vault_conn() 을 쓰지 않아야 합니다. 실명 복원은 restore_conn() 으로 합니다.
 - auth_conn()  : 로그인 판정(service/auth.py) 전용. 지금은 관리자 계정(POSTGRES_USER)으로 연결합니다(구조 단순화).
   고도화 때 config.AUTH_DSN 만 app_search 로 바꾸면 됩니다(권한은 infra/init/06_grants.sh 에 있음).
+- restore_conn(): 실명 복원(service/app.py) 전용. vault.restore_token() 만 호출합니다(토큰마다 audit.restore_log 기록).
+  지금은 관리자 계정(AUTH_DSN 과 같은 접속)을 씁니다. 권한 정리 때 pii_search 계정(app_search)으로 바꿉니다.
+  함수는 SECURITY DEFINER(소유자 vault_user)라 내부 조회·기록은 접속 계정과 상관없이 vault_user 권한으로 실행됩니다.
 """
 import psycopg
 from pgvector.psycopg import register_vector
@@ -23,4 +26,9 @@ def vault_conn():
 
 
 def auth_conn():
+    return psycopg.connect(config.AUTH_DSN, autocommit=False)
+
+
+def restore_conn():
+    # 권한 정리 때 이 접속만 pii_search 계정으로 바꾼다 (지금은 로그인 판정과 같은 관리자 계정)
     return psycopg.connect(config.AUTH_DSN, autocommit=False)

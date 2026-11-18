@@ -1,6 +1,6 @@
 # 권한 정책 데이터 구조 (초안)
 
-2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가 · 2026-11-17 `query_log` 기록 구현 반영(4.1, ⑧ 단계)
+2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가 · 2026-11-17 `query_log` 기록 구현 반영(4.1, ⑧ 단계) · 2026-11-18 `restore_log` 기록 구현 반영(4.2, ⑦ 단계)
 상태: **설계 기록**. 2026-11-12부터 DB 스키마는 develop의 `infra/init/04~07`이 기준입니다. 4·5절의 표·트리거 설명 중 develop에 없는 항목(아래 '고도화 후보')은 아직 적용되지 않았습니다.
 
 관련 파일
@@ -73,7 +73,7 @@ flowchart TD
 | ③ 권한 필터 | `policy.doc_type_level`, `policy.policy_state` → `get_policy()` | 정책을 캐시해 두고, `policy_state.version`이 바뀌었을 때만 다시 읽음. Lv0/Lv1은 허용 doc_type 목록, Lv2는 필터 없음 |
 | ④ 검색 | `rag.chunks` 읽기 | `access`는 **필수 인자**(정책서 9절 결정 4). SQL 세 경로(AND·토큰 없음·boost) 모두에 `AND doc_type = ANY(허용 목록)`을 `LIMIT` 전에 추가. 결과(질의 토큰, 반환 문서)는 메모리에 보관 |
 | ⑥ 재검사 | (없음) | 결과(조치, 라벨별 개수, 탐지기)를 메모리에 보관 |
-| ⑦ 복원 | `vault.token_map` 읽기, `audit.restore_log` 쓰기 | Lv2만 `full`. **실제로 복원한 경우에만 기록**하며, 기록에 실패하면 복원하지 않음 |
+| ⑦ 복원 | `vault.restore_token()` 호출 (함수가 `vault.token_map` 읽기, `audit.restore_log` 쓰기) | Lv2만 `full`. **실제로 복원한 경우에만 기록**하며, 기록에 실패하면 복원하지 않음. **구현됨(2026-11-18)**: `service/app.py`의 `_fetch_originals()`가 DB 함수만 호출(4.2) |
 | ⑧ 기록 마무리 | `audit.query_log` 쓰기 | 응답 직전에 **한 번** 씀. 결과 없음·LLM 없음·지역 되묻기·오류로 일찍 끝나도 반드시 1행. 기록에 실패해도 답변은 돌려주고, 같은 행을 `outputs/audit_fallback.jsonl`에 추가한 뒤 실패 사실(시각·`request_id`·예외 종류)을 `outputs/server_error.log`와 터미널에 남김. 대체 파일도 실패하면 오류 로그에만 남음. **구현됨(2026-11-17)**: 미들웨어 대신 `/api/chat`(`service/app.py`)이 `service/audit.py`를 호출 |
 
 권한 밖 문서만 있어서 결과가 없을 때도 "일치하는 문서를 찾지 못했습니다"를 그대로 씁니다. "권한 밖 문서 N건 제외" 같은 안내는 하지 않습니다(문서 존재 비노출, 정책서 9절 결정 5).
@@ -304,13 +304,37 @@ flowchart LR
 | `request_id` | TEXT | N | | 요청 묶음 키 |
 | `user_id` | TEXT | N | | 로그인 ID |
 | `level` | SMALLINT | N | 0~2 | 요청 시점의 권한 레벨 |
-| `token` | TEXT | N | 토큰 형식만 허용 (`<라벨_64자리hex>`) | 복원 대상 토큰. 실명을 넣으면 DB가 거부함 |
+| `token` | TEXT | N | 토큰 형식만 허용 (`^<[A-Z_]+_[0-9a-f]+>$`, 현재 토큰은 hex 12자리) | 복원 대상 토큰. 실명을 넣으면 DB가 거부함 |
 | `label` | TEXT | N | | 토큰의 라벨 |
 | `mode` | TEXT | N | `full` | 적용된 복원 모드. 부분 복원(`partial`)을 도입하면 값을 추가 |
 
-인덱스: `created_at`, `(user_id, created_at)`
+인덱스: `request_id`, `(user_id, created_at)`
 
 정책 버전은 남기지 않습니다. 복원 규칙(Lv2만 전체 복원)은 코드에 고정이라 관리자가 편집하는 정책 버전과 관계가 없고, 그 질문의 정책 버전은 `request_id`로 `query_log`에서 확인합니다. `user_id`·`level`은 `query_log`에도 있지만, 복원 기록은 그 행만 봐도 "누가·언제·무엇을" 알 수 있도록 남깁니다.
+
+**구현(2026-11-18)**: `service/app.py`의 `_fetch_originals()`가 `vault.restore_token()`만 호출합니다. `vault.token_map`을 직접 읽지 않으며, 기록은 DB 함수가 남기므로 파이썬 기록 코드는 없습니다.
+
+- 복원 경로는 두 가지이고 같은 함수를 씁니다.
+  - `POST /api/restore-tokens {"request_id", "tokens"}`: 화면의 🔓 원복이 답변 메시지마다 그 응답의 `request_id`를 붙여 보냅니다. `request_id`가 없거나 형식(`req_<8자리 숫자>_<12자리 소문자 hex>`)이 틀리면 422.
+  - `POST /api/chat`의 `restore: true`: 같은 요청의 `request_id`로 복원합니다. 현재 화면은 이 경로를 쓰지 않습니다.
+- 토큰들을 SQL 한 번(`unnest`), 한 트랜잭션으로 넘깁니다. 하나라도 실패하면 전부 롤백되어 "복원은 됐는데 기록이 빠진" 경우가 생기지 않습니다. 그래서 한 번의 복원 요청에서 나온 행은 `created_at`(트랜잭션 시작 시각)이 같습니다.
+- `restore_log` CHECK와 같은 형식(`<[A-Z_]+_[0-9a-f]+>`)의 토큰만 DB에 넘깁니다. `vault.token_map`에 없는 토큰은 함수가 NULL을 돌려주고 기록하지 않습니다.
+- 기록에 실패하면 복원도 실패합니다. `query_log`(기록 실패해도 답변 진행)와 반대인데, 실명이 나가는 쪽이라 기록 없는 복원을 허용하지 않기 때문입니다.
+
+| 경우 | `/api/restore-tokens` | `/api/chat` (`restore: true`) |
+|---|---|---|
+| 권한 없음 (DB 함수가 42501로 거절) | 403 | 답변은 정상, 토큰 그대로, `restored: false` |
+| 기록 실패·DB 오류 | 503 | 답변은 정상, 토큰 그대로, `restored: false` |
+| `vault.token_map`에 없는 토큰 | 그 토큰만 결과에서 빠짐 | 그 토큰만 그대로 |
+
+- 실패 사실(시각·`request_id`·예외 종류)은 `outputs/server_error.log`와 터미널에 남깁니다. 예외 메시지·토큰·원문은 남기지 않습니다. 화면은 실패하면 토큰을 그대로 둡니다.
+- **DB 접속 계정: 지금은 관리자 계정(`POSTGRES_USER`)으로 호출합니다** (`starter/db.py`의 `restore_conn()`, 로그인 판정과 같은 방식). **권한 정리(고도화) 때 `pii_search` 계정(`app_search`)으로 바꿉니다.** `restore_conn()`의 접속만 바꾸면 됩니다.
+- 함수는 `SECURITY DEFINER`(소유자 `vault_user`)라 내부 조회·기록은 접속 계정과 관계없이 `vault_user` 권한으로 실행됩니다. 따라서 관리자 계정으로 호출해도 `06_grants.sh`의 `vault_user` 권한(`policy` 스키마 USAGE, `policy.users` SELECT, `audit.restore_log` INSERT)이 있어야 합니다.
+- 원복을 껐다 다시 켜면 다시 복원하므로 행이 또 쌓입니다(실명을 보여 줄 때마다 기록).
+- 한계 (고도화 과제)
+  - `request_id`가 그 사용자의 요청인지 서버가 확인하지 않습니다(형식만 검사). `pii_search`는 `query_log`에 INSERT 권한만 있어 조회로 확인할 수 없으므로 방법을 따로 정해야 합니다.
+  - 요청한 토큰이 그 응답에 실제로 나온 토큰인지 확인하지 않습니다. Lv2 사용자는 다른 토큰도 복원할 수 있지만, 그 사실은 모두 `restore_log`에 남습니다.
+- 테스트: `tests/test_restore.py` (DB 테스트는 롤백, DB 없으면 건너뜀). 실서버 확인(2026-11-18): Lv2 계정으로 복원 1회 → 토큰 8개가 각 1행, `query_log`와 `request_id`로 이어짐.
 
 ### 4.3 `audit.policy_change_log` — 정책 변경 이력 (develop `infra/init/05_audit.sql`)
 
@@ -340,10 +364,10 @@ flowchart LR
 | Lv1 질문 | 1행 (재검사 결과 포함) | 기록 안 함 (복원 없음) |
 | Lv2 질문 | 1행 (재검사 결과 포함) | 복원한 토큰마다 1행 |
 | 결과 없음·지역 되묻기·LLM 없음 | 1행 (`state` = `no_result`·`clarify`·`search_only`, `recheck_action` NULL) | 기록 안 함 |
-| 처리 중 오류 | 1행 (`state = error`) | 오류 전에 복원했다면 그 행 |
+| 처리 중 오류 | 1행 (`state = error`) | 기록 안 함 (답변이 없어 복원하지 않음) |
 
 - Lv0·Lv1에서 복원이 차단된 사실은 별도로 기록하지 않습니다. `query_log`의 `level`로 다시 계산할 수 있습니다(복원 규칙은 코드에 고정).
-- 기록 순서는 `restore_log`(복원할 때)가 먼저, `query_log`(응답 직전)가 나중입니다. 둘은 `request_id`로 이어지므로 순서는 문제가 되지 않습니다.
+- 기록 순서는 `query_log`가 먼저, `restore_log`가 나중입니다. `/api/chat`은 응답 직전에 `query_log`를 쓴 뒤 복원하고, 화면의 원복(`/api/restore-tokens`)은 응답을 받은 뒤의 별도 요청입니다. 둘은 `request_id`로 이어지므로 순서는 문제가 되지 않습니다.
 - Lv2에서 복원이 일어나지 않은 경우(예: 재검사에서 답변 차단)는 `query_log.recheck_action = blocked`나 `state`로 구분합니다.
 
 ## 5. 정책 테이블 (`policy` 스키마, develop `infra/init/04_policy.sql`)
@@ -514,6 +538,8 @@ COMMIT;   -- 버전 1 증가, 변경 이력 2행
 | `rag.*`, `vault.*` (기존) | `rag.*` 전체 | `vault.*` 전체 | - | - | 전체 |
 
 로그인 DB 계정: 지금은 관리자 계정(`POSTGRES_USER`)을 씁니다. 고도화 때 `06_grants.sh`의 `app_search`(`policy.users` 읽기, `last_login_at` 갱신)로 바꿉니다(`starter/config.py`의 `AUTH_DSN`).
+
+실명 복원 DB 계정: 지금은 관리자 계정(`POSTGRES_USER`)으로 `vault.restore_token()`을 호출합니다(`starter/db.py`의 `restore_conn()`). 고도화 때 `pii_search` 계정(`app_search`)으로 바꿉니다(4.2).
 
 - `policy.users`에 비밀번호 해시가 있으므로 `GRANT ... ON ALL TABLES IN SCHEMA policy`는 쓰지 않고 테이블 단위로만 줍니다. `rag_user`는 `users`를 읽지 않습니다.
 - 계정을 만드는 로그인 쪽은 `policy.resolve_team_level()` 실행 권한만 있으면 됩니다. 로그인과 관리자 화면이 같은 DB 계정을 쓰면 관리자 화면 계정에 포함합니다.
