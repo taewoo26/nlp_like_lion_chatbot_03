@@ -2,7 +2,8 @@
 
     python -m starter.chat "윤선영 고객 대출 상담 내역 알려줘"
 
-실명 복원·권한·출력 재검사는 종합에서 다룹니다. 이 파일은 vault 에 접근하지 않습니다.
+출력 재검사는 starter/recheck.py 를 LLM 응답 직후(실명 복원 전)에 부릅니다. 실명 복원·권한 확인은 service/app.py 가 합니다.
+이 파일은 vault 에 접근하지 않습니다.
 LLM_API_KEY 가 없으면 검색 결과까지만 보여줍니다.
 
 answer() 결과의 state (audit.query_log.state, 코드값 시트 기준)
@@ -10,9 +11,12 @@ answer() 결과의 state (audit.query_log.state, 코드값 시트 기준)
   no_result   : 조건에 맞는 문서가 없음
   search_only : LLM_API_KEY 가 없어 검색 결과만
   withheld    : LLM이 문서로 확인할 수 없다고 답함 (답변 문구로 판정. 오판 가능)
+                또는 출력 재검사가 차단함 (recheck action=blocked, search_only 에서도)
   answered    : 문서를 근거로 LLM이 답함
   error 는 예외로 올라가므로 호출하는 쪽이 정한다. 가명처리 뒤에 난 예외에는
   masked_query, query_tokens 속성이 붙어 있다 (search.tag_masked).
+
+answer() 결과의 recheck: {"action", "labels", "detector"} (audit.query_log.recheck_*). 재검사를 하지 않았으면 None.
 """
 import argparse
 import re
@@ -20,7 +24,7 @@ import time
 
 import requests
 
-from . import config
+from . import config, recheck
 from .search import search, tag_masked
 
 SYSTEM = """당신은 금융사 사내 문서 검색 도우미입니다. 아래 규칙을 지켜 한국어로 답하세요.
@@ -111,7 +115,7 @@ def _answer(masked_q, q_tokens, docs, meta):
     context = "\n\n".join(_doc_block(d, q_tokens) for d in docs)
     token_note = f"\n질문에 포함된 토큰: {', '.join(q_tokens)}" if q_tokens else ""
     result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None,
-              "notice": None, "state": None}
+              "notice": None, "state": None, "recheck": None}
     if meta["ask_region"]:                         # REG-33 이름이 겹치는 시군구
         result["answer"] = f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요."
         result["state"] = "clarify"
@@ -126,8 +130,7 @@ def _answer(masked_q, q_tokens, docs, meta):
         result["state"] = "no_result"
         return result
     if not config.LLM_API_KEY:
-        result["state"] = "search_only"
-        return result
+        return _rechecked(result, "search_only")
     payload = {"model": config.LLM_MODEL, "temperature": 0,
                "messages": [{"role": "system", "content": SYSTEM},
                             {"role": "user", "content": f"문서:\n{context}\n\n질문: {masked_q}{token_note}"}]}
@@ -135,7 +138,15 @@ def _answer(masked_q, q_tokens, docs, meta):
     r = _post_llm(payload)
     known = set(q_tokens) | {t for d in docs for t in TOKEN.findall(d["masked_text"])}
     result["answer"] = _restore_tokens(r.json()["choices"][0]["message"]["content"], known)
-    result["state"] = "withheld" if any(w in result["answer"] for w in WITHHELD_WORDS) else "answered"
+    withheld = any(w in result["answer"] for w in WITHHELD_WORDS)
+    return _rechecked(result, "withheld" if withheld else "answered")
+
+
+def _rechecked(result, state):
+    """화면으로 나갈 답변·문서 조각을 재검사한 뒤 state 를 정한다. 차단되면 withheld."""
+    result["recheck"] = recheck.check(result)
+    blocked = result["recheck"] is not None and result["recheck"]["action"] == "blocked"
+    result["state"] = "withheld" if blocked else state
     return result
 
 
@@ -151,6 +162,8 @@ def main():
         print("안내:", res["notice"])
     print("\n답변:", res["answer"] or "(LLM_API_KEY 없음 — 검색 결과만 표시)")
     print("상태:", res["state"])
+    if res["recheck"]:
+        print("재검사:", res["recheck"]["action"], res["recheck"]["labels"] or "")
 
 
 if __name__ == "__main__":

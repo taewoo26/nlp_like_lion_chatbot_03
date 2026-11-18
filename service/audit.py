@@ -10,7 +10,8 @@
 - state: chat.answer()가 정한 값. 예외면 error.
 - masked_query: 원문 금지. 가명처리 전에 실패해 가명 질의가 없으면 [MASK_FAILED].
 - policy_version: INSERT 안에서 policy.policy_state.version 을 함께 읽는다 (조회를 따로 하지 않음).
-- recheck_*: 출력 재검사가 아직 없어 NULL / {}.
+- recheck_*: chat.answer() 결과의 recheck(starter/recheck.py)를 옮긴다. 재검사를 하지 않았으면(no_result·clarify·
+  RECHECK=off·오류) NULL / {}. labels 는 라벨별 개수뿐이며 원문은 없다.
 - 기록에 실패해도 답변은 막지 않는다. 대신
     1) DB 기록 실패 → 같은 행을 outputs/audit_fallback.jsonl 에 한 줄 추가 (policy_version 은 null)
     2) 실패 사실(시각·request_id·단계·예외 종류)은 outputs/server_error.log 와 터미널에 남긴다
@@ -90,12 +91,14 @@ def build_row(request_id, user, *, result=None, error=None, latency_ms=None):
         masked, tokens = result["masked_query"], result["query_tokens"]
         doc_ids = [d["doc_id"] for d in result["docs"]]
         state = result["state"]
+        rc = result.get("recheck") or {}
     else:
         masked = getattr(error, "masked_query", None)
         tokens = getattr(error, "query_tokens", None) or []
         if masked is None:                  # 가명처리 전에 실패: 원문은 남기지 않는다
             masked, tokens = MASK_FAILED, []
         doc_ids, state = [], "error"
+        rc = {}
     return {
         "request_id": request_id,
         "user_id": user["user_id"],
@@ -105,9 +108,9 @@ def build_row(request_id, user, *, result=None, error=None, latency_ms=None):
         "masked_query": masked,
         "query_tokens": list(tokens),
         "returned_doc_ids": doc_ids,
-        "recheck_action": None,
-        "recheck_labels": {},
-        "recheck_detector": None,
+        "recheck_action": rc.get("action"),
+        "recheck_labels": dict(rc.get("labels") or {}),
+        "recheck_detector": rc.get("detector"),
         "state": state,
         "latency_ms": latency_ms,
     }
