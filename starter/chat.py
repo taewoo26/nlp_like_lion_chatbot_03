@@ -17,6 +17,7 @@ answer() 결과의 state (audit.query_log.state, 코드값 시트 기준)
   masked_query, query_tokens 속성이 붙어 있다 (search.tag_masked).
 
 answer() 결과의 recheck: {"action", "labels", "detector"} (audit.query_log.recheck_*). 재검사를 하지 않았으면 None.
+answer() 결과의 docs[*].snippet: 화면·API 로 내보낼 문서 조각(앞 180자, 재검사를 거침). masked_text(전체)는 내보내지 않는다.
 """
 import argparse
 import re
@@ -153,6 +154,7 @@ def _rechecked(result, state, check_answer=True):
         result["state"] = state
         return result
     result["recheck"] = recheck.check(result, check_answer=check_answer)
+    recheck.default_snippets(result)              # 재검사를 끈 경우에도 화면용 조각(snippet)은 항상 만든다
     blocked = result["recheck"] is not None and result["recheck"]["action"] == "blocked"
     result["state"] = "withheld" if blocked else state
     return result
@@ -171,7 +173,7 @@ def main():
     print("\n답변:", res["answer"] or "(LLM_API_KEY 없음 — 검색 결과만 표시)")
     print("상태:", res["state"])
     if res["recheck"]:
-        print("재검사:", res["recheck"]["action"], res["recheck"]["labels"] or "")
+        print("재검사:", res["recheck"]["action"], res["recheck"]["labels"] or "", f'({res["recheck"]["ms"]}ms)')
 
 
 if __name__ == "__main__":

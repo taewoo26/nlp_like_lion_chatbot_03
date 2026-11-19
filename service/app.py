@@ -18,6 +18,8 @@
 - state(화면용): found(아하!) / sorry(되물음·문서 없음·답변 보류) / nollm(LLM 키 없음, 검색 결과만)
   chat.answer()의 state(감사 로그용 6개 값)를 UI_STATE 로 바꿔 보낸다. answered→found, search_only→nollm, 나머지→sorry
 - 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
+- 출력 재검사(starter/recheck.py): 결과는 query_log.recheck_*, 걸린 시간은 서버 터미널 한 줄(recheck_ms·total_ms).
+  문서는 재검사를 거친 snippet 만 내보낸다.
   기록에 실패해도 답변은 그대로 돌려준다 (outputs/audit_fallback.jsonl, outputs/server_error.log 에 남김).
 - 실명 복원(Lv2 + 2차 인증): POST /api/verify-password {"password"} → 세션에 restore_verified
         POST /api/restore-tokens {"request_id", "tokens": [...]} → {"map": {토큰: 원문}}
@@ -226,6 +228,13 @@ def _fetch_originals(tokens, request_id: str, user_id: str) -> dict[str, str]:
     return {t: orig[0] for t, orig in rows if orig and orig[0]}
 
 
+def _log_recheck(request_id, rc, latency_ms):
+    """질문마다 출력 재검사 결과·시간을 서버 터미널에 한 줄 남긴다 (질문 원문·토큰·원문 값은 남기지 않음)."""
+    logging.getLogger("uvicorn.error").info(
+        "recheck request_id=%s action=%s labels=%s recheck_ms=%d total_ms=%d",
+        request_id, rc["action"], rc["labels"] or "{}", rc["ms"], latency_ms)
+
+
 def _log_restore_error(request_id, exc):
     """복원 실패 사실만 남긴다 (outputs/server_error.log + 터미널). 예외 메시지·토큰·원문은 남기지 않는다."""
     audit._log_error("실명 복원 실패 request_id=%s error=%s", request_id, type(exc).__name__)
@@ -240,8 +249,11 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     except Exception as exc:
         audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
-    audit.record(audit.build_row(request_id, user, result=res, latency_ms=_elapsed_ms(started)))
-    docs = [{"doc_id": d["doc_id"], "snippet": d["masked_text"][:180]} for d in res["docs"]]
+    latency_ms = _elapsed_ms(started)
+    audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms))
+    if res.get("recheck"):
+        _log_recheck(request_id, res["recheck"], latency_ms)
+    docs = [{"doc_id": d["doc_id"], "snippet": d["snippet"]} for d in res["docs"]]   # 출력 재검사를 거친 조각만 (starter/recheck.py)
     answer_text = res["answer"]
     masked_query = res["masked_query"]
     restored = False

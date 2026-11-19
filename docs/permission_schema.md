@@ -1,6 +1,6 @@
 # 권한 정책 데이터 구조 (초안)
 
-2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가 · 2026-11-17 `query_log` 기록 구현 반영(4.1, ⑧ 단계) · 2026-11-18 `restore_log` 기록 구현 반영(4.2, ⑦ 단계)
+2026-11-06 작성 · 2026-11-09 정책 DB 이관 반영 · 2026-11-10 팀·직책 레벨 규칙, 이름 정리 반영 · 2026-11-11 팀·계정 테이블(`teams`, `users`) 추가 · 2026-11-17 `query_log` 기록 구현 반영(4.1, ⑧ 단계) · 2026-11-18 `restore_log` 기록 구현 반영(4.2, ⑦ 단계) · 2026-11-19 출력 재검사 구현 반영(4.5, ⑥ 단계)
 상태: **설계 기록**. 2026-11-12부터 DB 스키마는 develop의 `infra/init/04~07`이 기준입니다. 4·5절의 표·트리거 설명 중 develop에 없는 항목(아래 '고도화 후보')은 아직 적용되지 않았습니다.
 
 관련 파일
@@ -72,7 +72,7 @@ flowchart TD
 | ① 미들웨어 | 로그인 계정의 `access_level`(`policy.users`) → `get_user_level(user)` | 질문마다 레벨 조회 1회, `request_id` 1개 발급. `Access`(user_id, level, team_cd, position, request_id, policy_version) 객체를 만들어 이후 단계에 넘김. 팀·직책은 기록용이고 판단에는 `level`만 씀 |
 | ③ 권한 필터 | `policy.doc_type_level`, `policy.policy_state` → `get_policy()` | 정책을 캐시해 두고, `policy_state.version`이 바뀌었을 때만 다시 읽음. Lv0/Lv1은 허용 doc_type 목록, Lv2는 필터 없음 |
 | ④ 검색 | `rag.chunks` 읽기 | `access`는 **필수 인자**(정책서 9절 결정 4). SQL 세 경로(AND·토큰 없음·boost) 모두에 `AND doc_type = ANY(허용 목록)`을 `LIMIT` 전에 추가. 결과(질의 토큰, 반환 문서)는 메모리에 보관 |
-| ⑥ 재검사 | (없음) | 결과(조치, 라벨별 개수, 탐지기)를 메모리에 보관 |
+| ⑥ 재검사 | (없음, vault 쓰기 없음) | LLM 답변과 화면에 나갈 문서 조각을 다시 탐지해 토큰화하거나 차단. 결과(조치, 라벨별 개수, 탐지기)는 ⑧에서 `query_log`에 기록. **구현됨(2026-11-19)**: `starter/recheck.py`를 `chat.answer()`가 LLM 응답 직후에 호출(4.5) |
 | ⑦ 복원 | `vault.restore_token()` 호출 (함수가 `vault.token_map` 읽기, `audit.restore_log` 쓰기) | Lv2만 `full`. **실제로 복원한 경우에만 기록**하며, 기록에 실패하면 복원하지 않음. **구현됨(2026-11-18)**: `service/app.py`의 `_fetch_originals()`가 DB 함수만 호출(4.2) |
 | ⑧ 기록 마무리 | `audit.query_log` 쓰기 | 응답 직전에 **한 번** 씀. 결과 없음·LLM 없음·지역 되묻기·오류로 일찍 끝나도 반드시 1행. 기록에 실패해도 답변은 돌려주고, 같은 행을 `outputs/audit_fallback.jsonl`에 추가한 뒤 실패 사실(시각·`request_id`·예외 종류)을 `outputs/server_error.log`와 터미널에 남김. 대체 파일도 실패하면 오류 로그에만 남음. **구현됨(2026-11-17)**: 미들웨어 대신 `/api/chat`(`service/app.py`)이 `service/audit.py`를 호출 |
 
@@ -249,7 +249,7 @@ flowchart LR
 - `request_id`는 요청 시작 시 앱이 만듭니다(`req_20261117_3f9a1c07b2e4`). DB 시퀀스는 쓰지 않습니다.
 - `level`·`team_cd`·`position`은 로그인 사용자(`policy.users`)에서, `latency_ms`는 앱에서 잽니다.
 - 오류(`error`)일 때 `masked_query`: 가명처리 뒤 실패면 가명 질의, 가명처리 전 실패(탐지 오류)면 고정값 `[MASK_FAILED]`. 원문은 남기지 않습니다.
-- 출력 재검사가 아직 없어 `recheck_action`·`recheck_detector`는 NULL, `recheck_labels`는 `{}`입니다.
+- `recheck_*`는 출력 재검사 결과입니다(4.5). 재검사를 하지 않은 경우(문서가 없는 결과·되묻기, `RECHECK=off`, 처리 중 오류)는 `recheck_action`·`recheck_detector`가 NULL, `recheck_labels`가 `{}`입니다.
 - 기록 실패 시 처리는 2절 ⑧ 단계를 따릅니다. 대체 파일의 행은 `policy_version`이 null이고 `db_error`(예외 종류)가 붙습니다.
 - 기록 계정은 지금 `rag_user`(audit 스키마 소유자)입니다. 고도화 때 `app_search`로 바꿉니다.
 
@@ -363,12 +363,80 @@ flowchart LR
 | Lv0 질문 | 1행 (재검사 결과 포함) | 기록 안 함 (복원 없음) |
 | Lv1 질문 | 1행 (재검사 결과 포함) | 기록 안 함 (복원 없음) |
 | Lv2 질문 | 1행 (재검사 결과 포함) | 복원한 토큰마다 1행 |
-| 결과 없음·지역 되묻기·LLM 없음 | 1행 (`state` = `no_result`·`clarify`·`search_only`, `recheck_action` NULL) | 기록 안 함 |
+| 결과 없음·문서 없는 되묻기 | 1행 (`state` = `no_result`·`clarify`, `recheck_action` NULL) | 기록 안 함 |
+| LLM 없음·문서가 있는 되묻기 | 1행 (`state` = `search_only`·`clarify`, 문서 조각만 재검사) | 기록 안 함 |
 | 처리 중 오류 | 1행 (`state = error`) | 기록 안 함 (답변이 없어 복원하지 않음) |
 
 - Lv0·Lv1에서 복원이 차단된 사실은 별도로 기록하지 않습니다. `query_log`의 `level`로 다시 계산할 수 있습니다(복원 규칙은 코드에 고정).
 - 기록 순서는 `query_log`가 먼저, `restore_log`가 나중입니다. `/api/chat`은 응답 직전에 `query_log`를 쓴 뒤 복원하고, 화면의 원복(`/api/restore-tokens`)은 응답을 받은 뒤의 별도 요청입니다. 둘은 `request_id`로 이어지므로 순서는 문제가 되지 않습니다.
 - Lv2에서 복원이 일어나지 않은 경우(예: 재검사에서 답변 차단)는 `query_log.recheck_action = blocked`나 `state`로 구분합니다.
+
+### 4.5 출력 재검사 구현 (`starter/recheck.py`, 2026-11-19)
+
+화면으로 나가는 글에 원문 개인정보가 남아 있는지 응답 직전에 다시 탐지합니다. 재검사는 **질문마다 한 번**, LLM 답변 직후(`query_log` 기록 전, 실명 복원 전)에 합니다. LLM에 보내기 전에는 검사하지 않습니다.
+
+**검사 대상**
+
+| state | 검사하는 글 |
+|---|---|
+| `answered`, `withheld` | LLM 답변 전체 + 문서 조각 |
+| `search_only` | 문서 조각 (LLM 답변 없음) |
+| `clarify` | 문서가 있으면 문서 조각만 (되묻기 문구는 시스템 고정 문장) |
+| `no_result`, 문서 없는 `clarify` | 검사하지 않음 (`recheck_*` NULL) |
+
+- 문서는 화면에 앞 180자(`snippet`)만 나가므로 앞 200자만 검사합니다(경계에 걸친 이름을 위한 여유). 경계에 걸친 토큰은 자르지 않습니다.
+- 화면·API로는 재검사를 거친 `snippet`만 내보냅니다(`service/app.py`). 문서 전체(`masked_text`)는 재검사하지 않으므로 내보내지 않습니다. 문서 전체를 보여 주는 기능이 생기면 그 경로에도 재검사를 붙여야 합니다.
+
+**탐지기와 조건**
+
+- 탐지기: `koelectra_post_kiwi_split_v3` (적재와 같은 탐지기). `RECHECK_DETECTOR`로 `union`도 고를 수 있습니다.
+- 버리는 탐지 결과 (오탐 줄이기)
+  - 이미 가린 구간(가명 토큰, `[운전면허번호 비공개]`, `[개인정보]`)과 겹치는 것
+  - 지역만 있는 주소(`대구 수성구`, 적재 때도 남기는 값)와 행정구역 이름(적재와 같은 규칙)
+  - 이름 후보가 "이름이 아닌 단어"와 정확히 같은 것: 적재 규칙의 목록(`FORM_LABELS`·`ROLE_WORDS`·`KIN_EVENTS`·`EMPTY_NAME_VALUES`, `detection/extra_rules.py`)과 재검사 전용 `NOT_NAMES`(`방문처`, `반송`, `인사팀`, 근거는 코드 주석). 일반 단어만 넣고, 데이터 고유 회사명은 넣지 않습니다.
+- 탐지기에 넣기 전 마크다운 굵은 글씨 `**`를 같은 길이의 공백으로 바꿉니다. LLM 답변의 `- **방문처**: 협력사 사업장`이 이름으로 잡혔고, `**`를 지우면 실제 이름은 남기고 항목명만 빠지는 것을 확인했습니다. `****` 같은 가림 표기는 바꾸지 않습니다.
+
+**조치 (`recheck_action`)**
+
+| 조치 | 조건 | 처리 |
+|---|---|---|
+| `none` | 적발 없음 | 그대로 |
+| `masked` | 이름·전화번호·이메일·주소 | `pii_pipeline.pseudonymize(strict=False)`로 적재와 같은 규칙으로 토큰화. vault에는 쓰지 않으므로, 적재 때 토큰화된 적이 있는 값만 Lv2가 복원할 수 있습니다 |
+| `masked` | 운전면허번호 | `[운전면허번호 비공개]`로 삭제 (적재 규칙과 같음) |
+| `blocked` | 주민등록번호·카드번호·계좌번호 (`RECHECK_BLOCK_LABELS`, **임시값·팀 합의 필요**) | 답변을 안내 문구로 바꾸고 문서 조각을 모두 비움. `state`는 `withheld` |
+
+- 재검사 중 예외가 나면 답변을 내보내지 않습니다(`state = error`).
+- 기록: `query_log`의 `recheck_action`·`recheck_labels`(라벨별 개수, 원문 없음)·`recheck_detector`. 재검사 시간은 서버 터미널에만 한 줄(`recheck_ms`, `total_ms`)로 남기고 DB에는 넣지 않습니다.
+- 설정(`.env`, 없으면 기본값): `RECHECK`(on), `RECHECK_DETECTOR`(split_v3), `RECHECK_BLOCK_LABELS`(위 3종).
+
+**실험 결과** (로컬 `experiments/recheck/`, holdout 187문서)
+
+| 항목 | split_v3 | union |
+|---|---|---|
+| 평범한 형태의 개인정보를 글에 넣었을 때 적발 (374건) | 98.9% | 99.2% |
+| 적재 때 실제로 놓친 이름 3건 적발 | 1건 | 1건 |
+| 누락이 없는 문서에서 무언가를 고친 비율 (오탐) | 13/187 (7%) | 44/187 (24%), 잘못 차단 6건 |
+| 질문 1건 재검사 시간 (88개 질의) | 평균 약 0.7초, p95 약 1.8초 | - |
+
+- 그래서 기본 탐지기는 split_v3입니다. dev·test에서는 적재 누락이 0건이라 실제 누락은 holdout에서만 측정할 수 있었습니다.
+- 적재 누락 8건 중 5건은 우편번호입니다(적재 규칙이 우편번호를 일부러 주소 토큰에서 뺌). 우편번호를 개인정보로 볼지는 팀 결정이 필요합니다.
+- 오탐은 대부분 가명처리 후 바뀐 문맥에서 일반 단어·회사명을 이름으로 잡은 경우입니다(원문에서는 안 잡힘).
+
+**한계**
+
+- 적재와 같은 탐지기라 **적재 누락은 대부분 다시 놓칩니다**. 재검사는 주로 LLM 답변 단계의 노출(질문에서 빠진 실명, LLM이 만든 값)을 막는 장치입니다.
+- LLM에는 문서 전체가 들어가므로, 적재 누락은 외부 API로 이미 전송된 뒤입니다.
+- 적발 수(`recheck_labels`)는 "재검사가 의심한 건수"이며 오탐이 섞입니다.
+- 재검사로 만든 토큰 중 vault에 없는 값은 복원되지 않습니다. LLM이 만든 가짜 토큰(`<PERSON_…>` 형식)은 이미 가린 것으로 보고 통과합니다.
+- 이름이 아닌 단어 목록은 정확히 같은 단어만 거르며, 새 오탐이 나오면 추가해야 합니다.
+
+**후속 과제**
+
+1. 적재와 다른 모델로 재검사: split_v3 + `FrameByFrame/korean-pii-e5-base` 이름 보강, 또는 MoAI 조합 평가
+2. 적재 2차 검사 제안: 가명처리된 글을 적재 때 한 번 더 검사(외부 API 전송 전에 막고, 토큰이 vault에 저장되어 복원·검색 가능). 이때 `NOT_NAMES`와 `**` 처리를 탐지기 공통 코드로 이동
+3. 토큰을 가짜 이름으로 바꿔 원문과 비슷한 문맥에서 검사(가명처리 문맥 오탐 줄이기)
+4. 답변과 문서 조각을 한 번에 묶어 검사(탐지기 호출 4회 → 1회, 속도)
+5. 차단 라벨, 우편번호 처리 팀 합의
 
 ## 5. 정책 테이블 (`policy` 스키마, develop `infra/init/04_policy.sql`)
 
