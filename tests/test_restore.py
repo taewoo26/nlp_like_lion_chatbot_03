@@ -158,7 +158,8 @@ def test_restore_tokens_db_errors(env, exc, status):
 
 def _answer(q, k):
     return {"masked_query": f"{TOK} 고객 한도", "query_tokens": [TOK], "answer": f"{TOK} 고객 1건입니다.",
-            "notice": None, "docs": [{"doc_id": "H0001", "masked_text": f"{TOK} 한도 상향"}], "state": "answered"}
+            "notice": None, "docs": [{"doc_id": "H0001", "masked_text": f"{TOK} 한도 상향", "snippet": f"{TOK} 한도 상향"}],
+            "state": "answered"}
 
 
 def test_chat_restore_uses_same_request_id(env, monkeypatch):

@@ -39,7 +39,7 @@ def env(monkeypatch):
 
 def _result(state, docs=True, answer="네, 1건 있습니다."):
     return lambda q, k: {"masked_query": MASKED, "query_tokens": [TOK], "answer": answer, "notice": None,
-                         "docs": [{"doc_id": "H0001", "masked_text": f"{TOK} 한도 상향"}] if docs else [],
+                         "docs": [{"doc_id": "H0001", "masked_text": f"{TOK} 한도 상향", "snippet": f"{TOK} 한도 상향"}] if docs else [],
                          "state": state}
 
 
