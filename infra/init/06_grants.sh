@@ -9,12 +9,10 @@
 #   app_ingest  적재 파이프라인   : rag·vault 쓰기 (토큰 삭제 불가)
 #   app_reset   전체 재적재      : 적재 권한 + 명시된 5개 테이블만 TRUNCATE
 #   app_search  챗봇 검색 서비스  : rag·정책 읽기, query_log 추가, 복원은 vault.restore_token()으로만
-#   app_read    읽기 전용 조회    : rag·정책 읽기 (비밀번호 해시 제외)
-#   app_admin   관리자 화면       : 정책 편집, vault·감사 로그 열람
-# 감사 로그(audit.*)는 어느 계정에도 UPDATE·DELETE를 주지 않는다.
+# 관리자(admin)는 슈퍼유저를 그대로 쓴다. 감사 로그(audit.*)는 어느 계정에도 UPDATE·DELETE를 주지 않는다.
 #
 # 비밀번호는 compose의 env_file(.env)에서 받는다. 값이 없는 계정은 로그인 없이 만든다.
-#   APP_INGEST_PASSWORD, APP_RESET_PASSWORD, APP_SEARCH_PASSWORD, APP_READ_PASSWORD, APP_ADMIN_PASSWORD
+#   APP_INGEST_PASSWORD, APP_RESET_PASSWORD, APP_SEARCH_PASSWORD
 set -eo pipefail   # -u는 쓰지 않음: 실행 권한 없이 source될 때 엔트리포인트까지 영향을 줌
 
 psql -v ON_ERROR_STOP=1 --quiet \
@@ -22,17 +20,13 @@ psql -v ON_ERROR_STOP=1 --quiet \
      --dbname "$POSTGRES_DB" \
      -v pw_ingest="${APP_INGEST_PASSWORD:-}" \
      -v pw_search="${APP_SEARCH_PASSWORD:-}" \
-     -v pw_read="${APP_READ_PASSWORD:-}" \
-     -v pw_reset="${APP_RESET_PASSWORD:-}" \
-     -v pw_admin="${APP_ADMIN_PASSWORD:-}" <<'EOSQL'
+     -v pw_reset="${APP_RESET_PASSWORD:-}" <<'EOSQL'
 
 -- 비밀번호를 세션 설정으로 넘겨 DO 블록에서 쓴다 (트랜잭션이 끝나면 사라짐)
 BEGIN;
 SELECT set_config('init.pw_ingest', :'pw_ingest', true),
        set_config('init.pw_reset',  :'pw_reset', true),
-       set_config('init.pw_search', :'pw_search', true),
-       set_config('init.pw_read',   :'pw_read',   true),
-       set_config('init.pw_admin',  :'pw_admin',  true) \gset
+       set_config('init.pw_search', :'pw_search', true) \gset
 
 -- 1. 역할: 권한 묶음(pii_*, 로그인 불가) + 로그인 계정(app_*)
 DO $$
@@ -44,13 +38,9 @@ BEGIN
         ('pii_ingest', NULL,          NULL),
         ('pii_reset',  NULL,          NULL),
         ('pii_search', NULL,          NULL),
-        ('pii_read',   NULL,          NULL),
-        ('pii_admin',  NULL,          NULL),
         ('app_ingest', 'pii_ingest',  'init.pw_ingest'),
         ('app_reset',  'pii_reset',   'init.pw_reset'),
-        ('app_search', 'pii_search',  'init.pw_search'),
-        ('app_read',   'pii_read',    'init.pw_read'),
-        ('app_admin',  'pii_admin',   'init.pw_admin')
+        ('app_search', 'pii_search',  'init.pw_search')
     ) AS t(name, grp, pw_key)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.name) THEN
@@ -69,7 +59,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    EXECUTE format('GRANT CONNECT ON DATABASE %I TO pii_ingest, pii_reset, pii_search, pii_read, pii_admin',
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO pii_ingest, pii_reset, pii_search',
                    current_database());
 END
 $$;
@@ -109,23 +99,7 @@ GRANT UPDATE (last_login_at) ON policy.users TO pii_search;
 GRANT INSERT ON audit.query_log TO pii_search;
 GRANT EXECUTE ON FUNCTION vault.restore_token(text, text, text) TO pii_search;
 
--- 5. 읽기 전용: 가명 데이터·정책만, 비밀번호 해시 제외
-GRANT USAGE ON SCHEMA rag, policy TO pii_read;
-GRANT SELECT ON rag.chunks, rag.look_up, rag.role_master TO pii_read;
-GRANT SELECT ON policy.doc_type_level, policy.team_level, policy.teams, policy.policy_state TO pii_read;
-GRANT SELECT (user_id, user_name, team_cd, position, grade, access_level,
-              is_admin, is_active, last_login_at, created_at, updated_at) ON policy.users TO pii_read;
-
--- 6. 관리자: 정책 편집 (앱은 먼저 SET LOCAL app.user_id = '<사번>'), vault·감사 열람
-GRANT USAGE ON SCHEMA rag, vault, policy, audit TO pii_admin;
-GRANT SELECT ON ALL TABLES IN SCHEMA rag TO pii_admin;
-GRANT SELECT, INSERT, UPDATE, DELETE
-    ON policy.doc_type_level, policy.team_level, policy.teams, policy.users TO pii_admin;
-GRANT SELECT ON policy.policy_state TO pii_admin;
-GRANT SELECT                 ON vault.token_map                          TO pii_admin;
-GRANT SELECT, INSERT, UPDATE ON vault.person_info, vault.person_registry TO pii_admin;
-GRANT SELECT ON ALL TABLES IN SCHEMA audit TO pii_admin;
-GRANT EXECUTE ON FUNCTION vault.restore_token(text, text, text) TO pii_admin;
+-- 5. 관리자(admin)는 슈퍼유저이므로 별도 GRANT 불필요
 
 COMMIT;
 EOSQL
