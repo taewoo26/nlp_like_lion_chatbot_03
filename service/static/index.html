@@ -6,7 +6,7 @@
 <title>도장곰 창구</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#f6efe4; --bg2:#efe3d1; --wall:#fbf6ee; --ink:#3a2a20; --ink2:#7a6253; --line:#e2d3bf;
@@ -18,21 +18,21 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--ink);font-family:"Gowun Dodum",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
   background-image:radial-gradient(circle at 20% 10%,#fff8ec 0,transparent 40%),radial-gradient(circle at 90% 90%,#f1e2cd 0,transparent 45%)}
 .app{max-width:1360px;margin:0 auto;padding:12px 10px 16px;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:14px;height:100vh;height:100dvh}
 @media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto auto 80vh;height:auto}.counter{min-height:460px}}
 header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px}
-.brand-badge{width:42px;height:42px;border-radius:12px;background:var(--cap);display:grid;place-items:center;color:#fff;font-family:Jua;font-size:22px;box-shadow:0 3px 0 var(--cap2)}
-.brand h1{margin:0;font-family:Jua;font-size:26px;letter-spacing:.5px}
+.brand-badge{width:42px;height:42px;border-radius:12px;background:var(--cap);display:grid;place-items:center;color:#fff;font-family:"Noto Sans KR";font-weight:700;font-size:22px;box-shadow:0 3px 0 var(--cap2)}
+.brand h1{margin:0;font-family:"Noto Sans KR";font-weight:700;font-size:26px;letter-spacing:.5px}
 .brand p{margin:0;color:var(--ink2);font-size:13px}
 .status{display:flex;gap:8px;flex-wrap:wrap}
 .pill{font-size:12px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2);display:inline-flex;gap:6px;align-items:center}
 .dot{width:8px;height:8px;border-radius:50%;background:#bbb}
 .dot.on{background:var(--ok)} .dot.demo{background:var(--warn)}
 /* 로그인 사용자 영역 (상단 오른쪽) */
-.top-btn{font-family:Jua;font-size:13px;padding:6px 14px;border-radius:999px;border:none;cursor:pointer;background:var(--cap);color:#fff;box-shadow:0 2px 0 var(--cap2)}
+.top-btn{font-family:"Noto Sans KR";font-weight:600;font-size:13px;padding:6px 14px;border-radius:999px;border:none;cursor:pointer;background:var(--cap);color:#fff;box-shadow:0 2px 0 var(--cap2)}
 .top-btn.admin{background:var(--wood2,#9a6239);box-shadow:0 2px 0 var(--wood3)}
 .top-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 [hidden]{display:none!important}
@@ -43,7 +43,7 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
   linear-gradient(var(--wall),var(--wall)) padding-box,
   repeating-linear-gradient(90deg,transparent 0 46px,rgba(185,122,74,.06) 46px 48px)}
 .sign{display:flex;justify-content:space-between;align-items:center}
-.window-no{font-family:Jua;background:var(--cap);color:#fff;padding:6px 12px;border-radius:10px;font-size:15px;box-shadow:0 3px 0 var(--cap2)}
+.window-no{font-family:"Noto Sans KR";font-weight:700;background:var(--cap);color:#fff;padding:6px 12px;border-radius:10px;font-size:15px;box-shadow:0 3px 0 var(--cap2)}
 .clock{width:46px;height:46px;border-radius:50%;background:#fff;border:3px solid var(--wood2);position:relative}
 .clock::before,.clock::after{content:"";position:absolute;left:50%;top:50%;background:var(--ink);border-radius:2px;transform-origin:50% 100%}
 .clock::before{width:3px;height:14px;margin:-14px 0 0 -1.5px;transform:rotate(40deg)}
@@ -56,7 +56,7 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 #bear{position:relative;overflow:visible;width:338px;max-width:92%;max-height:100%;z-index:2;transform-origin:50% 100%}
 .desk{position:relative;z-index:3;flex:none;height:96px;background:linear-gradient(180deg,var(--wood) 0 22px,var(--wood2) 22px);border-top:3px solid #d49a6a;box-shadow:inset 0 -18px 0 var(--wood3)}
 .desk::before{content:"";position:absolute;left:0;right:0;top:22px;height:2px;background:rgba(0,0,0,.08)}
-.nameplate{position:absolute;left:22px;top:-26px;background:#fff8ea;border:2px solid var(--wood3);border-radius:8px;padding:4px 10px;font-family:Jua;font-size:14px;color:var(--wood3);box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.nameplate{position:absolute;left:22px;top:-26px;background:#fff8ea;border:2px solid var(--wood3);border-radius:8px;padding:4px 10px;font-family:"Noto Sans KR";font-weight:700;font-size:14px;color:var(--wood3);box-shadow:0 3px 0 rgba(0,0,0,.08)}
 .bell{position:absolute;right:30px;top:-20px;width:40px;height:22px}
 .bell i{position:absolute;bottom:0;left:2px;width:36px;height:6px;border-radius:3px;background:#8a8f99}
 .bell b{position:absolute;bottom:5px;left:6px;width:28px;height:16px;border-radius:14px 14px 2px 2px;background:linear-gradient(180deg,#f5d77b,#d9a93a)}
@@ -64,7 +64,7 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 .ticket{position:absolute;left:16px;right:16px;text-align:center;bottom:14px;font-size:12px;color:#f8ead6;opacity:.9;letter-spacing:.5px}
 
 /* 말풍선(생각/아하/죄송) */
-.bubble{position:absolute;z-index:4;top:4px;right:4%;padding:8px 14px;border-radius:16px;background:#fff;border:2px solid var(--ink);font-family:Jua;font-size:18px;opacity:0;transform:scale(.6) translateY(10px);transition:all .25s cubic-bezier(.3,1.6,.6,1)}
+.bubble{position:absolute;z-index:4;top:4px;right:4%;padding:8px 14px;border-radius:16px;background:#fff;border:2px solid var(--ink);font-family:"Noto Sans KR";font-weight:700;font-size:18px;opacity:0;transform:scale(.6) translateY(10px);transition:all .25s cubic-bezier(.3,1.6,.6,1)}
 .bubble::after{content:"";position:absolute;left:18px;bottom:-12px;width:14px;height:14px;background:#fff;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:rotate(45deg)}
 .state-thinking .bubble.think,.state-found .bubble.aha,.state-sorry .bubble.sorry,.state-nollm .bubble.aha{opacity:1;transform:none}
 .think span{display:inline-block;animation:dots 1.1s infinite}
@@ -102,14 +102,16 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 /* ---------------- 상담 창 (오른쪽) ---------------- */
 .panel{background:#fff;border:1px solid var(--line);border-radius:26px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .panel-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
-.panel-head h2{margin:0;font-family:Jua;font-size:19px}
+.panel-head h2{margin:0;font-family:"Noto Sans KR";font-weight:700;font-size:19px}
 .panel-head small{color:var(--ink2)}
-.log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,#fffdf9,#fffaf2)}
+.log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,#fffdf9,#fffaf2);position:relative}
+.log::before{content:attr(data-wm);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink);opacity:.05;white-space:nowrap;letter-spacing:2px;pointer-events:none;transform:rotate(-18deg);line-height:2.4;overflow:hidden;z-index:0}
+.log>*{position:relative;z-index:1}
 .msg{max-width:86%;padding:12px 15px;border-radius:var(--radius);line-height:1.65;font-size:15px;word-break:keep-all;overflow-wrap:anywhere;animation:rise .25s ease-out}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 .msg.user{align-self:flex-end;background:var(--user);color:var(--user-ink);border-bottom-right-radius:6px}
 .msg.bot{align-self:flex-start;background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:6px}
-.msg.bot .who{font-family:Jua;font-size:13px;color:var(--wood3);margin-bottom:4px;display:flex;gap:6px;align-items:center}
+.msg.bot .who{font-family:"Noto Sans KR";font-weight:600;font-size:13px;color:var(--wood3);margin-bottom:4px;display:flex;gap:6px;align-items:center}
 .msg.bot.sorry{background:#fff4ee;border-color:#f0cdb8}
 .typing{display:inline-flex;gap:4px}
 .typing i{width:7px;height:7px;border-radius:50%;background:var(--ink2);animation:dots 1s infinite}
@@ -118,8 +120,8 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 .tok b{font-weight:400;color:var(--ink2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .meta{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:grid;gap:8px}
 .mask-box{position:relative;background:#f7f2ea;border-radius:12px;padding:8px 10px;font-size:13.5px}
-.mask-box .label{font-family:Jua;font-size:12px;color:var(--cap);display:block;margin-bottom:2px}
-.seal{position:absolute;right:8px;top:6px;width:42px;height:42px;border-radius:50%;border:3px solid var(--ink-red);color:var(--ink-red);font-family:Jua;font-size:13px;display:grid;place-items:center;transform:rotate(-14deg) scale(1.6);opacity:0;mix-blend-mode:multiply}
+.mask-box .label{font-family:"Noto Sans KR";font-weight:600;font-size:12px;color:var(--cap);display:block;margin-bottom:2px}
+.seal{position:absolute;right:8px;top:6px;width:42px;height:42px;border-radius:50%;border:3px solid var(--ink-red);color:var(--ink-red);font-family:"Noto Sans KR";font-weight:700;font-size:13px;display:grid;place-items:center;transform:rotate(-14deg) scale(1.6);opacity:0;mix-blend-mode:multiply}
 .seal.on{animation:seal .45s cubic-bezier(.2,1.6,.5,1) forwards}
 @keyframes seal{to{opacity:.85;transform:rotate(-14deg) scale(1)}}
 .docs{display:flex;flex-wrap:wrap;gap:6px}
@@ -131,7 +133,7 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 form{display:flex;gap:8px}
 input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none}
 input[type=text]:focus{border-color:var(--cap)}
-button.send{font-family:Jua;font-size:16px;padding:0 18px;border-radius:14px;border:none;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
+button.send{font-family:"Noto Sans KR";font-weight:600;font-size:16px;padding:0 18px;border-radius:14px;border:none;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
 button.send:disabled{opacity:.55;cursor:wait}
 .note{font-size:12px;color:var(--ink2)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -145,20 +147,26 @@ button.send:disabled{opacity:.55;cursor:wait}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:grid;place-items:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-overlay.open{opacity:1;pointer-events:auto}
 .modal{background:#fffcf6;border:1px solid var(--line);border-radius:18px;padding:28px 24px;width:90%;max-width:360px;text-align:center}
-.modal h3{font-family:Jua;font-size:18px;margin:0 0 8px}
+.modal h3{font-family:"Noto Sans KR";font-weight:700;font-size:18px;margin:0 0 8px}
 .modal p{font-size:13px;color:var(--ink2);margin:0 0 16px}
 .modal input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;outline:none;margin-bottom:4px;box-sizing:border-box}
 .modal input:focus{border-color:var(--cap)}
 .modal .error{font-size:12px;color:var(--ink-red);min-height:18px;margin:0 0 10px}
 .modal-btns{display:flex;gap:8px}
-.modal-btns button{flex:1;font-family:Jua;font-size:14px;padding:10px;border-radius:12px;border:none;cursor:pointer}
+.modal-btns button{flex:1;font-family:"Noto Sans KR";font-weight:600;font-size:14px;padding:10px;border-radius:12px;border:none;cursor:pointer}
 .modal-btns .confirm{background:var(--cap);color:#fff;box-shadow:0 2px 0 var(--cap2)}
 .modal-btns .cancel{background:#eee;color:var(--ink)}
 /* 원복된 텍스트 */
 .restored-tok{color:var(--ink-red);font-weight:700;border-bottom:2px dotted var(--ink-red);cursor:help}
 /* 마크다운 답변 */
-.msg.bot .ans ul{margin:6px 0;padding-left:20px}
-.msg.bot .ans li{margin:2px 0}
+.msg.bot .ans ul,.msg.bot .ans ol{margin:6px 0;padding-left:20px}
+.msg.bot .ans li{margin:3px 0}
+.msg.bot .ans b{color:var(--ink);font-weight:600}
+.msg.bot .ans code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px}
+.msg.bot .ans .md-h{font-family:"Noto Sans KR";font-weight:600;font-size:14.5px;margin:10px 0 4px;color:var(--ink)}
+.msg.bot .ans h5.md-h{font-size:14px}
+.msg.bot .ans h6.md-h{font-size:13.5px}
+.msg.bot .ans .md-hr{border:none;border-top:1px dashed var(--line);margin:10px 0}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -211,7 +219,7 @@ button.send:disabled{opacity:.55;cursor:wait}
             <path d="M66 222 Q52 252 70 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
             <path d="M174 222 Q188 252 168 280" stroke="var(--cap2)" stroke-width="30" fill="none" stroke-linecap="round"/>
             <rect x="134" y="230" width="24" height="12" rx="3" fill="#fff8ea" stroke="var(--gold)" stroke-width="1.5"/>
-            <text x="146" y="239.5" font-size="8" text-anchor="middle" fill="var(--wood3)" font-family="Jua">주임</text>
+            <text x="146" y="239.5" font-size="8" text-anchor="middle" fill="var(--wood3)" font-family="Noto Sans KR">주임</text>
           </g>
           <g transform="translate(120 196) scale(1.5) translate(-120 -196)">
           <g id="head">
@@ -226,7 +234,7 @@ button.send:disabled{opacity:.55;cursor:wait}
             <path d="M46 82 Q120 62 194 82 Q198 92 190 96 Q120 78 50 96 Q42 92 46 82Z" fill="var(--cap2)"/>
             <path d="M52 88 Q120 70 188 88" stroke="var(--gold)" stroke-width="2" fill="none" opacity=".8"/>
             <circle cx="120" cy="48" r="12" fill="var(--gold)"/><circle cx="120" cy="48" r="9" fill="none" stroke="#c99a35" stroke-width="1.5"/>
-            <text x="120" y="52.5" font-size="12" text-anchor="middle" fill="var(--cap2)" font-family="Jua">印</text>
+            <text x="120" y="52.5" font-size="12" text-anchor="middle" fill="var(--cap2)" font-family="Noto Sans KR">印</text>
             <!-- 볼터치 -->
             <ellipse cx="72" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
             <ellipse cx="168" cy="146" rx="15" ry="9" fill="var(--blush)" opacity=".7"/>
@@ -360,18 +368,35 @@ function chipify(t){
     return `<span class="tok" title="가명 토큰 ${lab}_${id}">${ico} ${name} <b>#${id.slice(0,4).toLowerCase()}</b></span>`;
   });
   h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
   const lines = h.split('\n');
-  let out = '', inList = false;
+  let out = '', inList = false, listType = '';
   for (const line of lines) {
-    if (/^- /.test(line)) {
-      if (!inList) { out += '<ul>'; inList = true; }
-      out += `<li>${line.slice(2)}</li>`;
+    const ulMatch = /^- (.+)/.exec(line);
+    const olMatch = /^\d+\.\s+(.+)/.exec(line);
+    const headMatch = /^(#{1,3})\s+(.+)/.exec(line);
+    const hrMatch = /^---+$/.test(line.trim());
+    if (ulMatch || olMatch) {
+      const tag = ulMatch ? 'ul' : 'ol';
+      const content = ulMatch ? ulMatch[1] : olMatch[1];
+      if (!inList || listType !== tag) {
+        if (inList) out += `</${listType}>`;
+        out += `<${tag}>`; inList = true; listType = tag;
+      }
+      out += `<li>${content}</li>`;
     } else {
-      if (inList) { out += '</ul>'; inList = false; }
-      out += (out && !out.endsWith('</ul>') ? '<br>' : '') + line;
+      if (inList) { out += `</${listType}>`; inList = false; listType = ''; }
+      if (headMatch) {
+        const lvl = headMatch[1].length;
+        out += `<h${lvl+3} class="md-h">${headMatch[2]}</h${lvl+3}>`;
+      } else if (hrMatch) {
+        out += '<hr class="md-hr">';
+      } else {
+        out += (out && !/(<\/ul>|<\/ol>|<\/h[456]>|<hr[^>]*>)$/.test(out) ? '<br>' : '') + line;
+      }
     }
   }
-  if (inList) out += '</ul>';
+  if (inList) out += `</${listType}>`;
   return out;
 }
 function addMsg(cls, html){ const d = document.createElement("div"); d.className = "msg " + cls; d.innerHTML = html;
@@ -483,7 +508,16 @@ async function loadMe(){
   $("#adminBtn").hidden = user.access_level !== 2;
   $("#restoreBtn").hidden = user.access_level !== 2;
   startSessionTimer();
+  applyWatermark(user.user_id);
 }
+function applyWatermark(uid){
+  if(!uid) return;
+  const now = new Date();
+  const ts = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,"0")}.${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  const wm = `${uid}  ${ts}    `.repeat(3);
+  log.dataset.wm = wm;
+}
+setInterval(() => { const uid = $("#whoText")?.textContent?.split(" · ")[0]; if(uid) applyWatermark(uid); }, 60000);
 $("#logoutBtn").addEventListener("click", async () => {
   try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
 });

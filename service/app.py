@@ -33,7 +33,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -318,3 +318,334 @@ def admin_stats(user: dict = Depends(admin_required)):
         stats["review_unresolved"] = review.get("unresolved", 0)
     stats["fail_docs"] = 0
     return stats
+
+
+_LABEL_RE = re.compile(r"<([A-Z_]+)_[0-9A-Za-z]+>")
+_TOKEN_LABEL_NAMES = {
+    "PERSON": "PERSON 이름", "PHONE_NUMBER": "PHONE 전화", "EMAIL": "EMAIL 이메일",
+    "ACCOUNT": "ACCOUNT 계좌", "ADDRESS": "ADDRESS 주소", "CARD_NUMBER": "CARD 카드",
+}
+
+
+_DOCS_SORT_COLS = {
+    "doc_id": "doc_id",
+    "doc_type": "doc_type",
+    "created_at": "MIN(created_at)",
+    "chunk_count": "COUNT(*)",
+}
+
+
+@app.get("/api/admin/docs")
+def admin_docs(
+    doc_type: str = Query(None),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    sort: str = Query(None),
+    order: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if doc_type:
+        conditions.append("doc_type = %(doc_type)s")
+        params["doc_type"] = doc_type
+    if date_from:
+        conditions.append("created_at >= %(date_from)s::date")
+        params["date_from"] = date_from
+    if date_to:
+        conditions.append("created_at < (%(date_to)s::date + 1)")
+        params["date_to"] = date_to
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    sort_col = _DOCS_SORT_COLS.get(sort, "MIN(created_at)")
+    sort_dir = "ASC" if order == "asc" else "DESC"
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(DISTINCT doc_id) FROM rag.chunks {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT doc_id, doc_type, MIN(created_at)::date, COUNT(*)
+              FROM rag.chunks {where}
+             GROUP BY doc_id, doc_type
+             ORDER BY {sort_col} {sort_dir}
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        docs = [{"doc_id": r[0], "doc_type": r[1] or "미지정",
+                 "created_at": str(r[2]), "chunk_count": r[3]} for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT doc_type FROM rag.chunks WHERE doc_type IS NOT NULL ORDER BY doc_type")
+        doc_types = [r[0] for r in cur.fetchall()]
+    return {"docs": docs, "total": total, "page": page, "size": size, "doc_types": doc_types}
+
+
+@app.get("/api/admin/docs/{doc_id}")
+def admin_doc_detail(doc_id: str, user: dict = Depends(admin_required)):
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT doc_type, chunk_idx, masked_text, tokens
+              FROM rag.chunks WHERE doc_id = %s ORDER BY chunk_idx
+        """, (doc_id,))
+        rows = cur.fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+    doc_type = rows[0][0] or "미지정"
+    all_tokens, chunks = set(), []
+    for r in rows:
+        toks = r[3] or []
+        all_tokens.update(toks)
+        chunks.append({"chunk_idx": r[1], "masked_text": r[2], "tokens": toks})
+    labels = set()
+    for tok in all_tokens:
+        m = _LABEL_RE.match(tok)
+        if m:
+            labels.add(_TOKEN_LABEL_NAMES.get(m.group(1), m.group(1)))
+    return {"doc_id": doc_id, "doc_type": doc_type,
+            "token_labels": sorted(labels), "chunks": chunks}
+
+
+@app.get("/api/admin/review")
+def admin_review_list(
+    status: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if status:
+        conditions.append("p.resolution_status = %(status)s")
+        params["status"] = status
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM vault.person_info p {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT p.person_id, p.token, t.label, p.role, p.doc_id,
+                   p.resolution_status, t.created_at::date
+              FROM vault.person_info p
+              LEFT JOIN vault.token_map t ON p.token = t.token
+              {where}
+             ORDER BY CASE p.resolution_status
+                        WHEN 'pending' THEN 0
+                        WHEN 'unresolved' THEN 1
+                        ELSE 2 END,
+                      t.created_at DESC NULLS LAST
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = cur.fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "person_id": r[0], "token": r[1], "label": r[2] or "",
+            "role": r[3] or "", "doc_ids": r[4] or [],
+            "status": r[5], "created_at": str(r[6]) if r[6] else "",
+        })
+    return {"items": items, "total": total, "page": page, "size": size}
+
+
+class _ReviewStatusBody(BaseModel):
+    status: str
+
+
+@app.patch("/api/admin/review/{person_id}")
+def admin_review_update(person_id: str, body: _ReviewStatusBody, user: dict = Depends(admin_required)):
+    if body.status not in ("resolved", "unresolved"):
+        raise HTTPException(status_code=400, detail="status는 resolved 또는 unresolved만 가능합니다.")
+    from starter import db
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE vault.person_info SET resolution_status = %s WHERE person_id = %s RETURNING person_id",
+            (body.status, person_id),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="인물 정보를 찾을 수 없습니다.")
+        conn.commit()
+    return {"ok": True, "person_id": person_id, "status": body.status}
+
+
+@app.get("/api/admin/logs/query")
+def admin_logs_query(
+    user_id: str = Query(None),
+    state: str = Query(None),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if user_id:
+        conditions.append("user_id = %(user_id)s")
+        params["user_id"] = user_id
+    if state:
+        conditions.append("state = %(state)s")
+        params["state"] = state
+    if date_from:
+        conditions.append("created_at >= %(date_from)s::date")
+        params["date_from"] = date_from
+    if date_to:
+        conditions.append("created_at < (%(date_to)s::date + 1)")
+        params["date_to"] = date_to
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM audit.query_log {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT request_id, user_id, level, masked_query, query_tokens,
+                   returned_doc_ids, state, latency_ms, created_at
+              FROM audit.query_log {where}
+             ORDER BY created_at DESC
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = [{"request_id": r[0], "user_id": r[1], "level": r[2],
+                 "masked_query": r[3], "query_tokens": r[4] or [],
+                 "returned_doc_ids": r[5] or [], "state": r[6],
+                 "latency_ms": r[7], "created_at": r[8].isoformat() if r[8] else ""}
+                for r in cur.fetchall()]
+    return {"items": rows, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/logs/restore")
+def admin_logs_restore(
+    user_id: str = Query(None),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if user_id:
+        conditions.append("user_id = %(user_id)s")
+        params["user_id"] = user_id
+    if date_from:
+        conditions.append("created_at >= %(date_from)s::date")
+        params["date_from"] = date_from
+    if date_to:
+        conditions.append("created_at < (%(date_to)s::date + 1)")
+        params["date_to"] = date_to
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM audit.restore_log {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT request_id, user_id, level, token, label, mode, created_at
+              FROM audit.restore_log {where}
+             ORDER BY created_at DESC
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = [{"request_id": r[0], "user_id": r[1], "level": r[2],
+                 "token": r[3], "label": r[4], "mode": r[5],
+                 "created_at": r[6].isoformat() if r[6] else ""}
+                for r in cur.fetchall()]
+    return {"items": rows, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/logs/policy")
+def admin_logs_policy(
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if date_from:
+        conditions.append("created_at >= %(date_from)s::date")
+        params["date_from"] = date_from
+    if date_to:
+        conditions.append("created_at < (%(date_to)s::date + 1)")
+        params["date_to"] = date_to
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM audit.policy_change_log {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT user_id, entity, action, old_value, new_value,
+                   policy_version, created_at
+              FROM audit.policy_change_log {where}
+             ORDER BY created_at DESC
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = [{"user_id": r[0], "entity": r[1], "action": r[2],
+                 "old_value": r[3], "new_value": r[4],
+                 "policy_version": r[5],
+                 "created_at": r[6].isoformat() if r[6] else ""}
+                for r in cur.fetchall()]
+    return {"items": rows, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/users")
+def admin_users(
+    team_cd: str = Query(None),
+    level: int = Query(None, ge=0, le=2),
+    active: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if team_cd:
+        conditions.append("u.team_cd = %(team_cd)s")
+        params["team_cd"] = team_cd
+    if level is not None:
+        conditions.append("u.access_level = %(level)s")
+        params["level"] = level
+    if active == "true":
+        conditions.append("u.is_active")
+    elif active == "false":
+        conditions.append("NOT u.is_active")
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.auth_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM policy.users u {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT u.user_id, u.user_name, u.team_cd, t.team_name,
+                   u.position, u.grade, u.access_level, u.is_admin, u.is_active
+              FROM policy.users u
+              JOIN policy.teams t USING (team_cd)
+              {where}
+             ORDER BY u.access_level DESC, u.user_id
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        items = [{"user_id": r[0], "user_name": r[1], "team_cd": r[2],
+                  "team_name": r[3], "position": r[4], "grade": r[5],
+                  "access_level": r[6], "is_admin": r[7], "is_active": r[8]}
+                 for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT team_cd, team_name FROM policy.teams ORDER BY team_cd")
+        teams = [{"team_cd": r[0], "team_name": r[1]} for r in cur.fetchall()]
+    return {"items": items, "total": total, "page": page, "size": size, "teams": teams}
+
+
+class _UserUpdateBody(BaseModel):
+    access_level: int | None = None
+    is_active: bool | None = None
+
+
+@app.patch("/api/admin/users/{user_id}")
+def admin_user_update(user_id: str, body: _UserUpdateBody, user: dict = Depends(admin_required)):
+    from starter import db
+    sets, params = [], {"uid": user_id}
+    if body.access_level is not None:
+        if body.access_level not in (0, 1, 2):
+            raise HTTPException(status_code=400, detail="access_level은 0, 1, 2만 가능합니다.")
+        sets.append("access_level = %(level)s")
+        params["level"] = body.access_level
+    if body.is_active is not None:
+        sets.append("is_active = %(active)s")
+        params["active"] = body.is_active
+    if not sets:
+        raise HTTPException(status_code=400, detail="변경할 항목이 없습니다.")
+    with db.auth_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"UPDATE policy.users SET {', '.join(sets)} WHERE user_id = %(uid)s RETURNING user_id",
+            params,
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        conn.commit()
+    return {"ok": True, "user_id": user_id}
