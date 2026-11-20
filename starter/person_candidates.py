@@ -15,13 +15,21 @@
 식별자(info_label)는 이름과 같은 줄에서만 모으고, 줄에 사람 언급이 2번 이상이거나 대표번호 같은 공유 번호는
 처음부터 넣지 않는다. '내용·메모·요약·비고' 같은 서술 칸의 번호도 넣지 않는다.
 새 행은 pending, level hold 로 시작한다 (판정은 PersonResolver).
+
+단서·역할 귀속 보정 (PERSON_RULES=v3 일 때. v1 이면 기존과 같다)
+  - 화자 표기('이소율: 연체 고객 안내 …', '- 김은영: 그 고객 연락처 010-…')의 이름은
+    콜론 뒤 발화를 역할 단서로 쓰지 않고, 그 줄의 식별자도 화자에게 붙이지 않는다.
+  - 문서마다 뜻이 달라지는 항목명(AMBIGUOUS_FIELDS: '접수자')으로 정한 역할은 쓰지 않는다 (unknown).
+  - 이름이 없는 줄의 식별자는 같은 블록(빈 줄 없이 이어진 줄) 안 바로 위 3줄 이내의 '서식 주인공' 줄
+    ('신청인: 오현', '고객명: …', '성명: …', '대표자: …' 등, 이름 1명)에 붙인다. 식별자 줄은 '항목: 값' 형식이어야
+    하고, 받는 사람·변경 전/후 같은 항목은 제외한다. '본인 확인:' 줄은 바로 위 줄의 이름이 1명이면 그 사람에게 붙인다.
 """
 import re
 import uuid
 from datetime import datetime, timezone
 
-from .person_resolve import CLUE_LABELS, PersonResolver, is_given_of, new_evidence
-from .roles import _candidates, role_for_mention
+from .person_resolve import CLUE_LABELS, PersonResolver, is_given_of, new_evidence, rules_version
+from .roles import _FIELD_BEFORE, _candidates, role_for_mention
 _TOKEN = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
 _SHARED_PHONE = re.compile(r"^(?:1[5-9]\d{6}|080\d+)$")        # 1588-xxxx 같은 대표번호, 수신자부담
 _SUBJECT = re.compile(r"(?:께서|은|는|이|가)(?![가-힣])")
@@ -34,6 +42,68 @@ _DEPT = re.compile(r"[가-힣A-Za-z]{2,}(?:팀|부|실|센터|본부|지점)$")
 _EXTERNAL = re.compile(r"^(?:수탁사|위탁사|협력사|협력업체|파트너사|외부|업체)(?:의|측|소속)?$")   # 외부 조직 표시
 _ADDRESSEE = re.compile(r"\s*(?:씨|님)\s*[,，]")                 # '민준 씨,' — 메일의 받는 사람
 _SIGNER = re.compile(r"\s*(?:드림|올림)\s*$")                     # '조민준 드림' — 메일의 보내는 사람
+# --- 단서·역할 귀속 보정 (v3)
+AMBIGUOUS_FIELDS = ("접수자",)                                   # 양식마다 고객/직원이 달라지는 항목명
+SUBJECT_FIELDS = ("신청인", "고객명", "성명", "대표자", "변경 요청 고객", "대상 고객", "송금인", "예금주",
+                  "명의자", "가입자", "피해 고객", "민원인", "고객")   # 서식의 주인공(본인) 항목
+OTHER_PARTY_FIELDS = ("받는 사람", "보내는 사람", "수취인", "참조", "변경 전", "변경 후", "회신 방법")
+_SPEAKER_BEFORE = re.compile(r"^\s*(?:[-*•]|\d+[.)])?\s*(?:[가-힣A-Za-z]+\s+)?$")
+_SPEAKER_AFTER = re.compile(r"\s*[:：]")
+_LINE_FIELD = re.compile(r"^\s*(?:[-*•]|\d+[.)])?\s*([^:：|\n]{1,20}?)\s*[:：]")
+_SUBJECT_BEFORE = re.compile(r"^\s*(?:[-*•]|\d+[.)])?\s*([^:：|\n]{1,20}?)\s*[:：]\s*$")
+
+
+def attrib_on():
+    return rules_version() == "v3"
+
+
+def is_speaker(text, start, end):
+    """줄 맨 앞 화자 표기 '이소율: …', '- 김은영: …', '상담사 지우: …' 의 이름인가."""
+    line_start = text.rfind("\n", 0, start) + 1
+    return bool(_SPEAKER_BEFORE.match(text[line_start:start]) and _SPEAKER_AFTER.match(text[end:end + 3]))
+
+
+def mention_role(text, start, end, rules, others, attrib=False):
+    """role_for_mention 에 귀속 보정을 더한다 (attrib=True). 반환 role."""
+    if attrib and is_speaker(text, start, end):
+        colon = end + text[end:].index(":") if ":" in text[end:end + 3] else end + text[end:].index("：")
+        others = list(others) + [{"start": colon + 1, "end": colon + 1}]   # 콜론 뒤 발화는 역할 창에서 뺀다
+    role, rule_id = role_for_mention(text, start, end, rules, others)
+    if attrib and rule_id == "ROLE-11":
+        line_start = text.rfind("\n", 0, start) + 1
+        m = _FIELD_BEFORE.search(text[line_start:start])
+        if m and (m.group(1) in AMBIGUOUS_FIELDS or m.group(1).split()[-1] in AMBIGUOUS_FIELDS):
+            return "unknown"
+    return role
+
+
+def block_owner(text, pos, mentions_by_line, line_of):
+    """이름 없는 줄(pos)의 식별자를 붙일 서식 주인공 언급. 없으면 None (v3)."""
+    lines = text.split("\n")
+    ln = line_of(pos)
+    field = _LINE_FIELD.match(lines[ln])
+    if not field:
+        return None
+    label = field.group(1).strip()
+    if label.startswith(OTHER_PARTY_FIELDS) or label.endswith(OTHER_PARTY_FIELDS):
+        return None
+    for j in range(ln - 1, max(-1, ln - 4), -1):              # 바로 위 3줄 안, 빈 줄을 넘지 않음
+        if not lines[j].strip():
+            return None
+        found = mentions_by_line.get(j)
+        if not found:
+            continue
+        if len(found) != 1:
+            return None
+        m = found[0]
+        if label == "본인 확인" and j == ln - 1:
+            return m
+        line_start = text.rfind("\n", 0, m["start"]) + 1
+        subj = _SUBJECT_BEFORE.match(text[line_start:m["start"]])
+        if subj and subj.group(1).strip() in SUBJECT_FIELDS:
+            return m
+        return None
+    return None
 
 
 def is_shared_number(label, normalized):
@@ -75,6 +145,7 @@ def build_doc_candidates(doc_id, original, masked, records, chunks, rules, id_fa
     def line_of(pos):
         return original.count("\n", 0, pos)
 
+    attrib = attrib_on()
     people = [(m, r) for m, r in zip(tokens, records) if r["label"] == "person"]
     spans = [{"start": r["start"], "end": r["end"]} for _, r in people]
     mentions = []
@@ -82,19 +153,28 @@ def build_doc_candidates(doc_id, original, masked, records, chunks, rules, id_fa
         chunk_id = next((cid for s, e, cid in ranges if s <= token_match.start() and token_match.end() <= e), None)
         if chunk_id is None:
             raise ValueError("PERSON 토큰을 포함한 청크를 찾지 못함")
-        role, _ = role_for_mention(original, r["start"], r["end"], rules,
-                                   [s for s in spans if (s["start"], s["end"]) != (r["start"], r["end"])])
+        role = mention_role(original, r["start"], r["end"], rules,
+                            [s for s in spans if (s["start"], s["end"]) != (r["start"], r["end"])], attrib)
         mentions.append({"token": r["token"], "norm": r["normalized"], "start": r["start"], "end": r["end"],
                          "line": line_of(r["start"]), "chunk_id": chunk_id, "role": role, "clues": []})
     per_line = {}
     for m in mentions:
         per_line[m["line"]] = per_line.get(m["line"], 0) + 1
+    by_line = {}
+    for m in mentions:
+        by_line.setdefault(m["line"], []).append(m)
     for r in records:                                   # 식별자는 이름과 같은 줄, 그 줄에 이름이 1번뿐일 때만
         if r["label"] in CLUE_LABELS and not is_shared_number(r["label"], r["normalized"]) \
                 and not in_narrative_cell(original, r["start"]):
             line = line_of(r["start"])
+            m = None
             if per_line.get(line) == 1:
-                m = next(m for m in mentions if m["line"] == line)
+                m = by_line[line][0]
+                if attrib and is_speaker(original, m["start"], m["end"]):
+                    m = None                            # 화자 줄의 번호는 화자 것이 아님 (v3)
+            elif attrib and not per_line.get(line):
+                m = block_owner(original, r["start"], by_line, line_of)   # 서식 주인공 줄 (v3)
+            if m is not None:
                 if r["token"] not in m["clues"]:
                     m["clues"].append(r["token"])
                 m.setdefault("clue_kinds", {}).setdefault(r["label"], set()).add(r["token"])
@@ -157,6 +237,9 @@ def build_doc_candidates(doc_id, original, masked, records, chunks, rules, id_fa
     links = []
     norms = [clusters[i][0]["norm"] for i in range(len(rows))]
     depts = [next((d for d in (_dept(original, x) for x in members) if d), None) for members in clusters]
+    for row, dept in zip(rows, depts):                   # 문서 간 비교(v3 M9)에 쓰도록 이름 옆 부서를 남긴다
+        if dept:
+            row["evidence"]["dept"] = dept
     affils = [{a[0] for a in (_affil(original, x) for x in members) if a} for members in clusters]
     judge = PersonResolver([], token_info={r["token"]: {"label": r["label"], "normalized": r["normalized"]}
                                            for r in records}, role_group=rules.role_group)
