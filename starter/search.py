@@ -58,6 +58,16 @@ def mask_query(query, with_records=False):
     return (masked, tokens, records) if with_records else (masked, tokens)
 
 
+def keep_unknown_role():
+    """PERSON_RULES=v3: 질문에 역할 조건이 있어도 역할 미정(unknown) 후보는 빼지 않는다.
+    역할이 분명히 다른 후보만 제외한다 (인물사전을 끈 검색의 역할 처리와 같은 방식). v1 은 정확히 일치하는 역할만."""
+    return (config.env("PERSON_RULES", "v1") or "v1").strip().lower() == "v3"
+
+
+def _UNKNOWN_ROLE_SQL():
+    return " OR role = 'unknown' OR role IS NULL" if keep_unknown_role() else ""
+
+
 def person_candidates(cur, records, roles=(), meta=None):
     """이름 토큰 → 검색 가능한 chunk_id 목록. 빈 후보는 이름 토큰 검색으로 대체하지 않는다."""
     out = {}
@@ -67,7 +77,7 @@ def person_candidates(cur, records, roles=(), meta=None):
             continue
         cur.execute("""SELECT DISTINCT COALESCE(reg_id, person_id), chunk_id
             FROM rag.look_up
-            WHERE token = %s AND (%s::text[] = '{}' OR role = ANY(%s::text[]))
+            WHERE token = %s AND (%s::text[] = '{}' OR role = ANY(%s::text[])""" + _UNKNOWN_ROLE_SQL() + """)
             ORDER BY 1, 2""", (token, list(roles), list(roles)))
         rows = cur.fetchall()
         identities = {row[0] for row in rows}

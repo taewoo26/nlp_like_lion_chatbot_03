@@ -31,6 +31,20 @@ registry 행 = {"reg_id", "reason", "merged_into", ...}. merged_into 는 DB 에�
 토큰의 종류와 원문은 token_info = {token: {"label", "normalized"}} (vault.token_map) 로 본다.
 라벨은 대소문자를 가리지 않는다 (PERSON / person).
 
+v3 (PERSON_RULES=v3, 기본 v1 — v1 이면 아래 내용은 적용되지 않는다)
+  - 추정(mid) 연결에도 reg_id 를 준다. evidence.level 은 mid 로 남고, registry.reason.confidence 는
+    high 근거가 하나라도 있으면 high, 아니면 mid. registry.reason.path = "doc" (문서 간 연결).
+  - M9  같은 이름 토큰 + 이름 옆 부서가 같음(evidence.dept, person_candidates 가 남김) → mid.
+        같은 부서·같은 이름 후보가 서로 다른 사람 2명 이상이면 잇지 않고 검토로.
+  - M7  같은 이름 토큰 + 같은 역할 그룹, M8  같은 이름 토큰 + 다른 사람 근거 없음 → mid.
+        부서가 서로 다르면 M7·M8 로 잇지 않는다.
+  - N9  동명이인 방어: 같은 이름 토큰의 행들 사이에 not_same_as(N1~N7)·N1~N4·부서 다름·같은 문서 안 분리가
+        하나라도 있으면 그 이름은 M7·M8 을 쓰지 않는다 (판정 시작 때 전체 행으로 한 번 계산).
+  - 구성원 충돌 확인: 두 묶음을 잇기 전에 양쪽 구성원 쌍(다른 문서) 중 하나라도 N1~N4 이면 잇지 않고 검토(N8).
+  - registry 는 '여러 문서에 걸쳐 이어진 사람'이다. 이번 판정에서 새로 만든 reg_id 중 행이 모두 한 문서에
+    있는 것(같은 문서 안 M4 연결만 있는 경우)은 판정 끝에 풀고 추정 연결(mid_matched)로 되돌린다.
+  - 한계: 증분 적재에서는 새 충돌이 생겨도 기존 연결을 다시 평가하지 않는다 → 전체 재적재(--reset) 권장.
+
 적용하지 않는 규칙 (입력 정보가 아직 없음)
   - N5 사내 소속 충돌: person_candidates가 같은 문서 안에서만 확인한다.
   - H3·N3: token_map 에 사번·고객번호 라벨(employee_id, customer_id)이 있을 때만 동작한다.
@@ -49,6 +63,7 @@ H4_LABELS = M1_LABELS | {"card_number"}                                    # H4 
 ID_LABELS = frozenset({"employee_id", "customer_id"})                      # H3·N3 (있을 때만)
 BIRTH_LABEL, GENDER_LABEL = "birth_date", "gender"
 SURNAME2 = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문")
+LEVEL_RANK = {"hold": 0, "none": 0, "mid": 1, "high": 2}
 
 
 def is_given_of(short, full):
@@ -84,6 +99,19 @@ def creation_key(row, id_column):
     return (created_time(row.get('created_at')) or datetime.max.replace(tzinfo=timezone.utc), row[id_column])
 
 
+def rules_version(value=None):
+    """PERSON_RULES=v1|v3 (기본 v1)."""
+    v = (value or os.environ.get("PERSON_RULES") or "v1").strip().lower()
+    if v not in ("v1", "v3"):
+        raise ValueError(f"PERSON_RULES 는 v1 또는 v3 여야 합니다: {v}")
+    return v
+
+
+def mid_reg_default(version=None):
+    """추정 연결에도 reg_id 를 주는가: v3 에서만."""
+    return rules_version(version) == "v3"
+
+
 def _env_on(name):
     return (os.environ.get(name, "off") or "off").strip().lower() == "on"
 
@@ -115,7 +143,8 @@ class PersonResolver:
     """rows(person_info) 의 pending 행을 판정해 reg_id 로 잇는다. rows·registry 는 제자리에서 고친다."""
 
     def __init__(self, rows, registry=None, token_info=None, role_group=None, links=(),
-                 link_unique=None, link_given=None, clock=None, id_factory=None):
+                 link_unique=None, link_given=None, clock=None, id_factory=None, mid_reg=None,
+                 version=None, name_only=None):
         self.rows = rows
         self.by_id = {r["person_id"]: r for r in rows}
         self.registry = {r["reg_id"]: r for r in (registry if registry is not None else [])}
@@ -125,6 +154,12 @@ class PersonResolver:
         self.links = list(links)                       # 같은 문서 안 확정 연결 [(person_id, person_id, "M4")]
         self.link_unique = _env_on("PERSON_LINK_UNIQUE") if link_unique is None else link_unique   # M5
         self.link_given = _env_on("PERSON_LINK_GIVEN") if link_given is None else link_given       # M6
+        self.version = rules_version(version)
+        self.v3 = self.version == "v3"                                                              # M9·구성원 충돌
+        self.name_only = self.v3 if name_only is None else (self.v3 and name_only)   # M7·M8 (실험용 인자)
+        self.mid_reg = mid_reg_default(self.version) if mid_reg is None else mid_reg                # mid 도 reg_id
+        self._name_conflict = set()                    # N9: 동명이인 가능성이 있는 이름 토큰
+        self._new_regs = set()                         # 이번 판정에서 새로 만든 reg_id
         self.clock = clock or _now
         self.last_created_at = max((created_time(r['created_at']) for r in self.registry_list
                                     if r.get('created_at')), default=None)
@@ -163,11 +198,15 @@ class PersonResolver:
                 or (rejudge_hold and r["resolution_status"] == "unresolved" and not r["reg_id"]
                     and r["evidence"].get("level") == "hold")]
         self.waiting = {r["person_id"] for r in todo}
+        if self.name_only:
+            self._name_conflict = self._conflicted_tokens()
         for a in todo:
             self.waiting.discard(a["person_id"])
             self._touch(a)
             self._evaluate(a)
             self._settle_all()
+        if self.mid_reg:
+            self._drop_single_doc_regs()
         return {"rows": self.rows, "registry": self.registry_list, "review": self.review,
                 "look_up": build_look_up(self.rows)}
 
@@ -198,6 +237,10 @@ class PersonResolver:
         self._link_all(a, highs, "high")
         self._stage_m1(a, same)
         self._stage_m3(a, same)
+        if self.v3:
+            self._stage_dept(a, same)
+        if self.name_only:
+            self._stage_name(a, same)
         self._stage_given(a, cross)
         if not a["reg_id"] and self.link_unique:
             self._stage_m5(a, pool)
@@ -251,6 +294,63 @@ class PersonResolver:
             self._add_review(a, "M1", shared, "같은 식별 토큰·이름의 후보가 2명 이상")
         elif shared:
             self._link(a, shared[0], "mid", "M1", [b["person_id"] for b in shared])
+
+    def _stage_dept(self, a, same):
+        """M9 (v3): 같은 이름 + 이름 옆 부서가 같음 → 추정. 그런 후보가 서로 다른 사람 2명 이상이면 검토."""
+        da = self._dept_of(a)
+        if not da:
+            return
+        own = self._own(a)
+        hits = [b for b in same if b["person_id"] not in own and not self._blocked(a, b) and self._dept_of(b) == da]
+        persons = {self._pkey(b) for b in hits}
+        if len(persons) > 1:
+            self._add_review(a, "M9", hits, "같은 이름·같은 부서의 후보가 2명 이상")
+        elif hits:
+            self._link(a, hits[0], "mid", "M9", [b["person_id"] for b in hits])
+
+    def _member_conflict(self, a, b):
+        """v3: a 묶음과 b 묶음의 구성원(다른 문서) 사이에 N1~N4 가 있는가."""
+        ga, gb = self._soft_members(a), self._soft_members(b)
+        return any(x["doc_id"] != y["doc_id"] and self._n_rule(x, y) for x in ga for y in gb)
+
+    def _stage_name(self, a, same):
+        """M7·M8: 같은 이름 토큰이고 다른 사람 근거가 없으면 추정 연결. N9(동명이인 가능성) 이름은 건너뛴다.
+        same 은 N1~N4 로 막힌 행을 이미 뺀 같은 이름 토큰의 다른 문서 행이다."""
+        if a["token"] in self._name_conflict:
+            return
+        own, da = self._own(a), self._dept_of(a)
+        seen = set()
+        for b in same:
+            if b["person_id"] in own or self._blocked(a, b):
+                continue
+            db = self._dept_of(b)
+            if da and db and da != db:                 # 부서가 다르면 약한 근거로 잇지 않음
+                continue
+            key = self._pkey(b)
+            if key in seen or key == self._pkey(a):
+                continue
+            seen.add(key)
+            ga, gb = self._group_of(a), self._group_of(b)
+            self._link(a, b, "mid", "M7" if ga and gb and ga == gb else "M8")
+
+    def _conflicted_tokens(self):
+        """N9: 같은 이름 토큰의 행 사이에 다른 사람 근거가 하나라도 있는 토큰.
+        근거 = not_same_as(문서 안 N5~N7 포함), N1~N4, 부서 다름, 같은 문서 안에서 따로 남은 행(누구인지 모름)."""
+        by_token = {}
+        for r in self.rows:
+            by_token.setdefault(r["token"], []).append(r)
+        out = set()
+        for token, rows in by_token.items():
+            for i, a in enumerate(rows):
+                for b in rows[i + 1:]:
+                    da, db = self._dept_of(a), self._dept_of(b)
+                    if a["doc_id"] == b["doc_id"] or self._blocked(a, b) or self._n_rule(a, b) \
+                            or (da and db and da != db):
+                        out.add(token)
+                        break
+                if token in out:
+                    break
+        return out
 
     def _stage_m3(self, a, same):
         """M3: 생년월일·성별이 양쪽에 있고 모두 같음."""
@@ -340,14 +440,19 @@ class PersonResolver:
         N8 에 걸리면 잇지 않고 검토로 넘긴다. 잇지 않으면 False."""
         if a is b:
             return False
-        if level == "mid":
+        if self.v3 and self._pkey(a) != self._pkey(b) and self._member_conflict(a, b):
+            self._add_review(a, "N8", [b], "묶음 구성원 사이에 다른 사람 근거(N1~N4)가 있음 — 잇지 않음")
+            return False
+        if level == "mid" and not self.mid_reg:
             return self._mid_link(a, b, rule, matched)
         if self._pkey(a) != self._pkey(b) and self._conflict(a, b):
             self._add_review(a, "N8", [b], "합치면 not_same_as(none) 판정이 깨짐 — 합치지 않음")
             return False
         ga, gb = self._members(a), self._members(b)
         if not (a["reg_id"] and a["reg_id"] == b["reg_id"]):
-            self._join(a, b, ga, gb, rule)
+            self._join(a, b, ga, gb, rule, level)
+        elif self.mid_reg and level == "high":
+            self._raise_confidence(a["reg_id"])
         for row, other in ((a, b), (b, a)):
             self._record(row, level, rule, matched if row is a and matched else [other["person_id"]])
         if rule == "H1" and a["token"] != b["token"]:          # H1: 이름 토큰이 달라도 같은 사람 → registry.reason 에 name_diff
@@ -374,15 +479,21 @@ class PersonResolver:
             self._uf_union(a["person_id"], p["person_id"])
         return True
 
-    def _join(self, a, b, ga, gb, rule):
+    def _join(self, a, b, ga, gb, rule, level="high"):
         ra, rb = a["reg_id"], b["reg_id"]
         if not ra and not rb:
             reg = self.id_factory("reg_")
             self.last_created_at = next_created_at(self.last_created_at, self.clock())
-            row = {"reg_id": reg, "reason": {"method": "rule", "reason_code": rule}, "merged_into": None,
+            reason = {"method": "rule", "reason_code": rule}
+            if self.mid_reg:                           # 추정(mid)으로 만든 인물인지 구분
+                reason["confidence"] = level
+            if self.v3:
+                reason["path"] = "doc"                 # 문서 간 연결 (마스터 대조는 "master")
+            row = {"reg_id": reg, "reason": reason, "merged_into": None,
                    "created_at": self.last_created_at, "updated_at": self.clock()}
             self.registry[reg] = row
             self.registry_list.append(row)
+            self._new_regs.add(reg)
         elif not ra or not rb:
             reg = ra or rb
         else:                                           # 서로 다른 확정 인물 → 먼저 등록된 쪽으로 하나로
@@ -392,15 +503,51 @@ class PersonResolver:
             self._uf_union("reg:" + loser, "reg:" + reg)
         if reg in self.registry:
             self.registry[reg]["updated_at"] = self.clock()
+            if self.mid_reg and (level == "high" or any(
+                    (self.registry.get(x) or {}).get("reason", {}).get("confidence") == "high" for x in (ra, rb) if x)):
+                self._raise_confidence(reg)
         for r in ga + gb:
             r["reg_id"] = reg
             self._uf_union(r["person_id"], "reg:" + reg)
             self._touch(r)
 
+    def _drop_single_doc_regs(self):
+        """v3: 이번에 새로 만든 reg_id 중 행이 모두 한 문서에 있는 것을 풀어 추정 연결로 되돌린다.
+        (registry = 여러 문서에 걸쳐 이어진 사람. 기존 DB 의 reg_id 는 건드리지 않는다)"""
+        absorbed = {r.get("merged_into") for r in self.registry_list if r.get("merged_into")}
+        now = self.clock()
+        for reg in sorted(self._new_regs):
+            entry = self.registry.get(reg)
+            if entry is None or entry.get("merged_into") or reg in absorbed:
+                continue
+            members = [r for r in self.rows if r["reg_id"] == reg]
+            if len({r["doc_id"] for r in members}) != 1:
+                continue
+            rule = entry["reason"].get("reason_code") or "M4"
+            for r in members:
+                for other in members:
+                    if other is not r:
+                        r["evidence"].setdefault("mid_matched", {}).setdefault(other["person_id"], rule)
+            for r in members:
+                ev = r["evidence"]
+                r["reg_id"], r["resolution_status"] = None, "unresolved"
+                ev["level"], ev["rule"], ev["matched"] = "mid", next(iter(ev["mid_matched"].values())), []
+                ev["dt"] = r["updated_at"] = now
+            self.registry_list.remove(entry)
+            del self.registry[reg]
+
+    def _raise_confidence(self, reg):
+        """mid 로 만든 registry 에 high 근거가 생기면 confidence 를 high 로 올린다 (v3)."""
+        reason = self.registry[reg]["reason"]
+        if reason.get("confidence") != "high":
+            reason["confidence"] = "high"
+            self.registry[reg]["updated_at"] = self.clock()
+
     def _record(self, row, level, rule, matched):
-        """high 연결 기록. 처음 high 를 준 규칙을 유지하고 상대를 matched 에 더한다."""
+        """reg_id 연결 기록. 처음 그 level 을 준 규칙을 유지하고 상대를 matched 에 더한다.
+        level 은 올라가기만 한다 (high 다음에 온 mid 가 high 를 덮지 않음)."""
         ev = row["evidence"]
-        if ev.get("level") != level:
+        if LEVEL_RANK.get(ev.get("level"), 0) < LEVEL_RANK[level]:
             ev["level"], ev["rule"] = level, rule
         _add(ev.setdefault("matched", []), matched)
         self._touch(row)
@@ -485,6 +632,10 @@ class PersonResolver:
     def _members(self, row):
         """같은 reg_id(확정 인물)로 이어진 행들."""
         return [r for r in self.rows if r["reg_id"] == row["reg_id"]] if row["reg_id"] else [row]
+
+    def _dept_of(self, row):
+        """이름 옆 부서 (person_candidates 가 evidence.dept 에 남긴 값). 없으면 None."""
+        return row["evidence"].get("dept")
 
     def _key(self, row):
         return row["reg_id"] or row["person_id"]            # 확정 인물 단위: reg_id 하나, 이어지지 않은 행은 각자 1명
@@ -600,7 +751,7 @@ def check_look_up(rows, look_up, chunks):
             raise ValueError(f"{r['person_id']}: 청크 {l['chunk_id']} 의 문서가 후보의 문서와 다름")
 
 
-def check_rows(rows, registry=(), token_info=None):
+def check_rows(rows, registry=(), token_info=None, mid_reg=None):
     """판정 결과가 설계의 제약과 맞는지 확인한다 (어긋나면 ValueError). 시험·배치 끝 검증용.
 
     token_info 를 주면 DDL 에 FK 가 없는 부분도 확인한다:
@@ -608,6 +759,7 @@ def check_rows(rows, registry=(), token_info=None):
     """
     regs = {r["reg_id"]: r for r in registry}
     by_id = {r["person_id"]: r for r in rows}
+    mid_reg = mid_reg_default() if mid_reg is None else mid_reg
     for r in rows:
         if token_info is not None:
             if (token_info.get(r["token"], {}).get("label") or "").lower() != "person":
@@ -623,7 +775,9 @@ def check_rows(rows, registry=(), token_info=None):
         if reg and (reg not in regs or regs[reg].get("merged_into")):
             raise ValueError(f"{r['person_id']}: reg_id 가 없거나 이미 합쳐진 registry 를 가리킴")
         # 확정 인물(resolved)은 high 만. mid 는 reg_id 없는 추정 연결(unresolved)이다.
-        allowed = {"pending": {"hold"}, "resolved": {"high"}, "unresolved": {"mid", "none", "hold"}}[status]
+        # v3 이면 mid 도 reg_id 를 받아 resolved 가 된다.
+        allowed = {"pending": {"hold"}, "resolved": {"high", "mid"} if mid_reg else {"high"},
+                   "unresolved": {"mid", "none", "hold"}}[status]
         if level not in allowed:
             hint = (" (mid 는 reg_id 를 받지 않습니다. 기준 변경 전에 적재한 데이터라면 --reset 으로 다시 적재하세요)"
                      if status == "resolved" and level == "mid" else "")
