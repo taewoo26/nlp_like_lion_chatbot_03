@@ -16,13 +16,14 @@ from . import config
 
 
 def rag_conn():
-    conn = psycopg.connect(config.RAG_DSN, autocommit=False)
+    conn = psycopg.connect(config.RAG_DSN, autocommit=False, connect_timeout=5,
+                           options="-c statement_timeout=30000")
     register_vector(conn)
     return conn
 
 
 def vault_conn():
-    return psycopg.connect(config.VAULT_DSN, autocommit=False)
+    return psycopg.connect(config.VAULT_DSN, autocommit=False, connect_timeout=5)
 
 
 def ingest_conn():
@@ -30,7 +31,7 @@ def ingest_conn():
     dsn = config.env("INGEST_DSN")
     if not dsn:
         raise ValueError("PERSON_DICT=on 적재에는 INGEST_DSN을 설정하세요 (app_ingest 계정).")
-    conn = psycopg.connect(dsn, autocommit=False)
+    conn = psycopg.connect(dsn, autocommit=False, connect_timeout=5)
     register_vector(conn)
     return conn
 
@@ -40,15 +41,17 @@ def reset_conn():
     dsn = config.env('RESET_DSN')
     if not dsn:
         raise ValueError('PERSON_DICT=off --reset에는 RESET_DSN을 설정하세요 (app_reset 계정).')
-    conn = psycopg.connect(dsn, autocommit=False)
+    conn = psycopg.connect(dsn, autocommit=False, connect_timeout=5)
     register_vector(conn)
     return conn
 
 
 def auth_conn():
-    return psycopg.connect(config.AUTH_DSN, autocommit=False)
+    return psycopg.connect(config.AUTH_DSN, autocommit=False, connect_timeout=5,
+                           options="-c statement_timeout=30000")
 
 
 def restore_conn():
     # 권한 정리 때 이 접속만 pii_search 계정으로 바꾼다 (지금은 로그인 판정과 같은 관리자 계정)
-    return psycopg.connect(config.AUTH_DSN, autocommit=False)
+    return psycopg.connect(config.AUTH_DSN, autocommit=False, connect_timeout=5,
+                           options="-c statement_timeout=30000")

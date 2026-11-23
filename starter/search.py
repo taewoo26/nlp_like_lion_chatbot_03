@@ -42,6 +42,7 @@ import argparse
 import re
 
 from . import address, config, db, pii_pipeline
+from .bm25 import bm25_scores, extract_terms, has_keywords
 from .embed import embed
 from .roles import load_rules, query_name_roles, query_roles
 
@@ -273,41 +274,63 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 meta["excluded"] += 1
             else:
                 kept.append(d)
-        docs = rerank_top(masked_q, kept[:k])
+        docs = _apply_bm25(masked_q, kept[:k])
     else:
-        docs = rerank_top(masked_q, docs[:k])
+        docs = _apply_bm25(masked_q, docs[:k])
     return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
 
 
-# ---------------------------------------------------------------- 상위 문서 재정렬 (단어 겹침)
-_TOKEN = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
-_KEEP_TAGS = ("NNG", "NNP", "VV", "VA", "XR", "SL", "SN")
+# ---------------------------------------------------------------- BM25 하이브리드 + 상위 문서 재정렬
 
 
-def _terms(text):
-    """토큰을 지운 뒤 Kiwi로 내용어(명사·동사·형용사 등)만 뽑는다."""
-    from detection.rule.kiwi_filter import _get_kiwi   # 탐지기가 이미 불러 둔 Kiwi 재사용
-    return {t.form for t in _get_kiwi().tokenize(_TOKEN.sub(" ", text))
-            if t.tag in ("NNG", "NNP") or (t.tag.startswith(_KEEP_TAGS) and len(t.form) > 1)}
+def _bm25_weight():
+    return float(config.env("BM25_WEIGHT", "0.3"))
+
+
+def _bm25_cutoff_on():
+    return (config.env("BM25_CUTOFF", "on") or "on").strip().lower() == "on"
+
+
+def _apply_bm25(masked_q, docs):
+    """BM25 점수를 임베딩 점수에 합산하고, 키워드가 있으면 BM25=0 문서를 뺀다.
+
+    BM25_WEIGHT=0 이면 BM25를 끄고 기존 rerank_top 으로 돌아간다.
+    """
+    weight = _bm25_weight()
+    if weight <= 0 or len(docs) <= 1:
+        return rerank_top(masked_q, docs)
+    q_terms = extract_terms(masked_q)
+    if not has_keywords(q_terms):
+        return rerank_top(masked_q, docs)
+    scores = bm25_scores(q_terms, docs)
+    max_bm25 = max(scores.values()) if scores else 0
+    if max_bm25 > 0:
+        for d in docs:
+            d["bm25"] = scores.get(d["doc_id"], 0)
+            d["score"] = d["score"] + weight * d["bm25"] / max_bm25
+    if _bm25_cutoff_on():
+        docs = [d for d in docs if scores.get(d["doc_id"], 0) > 0]
+    return sorted(docs, key=lambda d: -d["score"])
 
 
 def rerank_top(masked_q, docs):
     """상위 RERANK_TOP(기본 5)개 문서만 '의미 점수 + 가중치 × 질문 단어 겹침'으로 다시 줄 세운다.
 
-    상위 5개에 드는 문서 구성은 바꾸지 않고 순서만 바꾸므로 Hit@5·Recall@5 는 그대로이고,
-    '완료/진행 중', '포인트', '감사 지적'처럼 같은 인물 문서끼리 갈리는 핵심 단어로 1등을 고른다.
+    BM25가 활성화되어 있으면 키워드 가산이 겹치므로 건너뛴다.
     holdout 재현 실험(bge-m3, AND): Hit@1 .852 → .898, MRR .904 → .934, 다른 지표 변화 없음.
     RERANK_TOP=0 이면 끈다.
     """
+    if _bm25_weight() > 0:
+        return docs
     top = int(config.env("RERANK_TOP", "5"))
     weight = float(config.env("RERANK_WEIGHT", "0.2"))
     if top <= 1 or len(docs) <= 1 or weight <= 0:
         return docs
-    q_terms = _terms(masked_q)
+    q_terms = extract_terms(masked_q)
     if not q_terms:
         return docs
     head, tail = docs[:top], docs[top:]
-    overlap = {d["doc_id"]: len(q_terms & _terms(d["masked_text"])) / len(q_terms) for d in head}
+    overlap = {d["doc_id"]: len(q_terms & extract_terms(d["masked_text"])) / len(q_terms) for d in head}
     best = max(overlap.values()) or 1.0
     for d in head:
         d["score"] = d["score"] + weight * overlap[d["doc_id"]] / best
