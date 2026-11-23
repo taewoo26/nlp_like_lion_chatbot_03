@@ -75,6 +75,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE rag_user IN SCHEMA rag, vault, policy, audit
 GRANT USAGE ON SCHEMA rag, policy, audit TO vault_user;
 GRANT SELECT ON policy.users TO vault_user;
 GRANT INSERT ON audit.restore_log TO vault_user;
+GRANT SELECT ON audit.query_log, rag.chunks TO vault_user;   -- partial_token: 본인 질문·답변에 나온 토큰 확인
 
 -- 3. 적재: 탐지 → 가명처리 → 적재 → 인물사전
 GRANT USAGE ON SCHEMA rag, vault TO pii_ingest;
@@ -98,6 +99,7 @@ GRANT SELECT                 ON policy.users TO pii_search;                     
 GRANT UPDATE (last_login_at) ON policy.users TO pii_search;
 GRANT INSERT ON audit.query_log TO pii_search;
 GRANT EXECUTE ON FUNCTION vault.restore_token(text, text, text) TO pii_search;
+GRANT EXECUTE ON FUNCTION vault.partial_token(text, text, text) TO pii_search;   -- Lv1 이름 부분 공개
 
 -- 5. 관리자(admin)는 슈퍼유저이므로 별도 GRANT 불필요
 
