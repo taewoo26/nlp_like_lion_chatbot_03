@@ -2,7 +2,8 @@
 
 단위 (DB·모델 없이 실행)
 - _fetch_partials: 이름 토큰만 DB 함수에 넘기고, request_id·user_id 를 함께 넘기고, 커밋한다
-- /api/verify-password: Lv1 은 partial_verified 만 켠다 (실명 복원 인증과 섞이지 않음), Lv0 403, 비밀번호 틀림 401
+- /api/verify-password: Lv1 은 partial_verified 만, Lv2 는 restore_verified 만 켠다 (섞이지 않음), Lv0 403, 비밀번호 틀림 401
+- 서버가 로그인 때 사용자 정보를 세션에 캐싱하므로(_SESSION_CACHE_TTL), 레벨을 바꾸는 테스트는 그 레벨로 다시 로그인한다
 - /api/partial-tokens: Lv1 + 2차 인증만, request_id 형식 검사, 권한 없음 403 / 기타 오류 503, 원문·토큰은 로그에 남기지 않음
 실제 DB (없거나 05_audit.sql 미적용이면 건너뜀, 모두 롤백)
 - 이름 마스킹 규칙
@@ -86,6 +87,13 @@ def _verify(env):
     assert env["client"].post("/api/verify-password", json={"password": "x"}).status_code == 200
 
 
+def _login_as(env, level):
+    """원하는 레벨로 다시 로그인한다. 서버는 로그인 때 사용자 정보를 세션에 캐싱하므로
+    (app._SESSION_CACHE_TTL) 로그인한 채로 레벨만 바꾸면 반영되지 않는다."""
+    env["user"]["access_level"] = level
+    assert env["client"].post("/api/login", json={"user_id": LV1["user_id"], "password": "x"}).status_code == 200
+
+
 def test_partial_tokens_lv1_after_second_auth(env):
     _verify(env)
     r = env["client"].post("/api/partial-tokens", json={"request_id": RID, "tokens": [TOK]})
@@ -107,21 +115,29 @@ def test_verify_password_wrong_password(env, monkeypatch):
 
 
 def test_verify_password_lv0_denied(env):
-    env["user"]["access_level"] = 0
+    _login_as(env, 0)                                        # 화면에 버튼이 없어도 API 를 직접 부를 수 있다
     assert env["client"].post("/api/verify-password", json={"password": "x"}).status_code == 403
 
 
-def test_lv1_verification_does_not_open_full_restore(env):
-    _verify(env)                                             # Lv1 인증은 partial_verified 만 켠다
-    env["user"]["access_level"] = 2                          # 이후 Lv2 로 바뀌어도 실명 복원은 다시 인증해야 함
-    r = env["client"].post("/api/restore-tokens", json={"request_id": RID, "tokens": [TOK]})
-    assert r.status_code == 403
+class _Req:                                                  # verify_password 를 직접 부를 때 쓰는 가짜 요청
+    def __init__(self):
+        self.session = {}
+
+
+@pytest.mark.parametrize("level, flag", [(1, "partial_verified"), (2, "restore_verified")])
+def test_verify_password_sets_only_own_flag(monkeypatch, level, flag):
+    """Lv1 인증은 partial_verified 만, Lv2 인증은 restore_verified 만 켠다 (서로 섞이지 않음)."""
+    monkeypatch.setattr(app_module.auth, "authenticate",
+                        lambda u, p, conn=None: app_module.auth.LoginResult(True, app_module.auth.OK))
+    req = _Req()
+    app_module.verify_password(app_module.VerifyPassword(password="x"), req, user=dict(LV1, access_level=level))
+    assert req.session == {flag: True}
 
 
 @pytest.mark.parametrize("level", [0, 2])
 def test_partial_tokens_lv1_only(env, level):
-    _verify(env)
-    env["user"]["access_level"] = level
+    _login_as(env, level)
+    env["client"].post("/api/verify-password", json={"password": "x"})   # Lv0 은 403, Lv2 는 restore_verified 만
     r = env["client"].post("/api/partial-tokens", json={"request_id": RID, "tokens": [TOK]})
     assert r.status_code == 403 and env["fetch"] == []
 

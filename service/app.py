@@ -51,6 +51,7 @@ from starter import chat, config, db, pii_pipeline
 STATIC = Path(__file__).with_name("static")
 UI_STATE = {"answered": "found", "search_only": "nollm"}   # 그 밖의 state 는 화면에서 sorry
 MIN_SECRET_LENGTH = 16
+_SESSION_CACHE_TTL = 60   # 세션 유저 정보 DB 재조회 주기(초). 이 시간 안에는 캐시 사용
 
 
 @asynccontextmanager
@@ -82,11 +83,22 @@ LOGIN_STATUS = {auth.INVALID: 401, auth.INACTIVE: 403}
 
 
 def _session_user(request: Request):
-    """세션의 로그인 사용자를 돌려준다. 로그인하지 않았거나 계정이 비활성이면 세션을 비우고 None."""
+    """세션의 로그인 사용자를 돌려준다. 로그인하지 않았거나 계정이 비활성이면 세션을 비우고 None.
+    _SESSION_CACHE_TTL 이내에는 DB를 다시 읽지 않고 세션에 캐싱된 정보를 쓴다."""
     user_id = request.session.get("user_id")
-    user = auth.get_active_user(user_id) if isinstance(user_id, str) and user_id else None
+    if not isinstance(user_id, str) or not user_id:
+        request.session.clear()
+        return None
+    cached = request.session.get("_user_cache")
+    cached_at = request.session.get("_user_cached_at", 0)
+    if cached and (time.time() - cached_at) < _SESSION_CACHE_TTL:
+        return cached
+    user = auth.get_active_user(user_id)
     if user is None:
         request.session.clear()
+        return None
+    request.session["_user_cache"] = user
+    request.session["_user_cached_at"] = time.time()
     return user
 
 
@@ -150,6 +162,8 @@ def login(body: Login, request: Request):      # 동기 함수: bcrypt 계산과
             "reason": result.reason, "message": LOGIN_MESSAGES[result.reason]})
     request.session.clear()                    # 이전 세션 값을 버리고 새로 시작
     request.session["user_id"] = result.user["user_id"]
+    request.session["_user_cache"] = result.user
+    request.session["_user_cached_at"] = time.time()
     return {"user": result.user}
 
 

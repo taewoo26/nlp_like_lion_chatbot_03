@@ -26,6 +26,7 @@ import time
 import requests
 
 from . import config, recheck
+from .bm25 import extract_terms
 from .search import search, tag_masked
 
 SYSTEM = """당신은 금융사 사내 문서 검색 도우미입니다. 아래 규칙을 지켜 한국어로 답하세요.
@@ -54,15 +55,23 @@ TOKEN = re.compile(r"<[A-Za-z_]+_[0-9A-Za-z]+>")
 WITHHELD_WORDS = ("확인되지 않", "찾지 못", "보류", "확인할 수 없", "알 수 없")
 
 
-def _doc_block(doc, q_tokens):
-    """문서 본문 앞에, 코드가 직접 확인한 '질문 토큰이 나오는 줄'을 붙인다.
-    긴 무작위 토큰을 LLM이 눈으로 대조하지 않아도 되게 하기 위함."""
-    lines = [ln.strip() for ln in doc["masked_text"].splitlines()
-             if any(t in ln for t in q_tokens)]
+def _doc_block(doc, q_tokens, q_keywords=None):
+    """문서 본문 앞에, 코드가 직접 확인한 '질문 토큰이 나오는 줄'과 '키워드가 나오는 줄'을 붙인다."""
+    token_lines = [ln.strip() for ln in doc["masked_text"].splitlines()
+                   if any(t in ln for t in q_tokens)]
     head = f"[{doc['doc_id']}]"
-    if lines:
+    if token_lines:
         head += "\n(시스템 확인) 질문의 토큰이 이 문서의 다음 줄에 그대로 나옵니다:\n" + \
-                "\n".join(f"  - {ln}" for ln in lines)
+                "\n".join(f"  - {ln}" for ln in token_lines)
+    if q_keywords:
+        doc_terms = extract_terms(doc["masked_text"])
+        matched = q_keywords & doc_terms
+        if matched:
+            kw_lines = [ln.strip() for ln in doc["masked_text"].splitlines()
+                        if any(kw in ln for kw in matched)]
+            if kw_lines:
+                head += "\n(키워드 확인) 질문의 핵심 단어가 이 문서의 다음 줄에 나옵니다:\n" + \
+                        "\n".join(f"  - {ln}" for ln in kw_lines)
     return f"{head}\n본문:\n{doc['masked_text']}"
 
 
@@ -113,7 +122,8 @@ def answer(query, k=3):
 
 
 def _answer(masked_q, q_tokens, docs, meta):
-    context = "\n\n".join(_doc_block(d, q_tokens) for d in docs)
+    q_keywords = extract_terms(masked_q)
+    context = "\n\n".join(_doc_block(d, q_tokens, q_keywords) for d in docs)
     token_note = f"\n질문에 포함된 토큰: {', '.join(q_tokens)}" if q_tokens else ""
     result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None,
               "notice": None, "state": None, "recheck": None}
