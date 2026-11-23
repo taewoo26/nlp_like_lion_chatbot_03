@@ -8,9 +8,24 @@
 """
 import math
 import re
+from collections import Counter
 
 _TOKEN = re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")
 _KEEP_TAGS = ("NNG", "NNP", "VV", "VA", "XR", "SL", "SN")
+_STOPWORDS = frozenset({
+    "관련", "문서", "내용", "정보", "사항", "부분", "경우",
+    "확인", "건", "것", "때", "중", "후", "전", "수", "등",
+    "위", "대", "간", "내", "외", "용", "별", "상", "하",
+    "보이", "되", "하", "있", "없", "주", "받", "알", "찾",
+})
+
+
+def _content_tokens(text):
+    """PII 토큰을 지운 뒤 Kiwi로 내용어 토큰 리스트를 반환한다 (불용어 제외)."""
+    from detection.rule.kiwi_filter import _get_kiwi
+    return [t.form for t in _get_kiwi().tokenize(_TOKEN.sub(" ", text))
+            if (t.tag in ("NNG", "NNP") or (t.tag.startswith(_KEEP_TAGS) and len(t.form) > 1))
+            and t.form not in _STOPWORDS]
 
 
 def extract_terms(text):
@@ -18,9 +33,7 @@ def extract_terms(text):
 
     반환: set of str (예: {"대출", "상담", "VOC"})
     """
-    from detection.rule.kiwi_filter import _get_kiwi
-    return {t.form for t in _get_kiwi().tokenize(_TOKEN.sub(" ", text))
-            if t.tag in ("NNG", "NNP") or (t.tag.startswith(_KEEP_TAGS) and len(t.form) > 1)}
+    return set(_content_tokens(text))
 
 
 def has_keywords(query_terms):
@@ -42,19 +55,19 @@ def bm25_scores(query_terms, docs, k1=1.5, b=0.75):
     if not query_terms or not docs:
         return {}
 
-    doc_terms = {}
+    doc_counts = {}
     doc_lengths = {}
     for d in docs:
-        terms = extract_terms(d["masked_text"])
-        doc_terms[d["doc_id"]] = terms
-        doc_lengths[d["doc_id"]] = len(terms)
+        counts = Counter(_content_tokens(d["masked_text"]))
+        doc_counts[d["doc_id"]] = counts
+        doc_lengths[d["doc_id"]] = sum(counts.values())
 
     n = len(docs)
     avgdl = sum(doc_lengths.values()) / n if n else 1
 
     df = {}
     for q in query_terms:
-        df[q] = sum(1 for terms in doc_terms.values() if q in terms)
+        df[q] = sum(1 for counts in doc_counts.values() if q in counts)
 
     idf = {}
     for q in query_terms:
@@ -64,10 +77,10 @@ def bm25_scores(query_terms, docs, k1=1.5, b=0.75):
     for d in docs:
         did = d["doc_id"]
         dl = doc_lengths[did]
-        terms = doc_terms[did]
+        counts = doc_counts[did]
         score = 0.0
         for q in query_terms:
-            tf = 1 if q in terms else 0
+            tf = counts.get(q, 0)
             if tf == 0:
                 continue
             numerator = tf * (k1 + 1)

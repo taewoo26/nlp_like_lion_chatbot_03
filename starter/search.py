@@ -274,13 +274,27 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 meta["excluded"] += 1
             else:
                 kept.append(d)
-        docs = _apply_bm25(masked_q, kept[:k])
+        docs = _apply_threshold(_apply_bm25(masked_q, kept[:k]))
     else:
-        docs = _apply_bm25(masked_q, docs[:k])
+        docs = _apply_threshold(_apply_bm25(masked_q, docs[:k]))
     return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
 
 
 # ---------------------------------------------------------------- BM25 하이브리드 + 상위 문서 재정렬
+
+
+def _score_ratio():
+    """1등 대비 최소 비율. 이 비율 미만인 문서는 반환하지 않는다."""
+    return float(config.env("SCORE_RATIO", "0.7"))
+
+
+def _apply_threshold(docs):
+    """상대 임계값: 1등 점수 × SCORE_RATIO 미만인 문서를 제거한다."""
+    ratio = _score_ratio()
+    if ratio <= 0 or len(docs) <= 1:
+        return docs
+    cutoff = docs[0]["score"] * ratio
+    return [d for d in docs if d["score"] >= cutoff]
 
 
 def _bm25_weight():
@@ -308,7 +322,7 @@ def _apply_bm25(masked_q, docs):
         for d in docs:
             d["bm25"] = scores.get(d["doc_id"], 0)
             d["score"] = d["score"] + weight * d["bm25"] / max_bm25
-    if _bm25_cutoff_on():
+    if _bm25_cutoff_on() and max_bm25 > 0:
         docs = [d for d in docs if scores.get(d["doc_id"], 0) > 0]
     return sorted(docs, key=lambda d: -d["score"])
 
