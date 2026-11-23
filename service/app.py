@@ -26,6 +26,10 @@
   복원은 vault.restore_token()으로만 한다. 토큰마다 audit.restore_log 1행이 남고 request_id 로 query_log 와 이어진다.
   기록에 실패하면 복원도 실패한다(화면에는 토큰 그대로). query_log 와 달리 실명이 나가는 쪽이라 기록 없는 복원은 하지 않는다.
   DB 접속은 db.restore_conn() (지금 관리자 계정, 권한 정리 때 pii_search 로 교체).
+- 이름 부분 공개(Lv1 + 2차 인증): POST /api/verify-password {"password"} → 세션에 partial_verified
+        POST /api/partial-tokens {"request_id", "tokens": [...]} → {"map": {토큰: "윤*영"}}
+  vault.partial_token()으로만 한다. DB 함수가 Lv1 확인 → 본인 질문(query_log) 확인 → 이름 토큰이고 그 답변에 나온
+  토큰인지 확인 → 마스킹 → audit.restore_log(mode=partial) 기록을 한다. 원문은 DB 밖으로 나오지 않는다.
 """
 import logging
 import re
@@ -162,12 +166,14 @@ def me(user: dict = Depends(login_required)):
 
 @app.post("/api/verify-password")
 def verify_password(body: VerifyPassword, request: Request, user: dict = Depends(login_required)):
-    if user.get("access_level") != 2:
-        raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
+    """2차 인증. Lv2 → restore_verified(실명 복원), Lv1 → partial_verified(이름 부분 공개). 서로 섞이지 않는다."""
+    level = user.get("access_level")
+    if level not in (1, 2):
+        raise HTTPException(status_code=403, detail="Lv1 이상 권한이 필요합니다.")
     result = auth.authenticate(user["user_id"], body.password)
     if not result.ok:
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
-    request.session["restore_verified"] = True
+    request.session["restore_verified" if level == 2 else "partial_verified"] = True
     return {"ok": True}
 
 
@@ -185,6 +191,23 @@ def restore_tokens(body: RestoreTokens, request: Request, user: dict = Depends(l
     except Exception as exc:                                # 기록 실패 포함: 기록 없는 복원은 하지 않는다
         _log_restore_error(body.request_id, exc)
         raise HTTPException(status_code=503, detail=f"복원 처리 중 오류: {type(exc).__name__}") from None
+    return {"map": token_map}
+
+
+@app.post("/api/partial-tokens")
+def partial_tokens(body: RestoreTokens, request: Request, user: dict = Depends(login_required)):
+    if user.get("access_level") != 1:           # Lv1 전용. Lv2 도 쓰게 하려면 < 1 로 (DB 함수·화면 버튼·verify_password 도 함께)
+        raise HTTPException(status_code=403, detail="Lv1 전용 기능입니다.")
+    if not request.session.get("partial_verified"):
+        raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
+    try:
+        token_map = _fetch_partials(body.tokens, body.request_id, user["user_id"])
+    except psycopg.errors.InsufficientPrivilege as exc:     # Lv1 아님·본인 질문 아님 (42501)
+        _log_restore_error(body.request_id, exc)
+        raise HTTPException(status_code=403, detail="부분 공개 권한이 없습니다.") from None
+    except Exception as exc:                                # 기록 실패 포함: 기록 없는 공개는 하지 않는다
+        _log_restore_error(body.request_id, exc)
+        raise HTTPException(status_code=503, detail=f"부분 공개 처리 중 오류: {type(exc).__name__}") from None
     return {"map": token_map}
 
 
@@ -226,6 +249,28 @@ def _fetch_originals(tokens, request_id: str, user_id: str) -> dict[str, str]:
             rows = cur.fetchall()
         conn.commit()
     return {t: orig[0] for t, orig in rows if orig and orig[0]}
+
+
+_PARTIAL_TOKEN_RE = re.compile(r"<PERSON_[0-9a-f]+>")      # 부분 공개는 이름 토큰만
+_PARTIAL_SQL = "SELECT t, vault.partial_token(%s, %s, t) FROM unnest(%s::text[]) AS t"
+
+
+def _fetch_partials(tokens, request_id: str, user_id: str) -> dict[str, str]:
+    """vault.partial_token()으로 이름 토큰 → 마스킹 값(윤*영) 매핑을 가져온다.
+
+    이름 토큰이 아니면 DB 를 부르기 전에 뺀다 (DB 함수도 person 이 아니면 NULL).
+    NULL(이름 아님·답변에 없던 토큰·token_map 에 없음)은 결과에서 빠진다.
+    한 트랜잭션이라 하나라도 실패하면(Lv1 아님·본인 질문 아님 42501, 기록 실패 등) 전부 롤백되고 예외가 올라간다.
+    """
+    valid = sorted({t for t in tokens if _PARTIAL_TOKEN_RE.fullmatch(t)})
+    if not valid:
+        return {}
+    with db.restore_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_PARTIAL_SQL, (request_id, user_id, valid))
+            rows = cur.fetchall()
+        conn.commit()
+    return {t: masked for t, masked in rows if masked}
 
 
 def _log_recheck(request_id, rc, latency_ms):

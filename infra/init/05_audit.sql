@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS audit.restore_log (
     level           SMALLINT    NOT NULL,
     token           TEXT        NOT NULL,
     label           TEXT        NOT NULL,
-    mode            TEXT        NOT NULL,                   -- 현재 full만
+    mode            TEXT        NOT NULL,                   -- full(Lv2 실명 복원) / partial(Lv1 이름 부분 공개)
     CONSTRAINT restore_log_level_chk CHECK (level BETWEEN 0 AND 2),
     CONSTRAINT restore_log_token_fmt CHECK (token ~ '^<[A-Z_]+_[0-9a-f]+>$'),
     CONSTRAINT restore_log_mode_chk  CHECK (mode IN ('full'))
@@ -140,6 +140,81 @@ END;
 $$;
 ALTER FUNCTION vault.restore_token(text, text, text) OWNER TO vault_user;
 REVOKE ALL ON FUNCTION vault.restore_token(text, text, text) FROM PUBLIC;
+
+-- 부분 공개(Lv1): restore_log.mode 에 'partial' 을 더한다. 이미 있는 DB 에도 다시 실행하면 적용된다
+ALTER TABLE audit.restore_log DROP CONSTRAINT IF EXISTS restore_log_mode_chk;
+ALTER TABLE audit.restore_log ADD CONSTRAINT restore_log_mode_chk CHECK (mode IN ('full', 'partial'));
+
+-- 이름 마스킹: 공백을 빼고 첫 글자·끝 글자만 남긴다. 윤선영 → 윤*영, 남궁민수 → 남**수, 김민 → 김*
+CREATE OR REPLACE FUNCTION vault.mask_name(p_name text)
+RETURNS text LANGUAGE sql IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT CASE
+        WHEN n IS NULL OR length(n) = 0 THEN NULL
+        WHEN length(n) = 1 THEN '*'
+        WHEN length(n) = 2 THEN left(n, 1) || '*'
+        ELSE left(n, 1) || repeat('*', length(n) - 2) || right(n, 1)
+    END
+    FROM (SELECT regexp_replace(p_name, '\s+', '', 'g') AS n) s
+$$;
+ALTER FUNCTION vault.mask_name(text) OWNER TO vault_user;
+REVOKE ALL ON FUNCTION vault.mask_name(text) FROM PUBLIC;
+
+-- 이름 부분 공개 (Lv1 전용): 원문은 함수 밖으로 내보내지 않고 마스킹한 값만 돌려준다.
+--   요청 단위 확인 (하나라도 틀리면 42501 로 거절, 기록 없음)
+--     1) 활성 Lv1 계정인가
+--     2) request_id 가 이 사용자의 질문인가 (audit.query_log 의 request_id·user_id)
+--   토큰 단위 확인 (틀리면 그 토큰만 NULL, 기록 없음 → 화면에는 칩 그대로)
+--     3) vault.token_map 에 있는 이름(person) 토큰인가
+--     4) 그 질문의 결과에 나온 토큰인가 (query_tokens, 또는 returned_doc_ids 문서의 rag.chunks.tokens)
+--   모두 맞으면 audit.restore_log 에 mode='partial' 로 기록하고 마스킹 값을 돌려준다.
+CREATE OR REPLACE FUNCTION vault.partial_token(p_request_id text, p_user_id text, p_token text)
+RETURNS text LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_level   smallint;
+    v_label   text;
+    v_orig    text[];
+    v_qtokens text[];
+    v_docs    text[];
+BEGIN
+    SELECT access_level INTO v_level
+      FROM policy.users
+     WHERE user_id = p_user_id AND is_active;
+
+    IF v_level IS DISTINCT FROM 1 THEN          -- Lv2 도 쓰게 하려면: v_level IS NULL OR v_level < 1
+        RAISE EXCEPTION '부분 공개 권한이 없습니다 (user_id=%)', p_user_id USING ERRCODE = '42501';
+    END IF;
+
+    SELECT query_tokens, returned_doc_ids INTO v_qtokens, v_docs
+      FROM audit.query_log
+     WHERE request_id = p_request_id AND user_id = p_user_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION '본인 질문이 아니거나 없는 요청입니다 (request_id=%)', p_request_id USING ERRCODE = '42501';
+    END IF;
+
+    SELECT label, originals INTO v_label, v_orig
+      FROM vault.token_map
+     WHERE token = p_token;
+    IF NOT FOUND OR lower(v_label) <> 'person' OR coalesce(cardinality(v_orig), 0) = 0 THEN
+        RETURN NULL;
+    END IF;
+
+    IF NOT (p_token = ANY(v_qtokens) OR EXISTS (
+            SELECT 1 FROM rag.chunks
+             WHERE doc_id = ANY(v_docs) AND p_token = ANY(tokens))) THEN
+        RETURN NULL;
+    END IF;
+
+    INSERT INTO audit.restore_log (request_id, user_id, level, token, label, mode)
+    VALUES (p_request_id, p_user_id, v_level, p_token, v_label, 'partial');
+    RETURN vault.mask_name(v_orig[1]);
+END;
+$$;
+ALTER FUNCTION vault.partial_token(text, text, text) OWNER TO vault_user;
+REVOKE ALL ON FUNCTION vault.partial_token(text, text, text) FROM PUBLIC;
 
 -- 설명 (테이블 정의서 기준)
 COMMENT ON TABLE audit.query_log IS '챗봇 질의·응답 대화 로그';

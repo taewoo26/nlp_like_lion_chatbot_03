@@ -158,6 +158,8 @@ button.send:disabled{opacity:.55;cursor:wait}
 .modal-btns .cancel{background:#eee;color:var(--ink)}
 /* 원복된 텍스트 */
 .restored-tok{color:var(--ink-red);font-weight:700;border-bottom:2px dotted var(--ink-red);cursor:help}
+/* 부분 공개된 이름 (Lv1) */
+.partial-tok{color:var(--user);font-weight:700;border-bottom:2px dotted var(--user);cursor:help}
 /* 마크다운 답변 */
 .msg.bot .ans ul,.msg.bot .ans ol{margin:6px 0;padding-left:20px}
 .msg.bot .ans li{margin:3px 0}
@@ -185,6 +187,7 @@ button.send:disabled{opacity:.55;cursor:wait}
       <span class="pill" id="modePill" hidden title="검색 방식">🔎 <span id="modeText">AND</span></span>
       <span class="pill" id="whoPill" hidden title="로그인한 사용자"><span id="whoText"></span></span>
       <button type="button" class="top-btn restore" id="restoreBtn" hidden title="원문 복원 토글 (2차 인증 필요)">🔓 원복</button>
+      <button type="button" class="top-btn restore" id="partialBtn" hidden title="이름 부분 공개 토글 (예: 윤*영)">🔍 부분 공개</button>
       <button type="button" class="top-btn admin" id="adminBtn" hidden title="Lv2 전용">🔐 관리실</button>
       <span class="timer-pill" id="timerPill" hidden>⏱ <b id="sessionTimer">15:00</b></span>
       <button type="button" class="top-btn" id="logoutBtn" hidden>로그아웃</button>
@@ -339,7 +342,7 @@ button.send:disabled{opacity:.55;cursor:wait}
 <div class="modal-overlay" id="restoreModal">
   <div class="modal">
     <h3>2차 인증</h3>
-    <p>원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.</p>
+    <p id="restoreMsg">원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.</p>
     <input type="password" id="restorePw" placeholder="비밀번호" maxlength="200">
     <div class="error" id="restoreErr"></div>
     <div class="modal-btns">
@@ -435,6 +438,7 @@ async function ask(q){
   if (res.docs && res.docs.length) meta.innerHTML += `<div class="docs">${res.docs.map(d => `<span class="doc" title="${esc(d.snippet || "")}">📄 ${esc(d.doc_id)}</span>`).join("")}</div>`;
   if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
   if (restoreMode) applyRestore();
+  if (partialMode) applyPartial();
   log.scrollTop = log.scrollHeight;
 }
 
@@ -475,6 +479,7 @@ async function health(){
 
 /* ---------- 원복 모드 ---------- */
 let restoreMode = false;
+let partialMode = false;   // Lv1 이름 부분 공개
 
 /* ---------- 세션 타이머 (F-03) ---------- */
 let sessionRemaining = 30 * 60;
@@ -507,6 +512,7 @@ async function loadMe(){
   $("#whoPill").hidden = false; $("#logoutBtn").hidden = false;
   $("#adminBtn").hidden = user.access_level !== 2;
   $("#restoreBtn").hidden = user.access_level !== 2;
+  $("#partialBtn").hidden = user.access_level !== 1;   // Lv1 전용 (Lv2 도 쓰게 하려면 < 1, 서버·DB 함수도 함께)
   startSessionTimer();
   applyWatermark(user.user_id);
 }
@@ -529,7 +535,9 @@ $("#adminBtn").addEventListener("click", () => {
 const restoreModal = $("#restoreModal");
 const savedTokHtml = {};
 
-async function applyRestore(){
+// 화면의 토큰 칩을 서버가 돌려준 값으로 바꾼다. Lv2 원복(실명)과 Lv1 부분 공개(윤*영)가 함께 쓴다.
+//   url: 요청할 API, cls: 바꾼 글자의 class, onlyPerson: 이름 칩만 보낼지 (부분 공개)
+async function applyReveal(url, cls, onlyPerson){
   // 답변 메시지(request_id)별로 묶어 보낸다. request_id 가 없는 메시지(데모·오류 응답)는 복원하지 않는다.
   const groups = new Map();   // request_id → {chips:[[칩, 토큰]], tokens:Set}
   log.querySelectorAll(".tok").forEach(el => {
@@ -537,30 +545,33 @@ async function applyRestore(){
     const rid = el.closest(".msg.bot")?.dataset.requestId;
     if (!t || !rid) return;
     const token = "<" + t.replace("가명 토큰 ", "") + ">";
+    if (onlyPerson && !/^<PERSON_/i.test(token)) return;
     if (!groups.has(rid)) groups.set(rid, {chips:[], tokens:new Set()});
     groups.get(rid).chips.push([el, token]);
     groups.get(rid).tokens.add(token);
   });
   for (const [rid, g] of groups) { try {
-    const r = await fetch("/api/restore-tokens", {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({request_id:rid, tokens:[...g.tokens]})});
     if (!r.ok) continue;   // 권한 없음·기록 실패: 토큰 그대로 둔다
     const {map} = await r.json();
     g.chips.forEach(([el, token]) => {
-      const original = map[token];
-      if (!original) return;
+      const value = map[token];
+      if (!value) return;
       if (!savedTokHtml[token]) savedTokHtml[token] = el.outerHTML;
-      const restored = document.createElement("b");
-      restored.textContent = original;
-      restored.className = "restored-tok";
-      restored.dataset.token = token;
-      el.replaceWith(restored);
+      const shown = document.createElement("b");
+      shown.textContent = value;
+      shown.className = cls;
+      shown.dataset.token = token;
+      el.replaceWith(shown);
     });
   } catch {} }
 }
+function applyRestore(){ return applyReveal("/api/restore-tokens", "restored-tok", false); }
+function applyPartial(){ return applyReveal("/api/partial-tokens", "partial-tok", true); }
 
 function undoRestore(){
-  log.querySelectorAll(".restored-tok").forEach(el => {
+  log.querySelectorAll(".restored-tok, .partial-tok").forEach(el => {
     const token = el.dataset.token;
     const html = savedTokHtml[token];
     if (!html) return;
@@ -570,6 +581,18 @@ function undoRestore(){
   });
 }
 
+// 2차 인증 모달은 Lv2 원복과 Lv1 부분 공개가 함께 쓴다. pendingMode: 인증이 끝나면 켤 기능
+let pendingMode = "restore";
+function openVerifyModal(mode){
+  pendingMode = mode;
+  $("#restoreMsg").textContent = mode === "partial"
+    ? "이름 부분 공개 기능을 사용하려면 비밀번호를 다시 입력해 주세요."
+    : "원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.";
+  restoreModal.classList.add("open");
+  $("#restorePw").value = "";
+  $("#restoreErr").textContent = "";
+  setTimeout(() => $("#restorePw").focus(), 100);
+}
 $("#restoreBtn").addEventListener("click", () => {
   if (restoreMode) {
     restoreMode = false;
@@ -578,10 +601,17 @@ $("#restoreBtn").addEventListener("click", () => {
     undoRestore();
     return;
   }
-  restoreModal.classList.add("open");
-  $("#restorePw").value = "";
-  $("#restoreErr").textContent = "";
-  setTimeout(() => $("#restorePw").focus(), 100);
+  openVerifyModal("restore");
+});
+$("#partialBtn").addEventListener("click", () => {   // Lv1: 켤 때 2차 인증 (권한 확인은 서버·DB 함수)
+  if (partialMode) {
+    partialMode = false;
+    $("#partialBtn").classList.remove("on");
+    $("#partialBtn").textContent = "🔍 부분 공개";
+    undoRestore();
+    return;
+  }
+  openVerifyModal("partial");
 });
 $("#restoreCancel").addEventListener("click", () => restoreModal.classList.remove("open"));
 restoreModal.addEventListener("click", e => { if (e.target === restoreModal) restoreModal.classList.remove("open"); });
@@ -597,11 +627,18 @@ $("#restoreConfirm").addEventListener("click", async () => {
       $("#restoreErr").textContent = body.detail || "인증에 실패했습니다.";
       return;
     }
-    restoreMode = true;
-    $("#restoreBtn").classList.add("on");
-    $("#restoreBtn").textContent = "🔓 원복 ON";
     restoreModal.classList.remove("open");
-    applyRestore();
+    if (pendingMode === "partial") {
+      partialMode = true;
+      $("#partialBtn").classList.add("on");
+      $("#partialBtn").textContent = "🔍 부분 공개 ON";
+      applyPartial();
+    } else {
+      restoreMode = true;
+      $("#restoreBtn").classList.add("on");
+      $("#restoreBtn").textContent = "🔓 원복 ON";
+      applyRestore();
+    }
   } catch { $("#restoreErr").textContent = "서버에 연결할 수 없습니다."; }
   finally { $("#restoreConfirm").disabled = false; }
 });
