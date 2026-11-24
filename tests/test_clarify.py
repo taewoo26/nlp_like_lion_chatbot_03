@@ -183,6 +183,13 @@ def test_filter_reason():
     assert search._filter_reason(FakeCursor([]), ["tok"], [[ADDR]], []) == "token"                        # 토큰만 걸림
 
 
+def test_keyword_miss_ignores_region_and_role_words(monkeypatch):
+    monkeypatch.setattr(search, "extract_terms", lambda text: set())      # 문서 본문: 주소는 토큰이라 지역 이름이 없음
+    docs = [{"masked_text": "<ADDRESS_aa> 거주 고객 상담"}]
+    assert search._keyword_miss({"서울특별시", "강서구", "고객", "알리"}, docs) is False   # 지역·역할·막연한 말만 → 판정 안 함
+    assert search._keyword_miss({"강서구", "클레임"}, docs) is True                       # 주제 키워드(클레임)는 그대로 본다
+
+
 def test_narrow_candidates_needs_other_condition():
     cand, meta = {TOK: ["c1", "c2"]}, {"person_candidates": {TOK: 2}, "ask_person": True}
     cur = FakeCursor([])

@@ -380,8 +380,11 @@ def _filter_reason(cur, token_where, token_params, regions):
 
 
 def _keyword_miss(q_terms, docs):
-    """질문의 의미 있는 키워드가 찾은 문서 어디에도 없으면 True (CLR-07)."""
-    terms = clarify.meaningful_terms(q_terms)       # 막연한 말(알리·사람 등)은 빼고 본다
+    """질문의 의미 있는 키워드가 찾은 문서 어디에도 없으면 True (CLR-07).
+
+    지역 이름(서울특별시·강서구)과 역할 말(고객·직원)은 뺀다: 지역은 지역 필터가, 역할은 역할 필터가 이미 확인했고,
+    문서 본문의 주소는 <ADDRESS_…> 토큰이라 지역 이름이 글자로 남아 있지 않기 때문 (넣으면 맞는 문서도 '불일치'로 판정)."""
+    terms = clarify.condition_free_terms(q_terms)   # 막연한 말·지역 이름·역할 말을 뺀 키워드
     if not terms:                                   # 볼 키워드가 없으면 판단하지 않는다
         return False                                # (CLR-08 이 따로 처리)
     return not any(terms & extract_terms(d["masked_text"]) for d in docs)   # 한 문서라도 겹치면 False

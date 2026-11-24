@@ -28,6 +28,8 @@ meta 에 남는 값 (search.py)
 # BM25 불용어(starter/bm25.py)와 따로 둔다: 저쪽을 고치면 검색 점수가 바뀌기 때문
 VAGUE_WORDS = frozenset({                       # 재질문 판정에만 쓰는 목록
     "알리", "말하", "보이", "주", "찾",          # 알려줘·말해줘·보여줘·주세요·찾아줘 의 동사 부분
+    "알려주", "보여주", "찾아주", "주시",          # Kiwi 가 붙여서 뽑는 경우
+    "사", "살", "거주",                          # '○○ 사는 고객' 의 동사 (지역 조건을 말하는 표현)
     "궁금", "궁금하", "부탁", "요청",             # 궁금해·부탁해
     "사람", "거", "그거", "이거", "저거",          # 그 사람 거 보여줘
     "목록", "리스트", "전체", "전부", "모두",       # 전체 목록 보여줘
@@ -206,3 +208,10 @@ def merge_query(prev_masked, prev_tokens, cur_masked, cur_tokens, cur_terms, pre
     merged = " ".join(keep + [cur_masked]).strip()   # 이전 조건 + 지금 조각
     tokens = sorted({t for t in prev_tokens if token_kind(t) not in replaced} | set(cur_tokens))   # 토큰도 같은 규칙
     return merged, tokens
+
+
+def condition_free_terms(terms):
+    """키워드에서 막연한 말·지역 이름·역할 말을 뺀 것 (CLR-07 키워드 불일치 판정용).
+    지역·역할은 검색 필터가 따로 확인하는 조건이라 문서 본문 단어와 비교하지 않는다."""
+    role_words = _role_words()                    # 고객·직원 …
+    return {t for t in meaningful_terms(terms) if t not in role_words and not _is_region_word(t)}   # 남는 주제 키워드
