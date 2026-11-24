@@ -40,7 +40,7 @@ def reset_conn():
     """전체 초기화·재적재 전용 계정. 일반 검색/적재 계정에 TRUNCATE를 부여하지 않는다."""
     dsn = config.env('RESET_DSN')
     if not dsn:
-        raise ValueError('PERSON_DICT=off --reset에는 RESET_DSN을 설정하세요 (app_reset 계정).')
+        raise ValueError('--reset(PERSON_DICT on/off 공통)에는 RESET_DSN을 설정하세요 (app_reset 계정).')
     conn = psycopg.connect(dsn, autocommit=False, connect_timeout=5)
     register_vector(conn)
     return conn

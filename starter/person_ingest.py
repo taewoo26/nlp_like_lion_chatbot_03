@@ -2,7 +2,8 @@
 
 판정 규칙은 「person_info 규칙 정의서」(jungha/종합/인물사전/)를 따른다.
 person_info.doc_id(TEXT[])에는 [문서 ID] 1개를 저장하고, 통일된 reg_id 이력은 registry.reason.merged_into 에 둔다.
-최초·증분 적재와 연결만 재판정하는 배치를 지원한다. 토큰 원문 매핑은 삭제하지 않는다.
+최초·증분 적재와 연결만 재판정하는 배치를 지원한다. 증분 적재는 토큰 원문 매핑을 삭제하지 않고,
+전체 재적재(--reset)는 token_map 까지 비운다(app_reset 계정).
 """
 import json
 
@@ -145,10 +146,10 @@ def store(cur, chunks, mapping, result, *, reset=False):
         if cur.fetchone():
             raise ValueError('기존 데이터와 문서 ID가 중복됩니다. 새 문서만 입력하세요.')
     if reset:
-        cur.execute('DELETE FROM rag.look_up')
-        cur.execute('DELETE FROM vault.person_info')
-        cur.execute('DELETE FROM vault.person_registry')
-        cur.execute('DELETE FROM rag.chunks')
+        # PERSON_DICT=off 의 전체 재적재(ingest.py)와 같게 token_map 까지 비운다. app_reset 계정이 필요하다.
+        cur.execute("SET LOCAL lock_timeout = '10s'")
+        cur.execute('''TRUNCATE TABLE rag.look_up, rag.chunks,
+                       vault.person_info, vault.person_registry, vault.token_map''')
     save_mappings(cur, mapping)
     cur.executemany(INSERT_SQL, chunks)
     _, _, all_mapping = load_state(cur)
@@ -162,7 +163,8 @@ def run(docs, args, pseudo_path):
         raise ValueError('PERSON_DICT=on은 한 트랜잭션으로 처리합니다. 실패한 입력은 --resume 없이 다시 실행하세요.')
     if (config.env('NAME_LINK', 'off') or 'off').lower() != 'off':
         raise ValueError('문서별 이름 후보를 보존하려면 NAME_LINK=off로 실행하세요.')
-    with db.ingest_conn() as conn, conn.cursor() as cur:
+    # 전체 재적재(--reset)는 TRUNCATE 권한이 있는 app_reset 계정(RESET_DSN)으로, 그 외에는 app_ingest 로 접속한다.
+    with (db.reset_conn() if args.reset else db.ingest_conn()) as conn, conn.cursor() as cur:
         lock_resolution(cur)
         existing, registry, mapping_before = load_state(cur) if not args.reset else ([], [], {})
         if not args.reset:

@@ -1,0 +1,3 @@
+# 빌드에는 requirements.txt 만 보낸다 (.env, data/, models/ 가 이미지에 들어가지 않게)
+*
+!requirements.txt
