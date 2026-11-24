@@ -16,6 +16,8 @@
   고도화 때 추가 예정: 미사용 시 자동 로그아웃(F-03), 로그인 실패 잠금(F-68).
 - 질문 원문은 서버 로그·응답 어디에도 남기지 않는다. 응답에는 가명처리된 질문과 문서만 담는다.
 - state(화면용): found(아하!) / sorry(되물음·문서 없음·답변 보류) / nollm(LLM 키 없음, 검색 결과만)
+- 재질문(starter/clarify.py): 응답의 need_more=True 면 화면이 '조건 확인 필요'로 표시하고, 바로 다음 질문에
+  {"follow_up_of": 이 응답의 request_id} 를 붙여 보낸다. 본인 질문 id 일 때만 query_log.follow_up_of 에 남는다.
   chat.answer()의 state(감사 로그용 6개 값)를 UI_STATE 로 바꿔 보낸다. answered→found, search_only→nollm, 나머지→sorry
 - 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
 - 출력 재검사(starter/recheck.py): 결과는 query_log.recheck_*, 걸린 시간은 서버 터미널 한 줄(recheck_ms·total_ms).
@@ -118,6 +120,7 @@ class Ask(BaseModel):
     query: str = Field(min_length=1, max_length=500)
     k: int = Field(default=3, ge=1, le=10)
     restore: bool = False
+    follow_up_of: str | None = Field(default=None, pattern=r"^req_[0-9]{8}_[0-9a-f]{12}$")   # 직전 재질문의 request_id (보충 질문일 때만)
 
 
 class VerifyPassword(BaseModel):
@@ -309,7 +312,8 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
         audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
     latency_ms = _elapsed_ms(started)
-    audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms))
+    follow_up_of = _own_request(body.follow_up_of, user["user_id"])     # 본인 질문의 id 일 때만 연결 (아니면 None)
+    audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms, follow_up_of=follow_up_of))
     if res.get("recheck"):
         _log_recheck(request_id, res["recheck"], latency_ms)
     docs = [{"doc_id": d["doc_id"], "snippet": d["snippet"]} for d in res["docs"]]   # 출력 재검사를 거친 조각만 (starter/recheck.py)
@@ -342,7 +346,26 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
 
     return {"request_id": request_id, "masked_query": masked_query, "query_tokens": res["query_tokens"],
             "docs": docs, "answer": answer_text, "state": _ui_state(res["state"]),
-            "restored": restored}
+            "restored": restored,
+            "clarify_code": res.get("clarify_code"),            # 재질문 원인 (starter/clarify.py)
+            "need_more": bool(res.get("clarify_code"))}         # True 면 화면이 '조건 확인 필요'로 표시하고 다음 질문에 이 request_id 를 붙인다
+
+
+def _own_request(request_id, user_id):
+    """follow_up_of 로 받은 request_id 가 이 사용자의 질문이면 그대로, 아니면 None.
+
+    남의 질문 id 를 붙여 기록을 섞지 못하게 한다. 확인에 실패해도 답변은 막지 않는다(연결만 생략).
+    """
+    if not request_id:                                          # 보충 질문이 아니면
+        return None                                             # 연결 없음
+    try:
+        with db.rag_conn() as conn, conn.cursor() as cur:       # 감사 로그와 같은 계정으로 조회
+            cur.execute("SELECT 1 FROM audit.query_log WHERE request_id = %s AND user_id = %s",
+                        (request_id, user_id))                  # 같은 사용자의 질문인지
+            return request_id if cur.fetchone() else None       # 맞으면 연결, 아니면 버림
+    except Exception as exc:                                    # DB 문제로 확인 못 하면
+        audit._log_error("follow_up_of 확인 실패 request_id=%s error=%s", request_id, type(exc).__name__)   # 기록만 남기고
+        return None                                             # 연결은 생략
 
 
 def admin_required(request: Request):

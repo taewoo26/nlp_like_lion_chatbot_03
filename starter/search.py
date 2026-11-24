@@ -41,7 +41,7 @@
 import argparse
 import re
 
-from . import address, config, db, pii_pipeline
+from . import address, clarify, config, db, pii_pipeline
 from .bm25 import bm25_scores, extract_terms, has_keywords
 from .embed import embed
 from .roles import load_rules, query_name_roles, query_roles
@@ -177,12 +177,18 @@ def tag_masked(exc, masked_q, q_tokens):
 
 def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None):
     meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {},
-            "ask_person": False, "person_scope": "registry" if reg_id else "name_role"}
+            "ask_person": False, "person_scope": "registry" if reg_id else "name_role",
+            "too_vague": False,        # CLR-08 찾을 단서가 없는 질문 (starter/clarify.py)
+            "empty_reason": None,      # 결과 0건의 원인: person / role / region / token
+            "empty_label": [],         # empty_reason=token 일 때 질문의 식별자 종류
+            "keyword_miss": False}     # CLR-07 토큰 없는 질문인데 문서에 질문 키워드가 하나도 없음
     if config.meta_on("REGION_META"):
         meta["regions"], meta["ask_region"] = address.query_regions(query)
         if meta["ask_region"]:                  # '중구 고객' → 검색하지 않고 되묻기 (REG-33)
             return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
     regions = meta["regions"]
+    q_terms = extract_terms(masked_q)                            # 질문의 키워드 (토큰은 지우고 뽑음)
+    meta["too_vague"] = clarify.is_vague(q_terms, q_tokens, regions)   # 검색 결과는 그대로 두고 꼬리표만 남긴다
     person_tokens = [t for t in q_tokens if t.startswith("<PERSON_")]
     vec = embed([pii_pipeline.embedding_text(masked_q)], kind="query")[0]
     mode = _mode()
@@ -214,31 +220,36 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 candidates = {token: selected_chunks for token in person_tokens}
                 meta['person_candidates'] = {token: int(bool(selected_chunks)) for token in person_tokens}
                 if not selected_chunks:
+                    meta["empty_reason"] = "person"      # CLR-03 선택한 확정 인물의 문서가 없음
                     return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
             else:
                 candidates = person_candidates(cur, q_records, candidate_roles, meta) if dict_on else {}
             # 후보가 없을 때만 종료한다. 여러 후보의 검색 결과는 유지하고 답변 단계에서 보류한다.
             if dict_on and any(not c for c in candidates.values()):
+                empty = [t for t, c in candidates.items() if not c]           # 후보가 0명인 이름 토큰
+                meta["empty_reason"] = _name_reason(cur, empty, candidate_roles)   # CLR-03(이름 없음) / CLR-04(역할 불일치)
                 return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
             allowed = set(person_tokens)
             pool = max(k * 3, ROLE_POOL) if wanted else k * 3
             where, params = [], [vec]
+            token_where, token_params = [], []     # 0건일 때 원인을 가리려고 토큰 조건을 따로 보관
             if selected_chunks is not None:
                 where.append('chunks.chunk_id = ANY(%s::text[])')
                 params.append(selected_chunks)
+                token_where.append('chunks.chunk_id = ANY(%s::text[])')   # 확정 인물 범위도 '토큰 쪽' 조건으로 본다
+                token_params.append(selected_chunks)                       # 위 조건의 값
             if q_tokens:
                 # 토큰 후보를 먼저 확정(MATERIALIZED)한 뒤 그 안에서만 거리 순으로 정렬한다.
                 # 필터를 바깥 쿼리에 두면 k가 작을 때 DB가 HNSW 근사 인덱스를 골라
                 # '가까운 약 40개'만 꺼낸 뒤 필터를 걸어, 정답이 그 밖에 있으면 빈 결과가 된다.
-                token_where, token_params = token_conditions(q_tokens, candidates)
-                where += token_where
-                params += token_params
+                t_where, t_params = token_conditions(q_tokens, candidates)
+                where += t_where
+                params += t_params
+                token_where += t_where                 # 진단용 사본
+                token_params += t_params               # 진단용 사본
             if regions:
                 # 지역도 토큰처럼 '같은 문서의 어느 청크든' 가지고 있으면 통과 (REG-30·31)
-                where.append("""EXISTS (
-                        SELECT 1 FROM rag.chunks AS region
-                        WHERE region.doc_id = chunks.doc_id AND region.regions @> %s::text[]
-                    )""")
+                where.append(REGION_SQL)
                 params.append(regions)
             if where:
                 sql = f"""WITH cand AS MATERIALIZED (
@@ -253,6 +264,10 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
             params.append(pool)
             cur.execute(sql, tuple(params))
             hits = cur.fetchall()
+            if not hits and (token_where or regions):   # 조건 때문에 0건이면 어느 조건 때문인지 가린다 (0건일 때만 실행)
+                meta["empty_reason"] = _filter_reason(cur, token_where, token_params, regions)   # CLR-05 / CLR-06
+                if meta["empty_reason"] == "token":                                             # 식별자 불일치면
+                    meta["empty_label"] = clarify.identifier_kinds(q_tokens)                    # 어떤 종류였는지 남긴다
             persons = _doc_persons(cur, sorted({h[0] for h in hits})) if wanted and not reg_id and (not dict_on or not person_tokens) else {}
     finally:
         if own:
@@ -274,10 +289,51 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 meta["excluded"] += 1
             else:
                 kept.append(d)
-        docs = _apply_threshold(_apply_bm25(masked_q, kept[:k]))
-    else:
-        docs = _apply_threshold(_apply_bm25(masked_q, docs[:k]))
+        if docs and not kept and meta["excluded"]:   # 문서는 있었는데 역할이 달라 전부 빠짐
+            meta["empty_reason"] = "role"            # CLR-04
+        docs = kept
+    if not q_tokens and not reg_id and docs:          # 토큰 없는 주제 질문만 키워드 일치를 따진다 (토큰 질문은 토큰 필터가 근거)
+        meta["keyword_miss"] = _keyword_miss(q_terms, docs[:k])   # CLR-07 문서 어디에도 질문 키워드가 없음
+    docs = _apply_threshold(_apply_bm25(masked_q, docs[:k]))
     return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
+
+
+# ---------------------------------------------------------------- 재질문(CLR) 원인 진단 (starter/clarify.py)
+
+REGION_SQL = """EXISTS (
+                        SELECT 1 FROM rag.chunks AS region
+                        WHERE region.doc_id = chunks.doc_id AND region.regions @> %s::text[]
+                    )"""   # 지역 조건 (검색과 진단이 같은 SQL 을 쓴다)
+
+
+def _name_reason(cur, tokens, roles):
+    """후보 0명인 이름이 '아예 없는 이름'(person)인지 '역할만 안 맞는 이름'(role)인지 가린다."""
+    if not roles:                                   # 역할 조건이 없었으면
+        return "person"                             # 이름 자체가 없음 (CLR-03)
+    cur.execute("SELECT 1 FROM rag.look_up WHERE token = ANY(%s::text[]) LIMIT 1", (list(tokens),))   # 역할 빼고 이름만 조회
+    return "role" if cur.fetchone() else "person"   # 이름은 있으면 역할 불일치 (CLR-04)
+
+
+def _count_docs(cur, where, params):
+    """조건을 만족하는 문서가 하나라도 있는지 (원인 진단용, 개수만 본다)."""
+    sql = f"SELECT 1 FROM rag.chunks AS chunks WHERE {' AND '.join(where)} LIMIT 1"   # 하나만 확인
+    cur.execute(sql, tuple(params))                 # 조건 값 바인딩
+    return cur.fetchone() is not None               # 있으면 True
+
+
+def _filter_reason(cur, token_where, token_params, regions):
+    """토큰·지역 조건을 함께 걸어 0건일 때 원인을 가린다: region(CLR-05) / token(CLR-06)."""
+    if token_where and regions:                     # 둘 다 걸려 있으면
+        return "region" if _count_docs(cur, token_where, token_params) else "token"   # 지역을 빼서 생기면 지역 탓
+    return "region" if regions else "token"         # 하나만 걸려 있으면 그 조건 탓
+
+
+def _keyword_miss(q_terms, docs):
+    """질문의 의미 있는 키워드가 찾은 문서 어디에도 없으면 True (CLR-07)."""
+    terms = clarify.meaningful_terms(q_terms)       # 막연한 말(알리·사람 등)은 빼고 본다
+    if not terms:                                   # 볼 키워드가 없으면 판단하지 않는다
+        return False                                # (CLR-08 이 따로 처리)
+    return not any(terms & extract_terms(d["masked_text"]) for d in docs)   # 한 문서라도 겹치면 False
 
 
 # ---------------------------------------------------------------- BM25 하이브리드 + 상위 문서 재정렬
@@ -394,6 +450,8 @@ def main():
         print("조건에 맞는 문서는 찾았지만 동일인 여부가 불분명한 후보가 여러 명입니다. 답변하려면 추가 단서가 필요합니다.")
     if meta["ask_region"]:
         print(f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요.")
+    print(f"재질문 꼬리표: 막연한 질문={meta['too_vague']}  0건 원인={meta['empty_reason'] or '없음'}"   # CLR 판정 확인용
+          f"  식별자 종류={meta['empty_label'] or '없음'}  키워드 불일치={meta['keyword_miss']}\n")       # (starter/clarify.py)
     for i, d in enumerate(docs, 1):
         grade = f"  역할등급={d['role_grade']}" if "role_grade" in d else ""
         print(f"{i}. {d['doc_id']}  score={d['score']:.3f}{grade}  tokens={d['tokens'][:4]}")
