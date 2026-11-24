@@ -1,0 +1,116 @@
+# 3팀 Airflow (LocalExecutor). 레포 루트에서 실행:
+#   docker compose --env-file airflow/.env -f airflow/compose.yaml up -d
+# 공식 docker-compose.yaml(CeleryExecutor)에서 redis·worker·flower·triggerer 를 뺐다.
+name: pii_airflow
+
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: airflow/Dockerfile
+  image: pii-airflow:3.4.0-py313
+  user: "${AIRFLOW_UID:-50000}:0"
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_META_PASSWORD:?airflow/.env 에 AIRFLOW_META_PASSWORD 필요}@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
+    AIRFLOW__CORE__PARALLELISM: '2'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?airflow/.env 에 AIRFLOW_JWT_SECRET 필요}
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+  depends_on: &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  # Airflow 메타DB (실행 기록 전용). 포트는 밖으로 열지 않는다.
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_META_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # 처음 한 번: 메타DB 초기화 + 관리자 계정 생성
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?airflow/.env 에 AIRFLOW_ADMIN_PASSWORD 필요}
+
+  # 화면·API. 로컬에서만 접속 (서버에서는 SSH 터널)
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # LocalExecutor 라 태스크가 여기서 실행된다 → 프로젝트 코드·.env·DB 가 필요한 곳은 이 서비스뿐
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    env_file:
+      - ../.env
+    environment:
+      <<: *airflow-common-env
+      PROJECT_ROOT: /opt/pii-rag
+      PROJECT_DB_HOST: ${PROJECT_DB_HOST:-db}
+      DB_HOST: ${PROJECT_DB_HOST:-db}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ..:/opt/pii-rag
+    networks:
+      - default
+      - project-db
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+networks:
+  project-db:
+    external: true
+    name: ${PROJECT_DB_NETWORK:-pii_starter_default}
+
+volumes:
+  airflow-pgdata:
