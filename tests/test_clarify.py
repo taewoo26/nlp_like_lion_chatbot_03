@@ -70,31 +70,60 @@ def test_clr10_doc_type_choices(monkeypatch):
     assert res["clarify_code"] == "ask_doc_type" and "민원현황 / 민원처리 / 분쟁조정" in res["answer"]
 
 
-def test_clr02_shows_candidate_count_not_names(monkeypatch):
-    res, post = _answer(monkeypatch, DOCS, tokens=[TOK], ask_person=True, person_candidates={TOK: 3})
+def test_clr02_unified_and_hides_docs(monkeypatch):
+    res, post = _answer(monkeypatch, DOCS, tokens=[TOK], ask_person=True, person_candidates={TOK: 7})
     assert res["state"] == "clarify" and res["clarify_code"] == "ask_person"
-    assert "3명" in res["answer"] and TOK not in res["answer"]   # 후보 수만, 토큰·이름은 없음
+    assert res["answer"] == clarify.UNIFIED                     # 통일 문장 그대로
+    assert "7" not in res["answer"] and res["docs"] == []        # 후보 수·문서 번호·조각 숨김
     post.assert_not_called()
 
 
 def test_priority_vague_before_person(monkeypatch):
-    res, _ = _answer(monkeypatch, DOCS, too_vague=True, ask_person=True)
+    res, _ = _answer(monkeypatch, DOCS, too_vague=True, ask_person=True)   # 둘 다 걸리면
     assert res["clarify_code"] == "too_vague"       # 우선순위 1번이 먼저
 
 
-# ---------------------------------------------------------------- 0건 원인별 문구 (CLR-03~06)
+# ---------------------------------------------------------------- 0건: B 그룹 통일 응답 / A 그룹 구체 안내
 
-@pytest.mark.parametrize("meta, code, phrase", [
-    ({"empty_reason": "person"}, "person", "등록된 인물을 찾지 못했습니다"),
-    ({"empty_reason": "role", "roles": ["직원"]}, "role", "'직원' 역할로는"),
-    ({"empty_reason": "region", "regions": ["제주특별자치도"]}, "region", "제주특별자치도 지역 문서에서는"),
-    ({"empty_reason": "token", "empty_label": ["address"]}, "token", "동·호수까지 전체 주소"),
+@pytest.mark.parametrize("tokens, meta, code", [
+    ([TOK], {"empty_reason": "person"}, "person"),                                           # CLR-03
+    ([TOK], {"empty_reason": "role", "roles": ["employee"]}, "role"),                         # CLR-04 (이름 있음)
+    ([TOK], {"empty_reason": "region", "regions": ["제주특별자치도"]}, "region"),               # CLR-05 (이름 있음)
+    (["<PHONE_NUMBER_aa11>"], {"empty_reason": "token", "empty_label": ["phone_number"]}, "token"),   # CLR-06
+    ([TOK], {}, "unknown"),                                                                   # 토큰 질문의 원인 불명
 ])
-def test_no_result_reasons(monkeypatch, meta, code, phrase):
-    res, post = _answer(monkeypatch, [], **meta)
-    assert res["state"] == "no_result" and res["clarify_code"] == code   # state 는 그대로 no_result
-    assert phrase in res["answer"]
+def test_person_group_is_unified(monkeypatch, tokens, meta, code):
+    res, post = _answer(monkeypatch, [], tokens=tokens, **meta)
+    assert res["state"] == "no_result" and res["clarify_code"] == code   # 원인은 감사 로그용으로 남는다
+    assert res["answer"] == clarify.UNIFIED                              # 화면 문장은 모두 같다
     post.assert_not_called()
+
+
+def test_unified_answers_are_identical_across_causes(monkeypatch):
+    answers = set()
+    for meta in ({"ask_person": True}, {"empty_reason": "person"}, {"empty_reason": "role"},
+                 {"empty_reason": "region", "regions": ["제주특별자치도"]}, {"empty_reason": "token"}):
+        docs = DOCS if meta.get("ask_person") else []
+        res, _ = _answer(monkeypatch, docs, tokens=[TOK], **meta)
+        answers.add((res["answer"], bool(res["clarify_code"]), tuple(d["doc_id"] for d in res["docs"])))
+    assert len(answers) == 1                        # 문장·배지·문서 노출이 원인과 관계없이 같다 (노출 점검 시트)
+
+
+def test_address_hint_depends_on_input_not_cause(monkeypatch):
+    for meta in ({"empty_reason": "token"}, {"empty_reason": "person"}):   # 원인이 달라도
+        res, _ = _answer(monkeypatch, [], tokens=[TOK, ADDR], **meta)
+        assert res["answer"] == clarify.UNIFIED + "\n" + clarify.ADDRESS_HINT   # 주소가 있으면 같은 안내
+    res, _ = _answer(monkeypatch, [], tokens=[TOK], empty_reason="token")
+    assert clarify.ADDRESS_HINT not in res["answer"]                       # 주소가 없으면 안 붙음
+
+
+@pytest.mark.parametrize("meta, phrase", [
+    ({"empty_reason": "role", "roles": ["employee", "agent"]}, "요청한 역할로는"),               # 토큰 없는 역할 질문
+    ({"empty_reason": "region", "regions": ["제주특별자치도"]}, "제주특별자치도 지역 문서에서는"),   # 토큰 없는 지역 질문
+])
+def test_no_token_questions_get_specific_message(monkeypatch, meta, phrase):
+    res, _ = _answer(monkeypatch, [], **meta)
+    assert phrase in res["answer"] and "employee" not in res["answer"]     # 내부 역할 코드는 보이지 않음
 
 
 def test_no_result_without_reason_keeps_old_message(monkeypatch):
@@ -102,9 +131,11 @@ def test_no_result_without_reason_keeps_old_message(monkeypatch):
     assert res["answer"] == "일치하는 문서를 찾지 못했습니다." and res["clarify_code"] is None
 
 
-def test_token_message_never_repeats_value(monkeypatch):
-    res, _ = _answer(monkeypatch, [], tokens=[ADDR], empty_reason="token", empty_label=["address"])
-    assert ADDR not in res["answer"] and "주소" in res["answer"]   # 종류 이름만 쓴다
+def test_role_notice_hidden_when_name_in_question(monkeypatch):
+    res, _ = _answer(monkeypatch, DOCS, tokens=[TOK], llm="네, 1건 있습니다. [H0001]", excluded=2)
+    assert res["notice"] is None                    # 이름 질문에서 다른 역할 문서 건수를 알리지 않는다
+    res, _ = _answer(monkeypatch, DOCS, llm="네, 1건 있습니다. [H0001]", excluded=2)
+    assert "2건" in res["notice"]                    # 이름 없는 질문은 기존대로 안내
 
 
 # ---------------------------------------------------------------- CLR-07 / CLR-09
@@ -150,6 +181,27 @@ def test_filter_reason():
     assert search._filter_reason(FakeCursor([None]), ["tok"], [[ADDR]], ["제주특별자치도"]) == "token"    # 지역 빼도 없음
     assert search._filter_reason(FakeCursor([]), [], [], ["제주특별자치도"]) == "region"                  # 지역만 걸림
     assert search._filter_reason(FakeCursor([]), ["tok"], [[ADDR]], []) == "token"                        # 토큰만 걸림
+
+
+def test_narrow_candidates_needs_other_condition():
+    cand, meta = {TOK: ["c1", "c2"]}, {"person_candidates": {TOK: 2}, "ask_person": True}
+    cur = FakeCursor([])
+    search._narrow_candidates(cur, cand, [TOK], [], {"customer"}, meta)   # 이름뿐이면
+    assert cur.sql == [] and meta["ask_person"] is True                   # 조회도 안 하고 그대로 되묻는다
+
+
+def test_narrow_candidates_to_one(monkeypatch):
+    cand, meta = {TOK: ["c1", "c2"]}, {"person_candidates": {TOK: 2}, "ask_person": True}
+    cur = FakeCursor([]); cur.fetchall = lambda: [("R1", "c1")]            # 번호가 있는 문서의 후보는 한 명
+    search._narrow_candidates(cur, cand, [TOK, "<PHONE_NUMBER_aa11>"], [], {"customer"}, meta)
+    assert cand[TOK] == ["c1"] and meta["ask_person"] is False and meta["person_candidates"][TOK] == 1
+
+
+def test_narrow_candidates_still_many():
+    cand, meta = {TOK: ["c1", "c2"]}, {"person_candidates": {TOK: 2}, "ask_person": True}
+    cur = FakeCursor([]); cur.fetchall = lambda: [("R1", "c1"), ("R2", "c2")]   # 지역을 넣어도 두 명
+    search._narrow_candidates(cur, cand, [TOK], ["서울특별시"], {"customer"}, meta)
+    assert cand[TOK] == ["c1", "c2"] and meta["ask_person"] is True
 
 
 def test_keyword_miss(monkeypatch):

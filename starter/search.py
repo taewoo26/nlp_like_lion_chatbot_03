@@ -224,6 +224,8 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                     return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
             else:
                 candidates = person_candidates(cur, q_records, candidate_roles, meta) if dict_on else {}
+                if meta["ask_person"]:                                   # CLR-02 후보가 여러 명이면
+                    _narrow_candidates(cur, candidates, q_tokens, regions, candidate_roles, meta)   # 다른 조건(번호·주소·지역)으로 좁혀 본다
             # 후보가 없을 때만 종료한다. 여러 후보의 검색 결과는 유지하고 답변 단계에서 보류한다.
             if dict_on and any(not c for c in candidates.values()):
                 empty = [t for t, c in candidates.items() if not c]           # 후보가 0명인 이름 토큰
@@ -304,6 +306,41 @@ REGION_SQL = """EXISTS (
                         SELECT 1 FROM rag.chunks AS region
                         WHERE region.doc_id = chunks.doc_id AND region.regions @> %s::text[]
                     )"""   # 지역 조건 (검색과 진단이 같은 SQL 을 쓴다)
+
+
+def _narrow_candidates(cur, candidates, q_tokens, regions, roles, meta):
+    """CLR-02 보충 질문: 이름 말고 다른 조건(전화번호·주소 등 토큰, 지역)이 있으면 그 조건을 만족하는
+    문서에 나오는 후보만 남긴다. 한 명으로 좁혀지면 그 사람의 청크만 검색하고 되묻지 않는다.
+
+    다른 조건이 없으면 아무것도 하지 않는다 (상위 k개 문서만 보고 좁히면 다른 사람을 고를 수 있으므로
+    반드시 '조건을 만족하는 모든 문서' 기준으로 센다)."""
+    others = [t for t in q_tokens if not t.startswith("<PERSON_")]   # 이름이 아닌 식별자 토큰
+    if not others and not regions:                  # 좁힐 조건이 없으면
+        return                                      # 그대로 되묻는다
+    cond, params = [], []                           # 같은 문서 안에 있어야 할 조건들
+    for t in others:                                # 식별자: 같은 문서의 어느 청크에든 있으면 통과 (검색과 같은 기준)
+        cond.append("""EXISTS (SELECT 1 FROM rag.chunks AS matched
+                       WHERE matched.doc_id = chunks.doc_id AND matched.tokens @> %s::text[])""")
+        params.append([t])                          # 그 토큰
+    if regions:                                     # 지역 조건 (검색과 같은 SQL)
+        cond.append(REGION_SQL)
+        params.append(regions)
+    still = False                                   # 좁힌 뒤에도 여러 명인 이름이 남았는지
+    for token, chunks in list(candidates.items()):  # 이름 토큰마다
+        if meta["person_candidates"].get(token, 0) <= 1:   # 이미 한 명이면
+            continue                                # 건드리지 않음
+        cur.execute(f"""SELECT DISTINCT COALESCE(l.reg_id, l.person_id), l.chunk_id
+            FROM rag.look_up AS l JOIN rag.chunks AS chunks ON chunks.chunk_id = l.chunk_id
+            WHERE l.token = %s AND (%s::text[] = '{{}}' OR l.role = ANY(%s::text[]){_UNKNOWN_ROLE_SQL().replace('role', 'l.role')})
+              AND {' AND '.join(cond)}""", (token, list(roles), list(roles), *params))   # 조건을 만족하는 문서의 후보만
+        rows = cur.fetchall()                       # (후보, 청크)
+        ids = {r[0] for r in rows}                  # 남은 후보
+        if len(ids) == 1:                           # 한 명으로 좁혀지면
+            candidates[token] = sorted({r[1] for r in rows})   # 그 사람의 청크만 검색
+            meta["person_candidates"][token] = 1    # 후보 수 갱신
+        else:
+            still = True                            # 0명이거나 여전히 여러 명 → 되묻기 유지
+    meta["ask_person"] = still                      # 모두 한 명으로 좁혀졌으면 되묻지 않는다
 
 
 def _name_reason(cur, tokens, roles):

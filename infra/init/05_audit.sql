@@ -39,7 +39,7 @@ ALTER TABLE audit.query_log ADD COLUMN IF NOT EXISTS follow_up_of TEXT;
 ALTER TABLE audit.query_log DROP CONSTRAINT IF EXISTS query_log_clarify_code_chk;
 ALTER TABLE audit.query_log ADD CONSTRAINT query_log_clarify_code_chk CHECK (clarify_code IS NULL OR clarify_code IN (
     'too_vague', 'ask_region', 'ask_doc_type', 'ask_person',
-    'person', 'role', 'region', 'token', 'keyword', 'withheld'));
+    'person', 'role', 'region', 'token', 'unknown', 'keyword', 'withheld'));
 CREATE INDEX IF NOT EXISTS query_log_follow_up_of ON audit.query_log (follow_up_of);
 COMMENT ON COLUMN audit.query_log.clarify_code IS '재질문 원인 코드 (CLR-01~10, starter/clarify.py)';
 COMMENT ON COLUMN audit.query_log.follow_up_of IS '이 질문이 이어받은 재질문의 request_id';

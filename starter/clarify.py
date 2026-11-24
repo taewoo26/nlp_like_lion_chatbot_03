@@ -12,8 +12,16 @@ meta 에 남는 값 (search.py)
   empty_label  : empty_reason=token 일 때 질문에 있던 식별자 종류 (address, phone_number …)
   keyword_miss : CLR-07 토큰 없는 질문인데 찾은 문서 어디에도 질문 키워드가 없음
 
+응답 그룹 (재질문 정의서 '응답 원칙' 시트)
+  A 구체 안내 : 사람과 무관한 원인 (CLR-08·01·10·07·09, 토큰 없는 질문의 CLR-04·05)
+                → 원인별로 무엇을 보충할지 구체적으로 안내
+  B 통일 응답 : 사람·식별자가 걸린 원인 (CLR-02·03·06, 토큰 있는 질문의 CLR-04·05, 토큰 있는 원인 불명 0건)
+                → 원인과 관계없이 같은 문장(UNIFIED) 하나. 후보 수·문서 번호·문서 조각은 화면에 보내지 않는다
+                  원인마다 문구가 다르면 조건을 바꿔 가며 물어 그 사람의 존재·역할·지역을 추측할 수 있기 때문
+  입력 방법 안내(ADDRESS_HINT)는 '못 찾은 원인'이 아니라 '질문에 주소가 들어 있는지'로만 붙인다.
+
 개인정보 원칙: 문구에는 질문의 원래 값(이름·번호·주소)을 다시 넣지 않는다.
-넣을 수 있는 것은 식별자 종류, 지역명, 역할어, 후보 수, 문서 종류 이름뿐이다.
+원인(clarify_code)은 감사 로그에만 남고 사용자 화면에는 드러나지 않는다.
 """
 
 # 키워드처럼 뽑히지만 무엇을 찾는지는 알려 주지 않는 말 (요청 동사·지시어·막연한 명사)
@@ -37,31 +45,24 @@ LABEL_KO = {                                    # 문구에 원래 값 대신 �
     "person": "이름",                             # 이름
 }
 
-# 식별자별로 '어떻게 입력하면 찾을 수 있는지' 안내 (CLR-06)
-LABEL_HINT = {                                  # 종류별 보충 방법
-    "address": "시·도부터 동·호수까지 전체 주소를 입력해야 찾을 수 있어요.",          # 주소는 전체 값으로 토큰을 만든다
-    "phone_number": "번호 전체를 입력해 주세요. (하이픈은 있어도 없어도 됩니다)",      # 정규화로 하이픈 차이는 흡수된다
-    "email": "@ 뒤 도메인까지 전체 주소를 입력해 주세요.",                         # 이메일 전체
-    "account_number": "계좌번호 전체를 입력해 주세요.",                            # 계좌번호 전체
-    "card_number": "카드번호 전체를 입력해 주세요.",                               # 카드번호 전체
-}
-
 # 원인(꼬리표) → 되묻기 문구. {…} 는 실행할 때 채운다
 MESSAGES = {                                    # 재질문 정의서 '② 이렇게 되묻고' 칸
     "too_vague": "어떤 문서를 찾으시나요? 이름이나 전화번호 같은 단서, 문서 종류(VOC, 대출상담 등), 기간 중 하나 이상을 알려 주세요.",  # CLR-08
     "ask_doc_type": "말씀하신 표현에 해당하는 문서 종류가 여러 개예요. {options} 중 어떤 문서를 찾으시나요?",  # CLR-10
-    "ask_person": "같은 이름의 후보가 여러 명({n}명) 있어 동일인 여부가 확정되지 않은 상태입니다. 한 사람의 기록으로 합쳐 답하지 않겠습니다. 역할(고객/직원), 지역, 전화번호 같은 다른 단서 중 하나를 더 알려 주세요.",  # CLR-02
-    "person": "입력한 이름으로 등록된 인물을 찾지 못했습니다. 이름 표기(띄어쓰기·오타)를 확인하거나, 전화번호·이메일 같은 다른 단서로 물어봐 주세요.",  # CLR-03
-    "role": "'{roles}' 역할로는 해당 인물을 찾지 못했습니다. 역할을 바꾸거나 빼고 다시 물어봐 주세요.",  # CLR-04
-    "region": "{regions} 지역 문서에서는 찾지 못했습니다. 지역을 다시 확인하거나 지역 조건 없이 물어봐 주세요.",  # CLR-05
-    "token": "입력한 {kinds}와(과) 정확히 같은 값이 나오는 문서를 찾지 못했습니다. {hint}",  # CLR-06
+    "role": "요청한 역할로는 해당 문서를 찾지 못했습니다. 역할을 바꾸거나 빼고 다시 물어봐 주세요.",  # CLR-04 (토큰 없는 질문만)
+    "region": "{regions} 지역 문서에서는 찾지 못했습니다. 지역을 다시 확인하거나 지역 조건 없이 물어봐 주세요.",  # CLR-05 (토큰 없는 질문만)
     "keyword": "질문과 같은 표현이 들어간 문서를 찾지 못했습니다. 문서에 쓰는 이름으로 다시 물어봐 주세요. (예: VOC요약, 피해접수, 카드분실상담)",  # CLR-07
     "withheld_hint": "찾은 문서 {n}건에는 요청한 정보가 없습니다. 원하는 정보나 문서 종류를 더 구체적으로 알려 주세요.",  # CLR-09 (LLM 답 뒤에 덧붙임)
 }
-GENERIC_NO_RESULT = "일치하는 문서를 찾지 못했습니다."   # 원인을 모를 때 쓰는 기존 문구
+GENERIC_NO_RESULT = "일치하는 문서를 찾지 못했습니다."   # 토큰 없는 질문에서 원인을 모를 때 쓰는 기존 문구
 
-# 재질문으로 처리할 원인 (no_result 중에서 '무엇을 보충할지' 안내하는 것)
-NEED_MORE_REASONS = ("person", "role", "region", "token", "keyword")   # CLR-03~07
+# B 그룹 통일 응답: 동명이인·이름 없음·역할 불일치·지역 불일치·식별자 불일치를 화면에서 구분할 수 없게 한다
+UNIFIED = ("이 질문만으로는 답변할 수 있는 정보가 없습니다. 역할(고객/직원), 지역, 전화번호 같은 조건이나 "
+           "찾으시는 업무·문서 종류를 함께 넣어 다시 질문해 주세요.")   # '정보가 없다'가 아니라 '이 질문만으로는' (동명이인에도 맞는 말)
+                                                                       # 역할·지역·번호를 앞에 둔 이유: 동명이인 후보를 실제로 좁히는 조건 (search._narrow_candidates)
+ADDRESS_HINT = "주소는 시·도부터 동·호수까지 전체를 입력해야 찾을 수 있어요."   # 질문에 주소가 있으면 원인과 관계없이 덧붙임
+PERSON_GROUP = frozenset({"ask_person", "person", "token"})    # 언제나 B 그룹인 원인 (role·region 은 토큰 유무로 결정)
+
 
 
 def meaningful_terms(terms):
@@ -86,22 +87,23 @@ def identifier_kinds(q_tokens):
     return sorted({token_kind(t) for t in q_tokens if not t.startswith("<PERSON_")})   # 이름 토큰은 뺌
 
 
-def _kinds_text(kinds):
-    """['address', 'phone_number'] → '주소·전화번호'. 종류가 없으면 '조건'."""
-    names = [LABEL_KO.get(k, k) for k in kinds]  # 한국어 이름으로 바꿈 (모르는 종류는 그대로)
-    return "·".join(names) or "조건"             # 가운뎃점으로 잇고, 비면 '조건'
+def is_person_group(code, q_tokens):
+    """이 원인을 B 그룹(통일 응답)으로 처리할지. 질문에 이름·식별자 토큰이 있으면 역할·지역·원인 불명도 B."""
+    if code in PERSON_GROUP:                    # 동명이인·이름 없음·식별자 불일치
+        return True                             # 언제나 통일 응답
+    return bool(q_tokens) and code in ("role", "region", None)   # 토큰이 걸린 역할·지역·원인 불명 0건도 통일 응답
 
 
-def candidate_count(meta):
-    """CLR-02 문구에 넣을 후보 수: 이름별 후보 수 중 가장 큰 값."""
-    counts = (meta.get("person_candidates") or {}).values()   # {토큰: 후보 수}
-    return max(counts, default=2)               # 값이 없으면 '여러 명'의 최소인 2
+def unified_message(q_tokens):
+    """B 그룹 화면 문장. 질문에 주소가 있으면(원인과 무관하게) 전체 주소 입력 안내를 덧붙인다."""
+    has_address = any(token_kind(t) == "address" for t in q_tokens)   # 사용자가 입력한 내용만 본다
+    return f"{UNIFIED}\n{ADDRESS_HINT}" if has_address else UNIFIED   # 주소가 있으면 한 줄 추가
 
 
-def pre_answer(meta):
+def pre_answer(meta, q_tokens=()):
     """검색 결과를 보기 전에 되물어야 하는 경우 (CLR-08 → 01 → 10 → 02 순서).
 
-    반환: (code, 문구) 또는 None. ask_region(CLR-01)은 기존 문구를 chat.py 가 그대로 쓴다.
+    반환: (code, 문구) 또는 None.
     """
     if meta.get("too_vague"):                   # CLR-08 조건이 아예 없음
         return "too_vague", MESSAGES["too_vague"]   # 무엇을 찾는지 먼저 묻는다
@@ -110,28 +112,22 @@ def pre_answer(meta):
     options = meta.get("ask_doc_type") or []    # CLR-10 문서 종류 후보 (동의어 사전이 채움)
     if len(options) > 1:                        # 후보가 2개 이상일 때만 되묻는다
         return "ask_doc_type", MESSAGES["ask_doc_type"].format(options=" / ".join(options))   # 후보를 / 로 나열
-    if meta.get("ask_person"):                  # CLR-02 동명 후보
-        return "ask_person", MESSAGES["ask_person"].format(n=candidate_count(meta))   # 후보 수만 알려 준다
+    if meta.get("ask_person"):                  # CLR-02 동명 후보 → B 그룹 통일 응답 (후보 수 안 알림)
+        return "ask_person", unified_message(q_tokens)
     return None                                 # 검색 전 재질문 없음
 
 
-def no_result_message(meta):
-    """결과 0건일 때 원인에 맞는 문구 (CLR-03~06). 원인을 모르면 기존 공통 문구."""
-    reason = meta.get("empty_reason")           # search.py 가 남긴 원인
-    if reason == "person":                      # CLR-03 이름 후보 0명
-        return MESSAGES["person"]               # 이름 표기·다른 단서 요청
-    if reason == "role":                        # CLR-04 역할 불일치
-        roles = "·".join(meta.get("roles") or []) or "요청한"   # 질문의 역할어 (없으면 '요청한')
-        return MESSAGES["role"].format(roles=roles)              # 역할 바꾸기·빼기 요청
-    if reason == "region":                      # CLR-05 지역 조건 때문에 0건
-        regions = "·".join(meta.get("regions") or []) or "요청한"  # 질문의 지역명
+def no_result_message(meta, q_tokens=()):
+    """결과 0건일 때 화면 문장 (CLR-03~06). 사람·식별자가 걸리면 원인과 관계없이 통일 응답."""
+    reason = meta.get("empty_reason")           # search.py 가 남긴 원인 (감사 로그용)
+    if is_person_group(reason, q_tokens):       # B 그룹
+        return unified_message(q_tokens)        # 같은 문장 (+ 주소 안내)
+    if reason == "role":                        # 토큰 없는 역할 질문 (예: 직원 VOC) → 사람과 무관
+        return MESSAGES["role"]                 # 역할 바꾸기·빼기 요청 (내부 역할 코드는 쓰지 않음)
+    if reason == "region":                      # 토큰 없는 지역 질문 (예: 제주 VOC)
+        regions = "·".join(meta.get("regions") or []) or "요청한"  # 질문의 지역명 (사용자가 입력한 것)
         return MESSAGES["region"].format(regions=regions)          # 지역 재확인 요청
-    if reason == "token":                       # CLR-06 식별자 불일치
-        kinds = meta.get("empty_label") or []   # 질문에 있던 식별자 종류
-        hint = LABEL_HINT.get(kinds[0], "값 전체를 정확히 입력해 주세요.") if len(kinds) == 1 \
-            else "값 전체를 정확히 입력했는지 확인하거나, 조건을 하나씩 나눠 물어봐 주세요."   # 종류가 여럿이면 나눠 묻기
-        return MESSAGES["token"].format(kinds=_kinds_text(kinds), hint=hint)   # 종류 이름 + 입력 방법
-    return GENERIC_NO_RESULT                    # 원인 불명: 기존 문구 유지
+    return GENERIC_NO_RESULT                    # 토큰 없는 질문의 원인 불명: 기존 문구 유지
 
 
 def withheld_hint(n_docs):
