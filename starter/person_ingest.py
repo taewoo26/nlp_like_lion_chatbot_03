@@ -56,7 +56,7 @@ def validate_resolution(cur, result, mapping):
     check_look_up(result['rows'], result['look_up'], chunks)
 
 
-def prepare_candidates(docs, max_chars, rules, detected=None):
+def prepare_candidates(docs, max_chars, rules, detected=None, source="pipeline"):
     """탐지 결과 주입은 테스트용. 기본 실행은 정답 라벨을 읽지 않는다."""
     from .ingest import collect_mapping, process_doc
     chunks, mapping, pseudo, candidates, links = [], {}, [], [], []
@@ -65,7 +65,8 @@ def prepare_candidates(docs, max_chars, rules, detected=None):
     for doc in docs:
         result = process_doc(doc, max_chars, config.meta_on('REGION_META'),
                              config.meta_on('ROLE_META'), rules,
-                             detected=detected.get(doc['id']) if detected else None)
+                             detected=detected.get(doc['id']) if detected else None,
+                             source=source)
         masked_parts = [r['masked_text'] for r in result['rows']]
         masked = result['masked_text']
         rows, doc_links = build_doc_candidates(doc['id'], doc['text'], masked,
@@ -175,7 +176,7 @@ def run(docs, args, pseudo_path):
         pool = make_pool(args.workers, args, config.meta_on('REGION_META'), config.meta_on('ROLE_META'), rules)
         try:
             detected = dict(zip((d['id'] for d in docs), pool.map(_worker_detect, docs))) if pool else None
-            chunks, mapping, pseudo, rows, links = prepare_candidates(docs, args.max_chars, rules, detected)
+            chunks, mapping, pseudo, rows, links = prepare_candidates(docs, args.max_chars, rules, detected, source=args.source)
         finally:
             if pool:
                 pool.terminate()

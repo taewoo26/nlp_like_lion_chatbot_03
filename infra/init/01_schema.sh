@@ -21,6 +21,7 @@ CREATE TABLE rag.chunks (
     masked_text  TEXT NOT NULL,                  -- 원문 저장 금지
     tokens       TEXT[] NOT NULL DEFAULT '{}',   -- 청크에 들어 있는 토큰 목록
     embedding    vector(${EMBED_DIM}) NOT NULL,
+    source       TEXT NOT NULL DEFAULT 'pipeline',  -- pipeline | upload
     created_at   TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX chunks_tokens_gin     ON rag.chunks USING GIN (tokens);
