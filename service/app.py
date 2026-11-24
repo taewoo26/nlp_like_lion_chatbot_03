@@ -16,6 +16,10 @@
   고도화 때 추가 예정: 미사용 시 자동 로그아웃(F-03), 로그인 실패 잠금(F-68).
 - 질문 원문은 서버 로그·응답 어디에도 남기지 않는다. 응답에는 가명처리된 질문과 문서만 담는다.
 - state(화면용): found(아하!) / sorry(되물음·문서 없음·답변 보류) / nollm(LLM 키 없음, 검색 결과만)
+- 재질문(starter/clarify.py): 응답의 need_more=True 면 화면이 '조건 확인 필요'로 표시하고, 바로 다음 질문에
+  {"follow_up_of": 이 응답의 request_id} 를 붙여 보낸다. 본인 질문 id 일 때만 query_log.follow_up_of 에 남는다.
+  직전 재질문이 MERGE_WINDOW_MIN 분 안이고 지금 질문이 조각(번호만·지역만·역할만)이면 직전 가명 질문과 합쳐 검색한다
+  (응답 merged=True). 원문은 다시 쓰지 않고 감사 로그의 가명 질문·토큰만 쓴다.
   chat.answer()의 state(감사 로그용 6개 값)를 UI_STATE 로 바꿔 보낸다. answered→found, search_only→nollm, 나머지→sorry
 - 감사 로그: 질문마다 audit.query_log 1행 (service/audit.py). 처리 중 예외도 state=error 로 남긴다.
 - 출력 재검사(starter/recheck.py): 결과는 query_log.recheck_*, 걸린 시간은 서버 터미널 한 줄(recheck_ms·total_ms).
@@ -46,7 +50,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from service import audit, auth
-from starter import chat, config, db, pii_pipeline
+from starter import clarify, chat, config, db, pii_pipeline
 
 STATIC = Path(__file__).with_name("static")
 UI_STATE = {"answered": "found", "search_only": "nollm"}   # 그 밖의 state 는 화면에서 sorry
@@ -118,6 +122,7 @@ class Ask(BaseModel):
     query: str = Field(min_length=1, max_length=500)
     k: int = Field(default=3, ge=1, le=10)
     restore: bool = False
+    follow_up_of: str | None = Field(default=None, pattern=r"^req_[0-9]{8}_[0-9a-f]{12}$")   # 직전 재질문의 request_id (보충 질문일 때만)
 
 
 class VerifyPassword(BaseModel):
@@ -303,13 +308,16 @@ def _log_restore_error(request_id, exc):
 def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     request_id = audit.new_request_id()
     started = time.perf_counter()
+    prev = _previous_request(body.follow_up_of, user["user_id"])       # 직전 재질문 (본인 질문일 때만)
+    context = _merge_context(prev)                                     # 이어받을 수 있으면 직전 가명 질문·토큰
     try:
-        res = chat.answer(body.query.strip(), body.k)
+        res = chat.answer(body.query.strip(), body.k, **({"context": context} if context else {}))
     except Exception as exc:
         audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
     latency_ms = _elapsed_ms(started)
-    audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms))
+    follow_up_of = prev["request_id"] if prev else None               # 본인 질문의 id 일 때만 연결 (아니면 None)
+    audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms, follow_up_of=follow_up_of))
     if res.get("recheck"):
         _log_recheck(request_id, res["recheck"], latency_ms)
     docs = [{"doc_id": d["doc_id"], "snippet": d["snippet"]} for d in res["docs"]]   # 출력 재검사를 거친 조각만 (starter/recheck.py)
@@ -342,7 +350,44 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
 
     return {"request_id": request_id, "masked_query": masked_query, "query_tokens": res["query_tokens"],
             "docs": docs, "answer": answer_text, "state": _ui_state(res["state"]),
-            "restored": restored}
+            "restored": restored,
+            "clarify_code": res.get("clarify_code"),            # 재질문 원인 (starter/clarify.py)
+            "need_more": bool(res.get("clarify_code")),         # True 면 화면이 '조건 확인 필요'로 표시하고 다음 질문에 이 request_id 를 붙인다
+            "merged": bool(res.get("merged"))}                  # True 면 이전 질문과 합쳐서 찾았다는 안내를 보여 준다
+
+
+def _previous_request(request_id, user_id):
+    """follow_up_of 로 받은 request_id 의 감사 로그 행 (이 사용자의 질문일 때만). 아니면 None.
+
+    남의 질문 id 를 붙여 기록을 섞거나 남의 질문을 이어받지 못하게 한다. 확인에 실패해도 답변은 막지 않는다.
+    반환: {'request_id', 'masked_query', 'query_tokens', 'clarify_code', 'age_min'}
+    """
+    if not request_id:                                          # 보충 질문이 아니면
+        return None                                             # 연결 없음
+    try:
+        with db.rag_conn() as conn, conn.cursor() as cur:       # 감사 로그와 같은 계정으로 조회
+            cur.execute("""SELECT request_id, masked_query, query_tokens, clarify_code,
+                                  EXTRACT(EPOCH FROM now() - created_at) / 60
+                           FROM audit.query_log WHERE request_id = %s AND user_id = %s""",
+                        (request_id, user_id))                  # 같은 사용자의 질문인지 + 몇 분 전인지
+            row = cur.fetchone()
+    except Exception as exc:                                    # DB 문제로 확인 못 하면
+        audit._log_error("follow_up_of 확인 실패 request_id=%s error=%s", request_id, type(exc).__name__)   # 기록만 남기고
+        return None                                             # 연결은 생략
+    if not row:                                                 # 남의 질문이거나 없는 id
+        return None
+    return {"request_id": row[0], "masked_query": row[1] or "", "query_tokens": list(row[2] or []),
+            "clarify_code": row[3], "age_min": float(row[4] or 0)}
+
+
+def _merge_context(prev):
+    """직전 재질문을 이어받을 수 있으면 chat.answer 에 넘길 context, 아니면 None.
+    조건: 이어받을 수 있는 재질문 원인(clarify.MERGE_CODES)이고 MERGE_WINDOW_MIN 분 안."""
+    if not prev or prev["clarify_code"] not in clarify.MERGE_CODES:   # 재질문이 아니었거나 이어받을 원인이 아니면
+        return None
+    if prev["age_min"] > clarify.MERGE_WINDOW_MIN:              # 너무 오래됐으면
+        return None
+    return {k: prev[k] for k in ("masked_query", "query_tokens", "clarify_code")}   # 가명 질문·토큰·원인만
 
 
 def admin_required(request: Request):

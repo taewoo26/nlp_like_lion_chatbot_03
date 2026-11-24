@@ -31,6 +31,19 @@ CREATE TABLE IF NOT EXISTS audit.query_log (
 ALTER TABLE audit.query_log OWNER TO rag_user;
 CREATE INDEX IF NOT EXISTS query_log_user_created ON audit.query_log (user_id, created_at);
 
+-- 재질문(CLR): state 는 그대로 두고 원인과 대화 흐름을 따로 남긴다. 이미 있는 DB 에도 다시 실행하면 적용된다
+--   clarify_code : 재질문 원인 (starter/clarify.py). 재질문이 아니면 NULL
+--   follow_up_of : 재질문 바로 다음 질문이면 그 재질문의 request_id (같은 사용자 질문만, app.py 가 확인)
+ALTER TABLE audit.query_log ADD COLUMN IF NOT EXISTS clarify_code TEXT;
+ALTER TABLE audit.query_log ADD COLUMN IF NOT EXISTS follow_up_of TEXT;
+ALTER TABLE audit.query_log DROP CONSTRAINT IF EXISTS query_log_clarify_code_chk;
+ALTER TABLE audit.query_log ADD CONSTRAINT query_log_clarify_code_chk CHECK (clarify_code IS NULL OR clarify_code IN (
+    'too_vague', 'ask_region', 'ask_doc_type', 'ask_person',
+    'person', 'role', 'region', 'token', 'unknown', 'keyword', 'withheld'));
+CREATE INDEX IF NOT EXISTS query_log_follow_up_of ON audit.query_log (follow_up_of);
+COMMENT ON COLUMN audit.query_log.clarify_code IS '재질문 원인 코드 (CLR-01~10, starter/clarify.py)';
+COMMENT ON COLUMN audit.query_log.follow_up_of IS '이 질문이 이어받은 재질문의 request_id';
+
 -- 실명 복원 로그. vault.restore_token()이 기록한다
 CREATE TABLE IF NOT EXISTS audit.restore_log (
     restore_log_id  BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
