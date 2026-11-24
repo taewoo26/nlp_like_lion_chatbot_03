@@ -150,7 +150,9 @@ def _doc_persons(cur, doc_ids):
     return out
 
 
-def search(query, k=10, conn=None, with_meta=False, reg_id=None):
+def search(query, k=10, conn=None, with_meta=False, reg_id=None, context=None):
+    """context: 직전 재질문 {'masked_query', 'query_tokens', 'clarify_code'} (service/app.py 가 감사 로그에서 꺼냄).
+    지금 질문이 조각(번호만·지역만·역할만)이면 직전 질문과 합쳐서 검색한다 (starter/clarify.py merge_query)."""
     dict_on = config.meta_on("PERSON_DICT")
     if reg_id and not dict_on:
         raise ValueError("reg_id 검색은 PERSON_DICT=on에서 사용하세요.")
@@ -159,8 +161,20 @@ def search(query, k=10, conn=None, with_meta=False, reg_id=None):
     else:
         masked_q, q_tokens = mask_query(query)
         q_records = []
+    merged = None                                                     # 이어받기 결과
+    if context:                                                       # 직전 재질문이 있으면
+        merged = clarify.merge_query(context["masked_query"], context.get("query_tokens") or [],
+                                     masked_q, q_tokens, extract_terms(masked_q), context.get("clarify_code"))
+    if merged:                                                        # 조각이라 합쳤으면
+        masked_q, q_tokens = merged                                   # 합친 가명 질문·토큰으로 검색
+        q_records = ([{"token": t, "label": clarify.token_kind(t)} for t in q_tokens]
+                     if dict_on else [])                              # 인물 후보 조회에는 토큰·종류만 쓰인다
+        query = masked_q                                              # 지역·역할 판단도 합친 질문으로 (원문은 다시 쓰지 않음)
     try:
-        return _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id)
+        out = _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id)
+        if with_meta:                                                 # meta 에 이어받기 여부 표시
+            out[3]["merged"] = bool(merged)
+        return out
     except Exception as exc:
         tag_masked(exc, masked_q, q_tokens)
         raise

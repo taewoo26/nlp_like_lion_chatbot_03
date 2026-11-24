@@ -433,7 +433,8 @@ async function ask(q){
   if (res.request_id) bot.dataset.requestId = res.request_id;   // 원복 요청에 함께 보낸다 (복원 기록 ↔ 질의 기록)
   const answer = res.answer || "참고 문서를 찾았어요. (LLM 키가 없어 문서 목록만 보여드려요)";
   pendingFollowUp = (res.need_more && res.request_id) ? res.request_id : null;   // 재질문이면 다음 질문 1번에 이 id 를 붙인다
-  const badge = res.need_more ? "· 조건 확인 필요" : (res.state === "sorry" ? "· 확인 불가" : "· 아하!");   // 재질문은 '확인 불가'와 구분
+  const badge = (res.need_more ? "· 조건 확인 필요" : (res.state === "sorry" ? "· 확인 불가" : "· 아하!"))   // 재질문은 '확인 불가'와 구분
+              + (res.merged ? " · 이전 질문과 이어서 찾았어요" : "");                                      // 보충 질문을 직전 질문과 합쳤으면 안내
   bot.innerHTML = `<div class="who">🐻 도장곰 주임 ${badge}</div><div class="ans"></div>`;
   await typeInto(bot.querySelector(".ans"), answer);
   const meta = document.createElement("div"); meta.className = "meta";

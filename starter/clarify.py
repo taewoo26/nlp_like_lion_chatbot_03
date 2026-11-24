@@ -133,3 +133,76 @@ def no_result_message(meta, q_tokens=()):
 def withheld_hint(n_docs):
     """CLR-09: LLM 이 '확인할 수 없다'고 답했을 때 덧붙이는 문장."""
     return MESSAGES["withheld_hint"].format(n=n_docs)   # 찾은 문서 수만 넣는다
+
+
+# ---------------------------------------------------------------- 이전 질문 이어받기 (보충 질문 합치기)
+# 재질문 바로 다음 질문이 '조각'(번호만, 지역만, '고객이요'처럼 역할만)이면 직전 질문과 합쳐서 검색한다.
+# 원문은 다시 쓰지 않는다: 감사 로그에 남은 직전 '가명처리된 질문·토큰'과 지금 질문의 가명처리 결과만 합친다.
+
+import re as _re                                  # 토큰 찾기용
+
+MERGE_CODES = frozenset({"ask_region", "ask_doc_type", "ask_person",
+                         "person", "role", "region", "token", "unknown"})   # 이어받을 수 있는 직전 재질문 원인
+MERGE_WINDOW_MIN = 10                             # 직전 재질문 후 이 시간(분)이 지나면 이어받지 않는다
+_TOKEN_RE = _re.compile(r"<[A-Z_]+_[0-9A-Za-z]+>")  # 가명 토큰 (<PHONE_NUMBER_ab12>)
+_TAIL = ("이에요", "예요", "입니다", "이요", "요")   # '고객이요', '서울이요' 같은 말끝
+
+
+def _bare(word):
+    """'고객이요,' → '고객' : 문장부호와 말끝·조사를 뗀 형태."""
+    from . import roles                           # 지연 import (순환 import 방지)
+    w = word.strip(" ,.?!")                       # 문장부호 제거
+    for tail in _TAIL:                            # 말끝 제거
+        if w.endswith(tail) and len(w) > len(tail):
+            w = w[: -len(tail)]
+            break
+    return roles._candidates(w)[-1] if roles._candidates(w) else w   # 조사까지 뗀 가장 짧은 형태
+
+
+def _role_words():
+    """질문에서 역할을 뜻하는 말 ('고객', '직원' …). DB 기본값과 같은 목록."""
+    from . import roles                           # 지연 import
+    return set(roles.default_rules().query_to_roles)   # role_master.query_cues
+
+
+def _is_region_word(word):
+    """'서울', '제주', '수성구' 같은 지역 이름인지."""
+    from . import address                         # 지연 import
+    return address._strip_region_josa(word) in address.REGION_WORDS or _bare(word) in address.REGION_WORDS
+
+
+def is_fragment(cur_terms, prev_code):
+    """지금 질문이 '조각'인지: 역할·지역·막연한 말을 빼면 키워드가 없음 (문서 종류 되묻기 뒤에는 2개까지 허용)."""
+    role_words = _role_words()                    # 역할 말
+    rest = {t for t in meaningful_terms(cur_terms) if t not in role_words and not _is_region_word(t)}   # 남는 키워드
+    if prev_code == "ask_doc_type":               # CLR-10 뒤에는 '민원처리'처럼 문서 종류 이름으로 답한다
+        return len(rest) <= 2                     # 짧은 답이면 이어받기
+    return not rest                               # 그 밖에는 남는 키워드가 없을 때만
+
+
+def merge_query(prev_masked, prev_tokens, cur_masked, cur_tokens, cur_terms, prev_code):
+    """직전 질문과 지금 조각을 합친다. 반환: (합친 가명 질문, 합친 토큰) 또는 None(합치지 않음).
+
+    같은 종류 조건은 새 값으로 바꾼다: 새 전화번호 → 이전 전화번호 제거, 새 지역 → 이전 지역 말 제거,
+    새 역할 → 이전 역할 말 제거, 새 이름 → 이전 이름 제거.
+    """
+    if prev_code not in MERGE_CODES or not is_fragment(cur_terms, prev_code):   # 이어받을 대상이 아니면
+        return None                               # 지금 질문만으로 검색
+    role_words = _role_words()                    # 역할 말
+    replaced = {token_kind(t) for t in cur_tokens}   # 새로 들어온 토큰 종류
+    cur_words = cur_masked.split()                # 지금 질문의 어절
+    has_role = any(_bare(w) in role_words for w in cur_words)   # 지금 질문에 역할 말이 있는지
+    has_region = any(_is_region_word(w) for w in cur_words)     # 지금 질문에 지역 말이 있는지
+    keep = []                                     # 직전 질문에서 남길 어절
+    for w in prev_masked.split():
+        tok = _TOKEN_RE.search(w)                 # 어절 속 토큰 (조사가 붙어 있을 수 있음)
+        if tok and token_kind(tok.group()) in replaced:   # 같은 종류 토큰이 새로 왔으면
+            continue                              # 이전 값은 버린다
+        if has_role and _bare(w) in role_words:   # 새 역할이 왔으면
+            continue                              # 이전 역할 말은 버린다
+        if has_region and _is_region_word(w):     # 새 지역이 왔으면
+            continue                              # 이전 지역 말은 버린다
+        keep.append(w)                            # 나머지는 이어받는다
+    merged = " ".join(keep + [cur_masked]).strip()   # 이전 조건 + 지금 조각
+    tokens = sorted({t for t in prev_tokens if token_kind(t) not in replaced} | set(cur_tokens))   # 토큰도 같은 규칙
+    return merged, tokens

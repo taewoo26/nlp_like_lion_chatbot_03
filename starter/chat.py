@@ -118,10 +118,13 @@ def _post_llm(payload, retries=5):
         return r
 
 
-def answer(query, k=3):
-    masked_q, q_tokens, docs, meta = search(query, k, with_meta=True)
+def answer(query, k=3, context=None):
+    """context: 직전 재질문 (service/app.py). 지금 질문이 조각이면 직전 질문과 합쳐서 찾는다."""
+    masked_q, q_tokens, docs, meta = search(query, k, with_meta=True, **({"context": context} if context else {}))
     try:
-        return _answer(masked_q, q_tokens, docs, meta)
+        res = _answer(masked_q, q_tokens, docs, meta)
+        res["merged"] = bool(meta.get("merged"))   # 이전 질문과 합쳐서 찾았는지 (화면 안내용)
+        return res
     except Exception as exc:
         tag_masked(exc, masked_q, q_tokens)
         raise

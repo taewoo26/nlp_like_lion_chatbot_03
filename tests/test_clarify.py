@@ -229,41 +229,125 @@ def test_audit_row_has_clarify_fields():
 
 @pytest.fixture
 def api(monkeypatch):
-    s = {"rows": [], "own": True}
+    s = {"rows": [], "own": True, "prev_code": "ask_person", "age": 1.0, "contexts": []}
     monkeypatch.setattr(app_module.auth, "get_active_user", lambda uid, conn=None: dict(USER))
     monkeypatch.setattr(app_module.auth, "authenticate",
                         lambda u, p, conn=None: app_module.auth.LoginResult(True, app_module.auth.OK, user=dict(USER)))
     monkeypatch.setattr(app_module.audit, "record", lambda row, conn=None: s["rows"].append(row) or "db")
-    monkeypatch.setattr(app_module, "_own_request", lambda rid, uid: rid if (rid and s["own"]) else None)   # 본인 질문 확인 대역
-    monkeypatch.setattr(app_module.chat, "answer", lambda q, k: dict(s["result"]))
+
+    def fake_prev(rid, uid):                       # 감사 로그 조회 대역
+        if not rid or not s["own"]:
+            return None
+        return {"request_id": rid, "masked_query": f"{TOK} 고객 상담 내역 알려줘", "query_tokens": [TOK],
+                "clarify_code": s["prev_code"], "age_min": s["age"]}
+    monkeypatch.setattr(app_module, "_previous_request", fake_prev)
+
+    def fake_answer(q, k, context=None):           # chat.answer 대역: 받은 context 를 기록
+        s["contexts"].append(context)
+        return dict(s["result"])
+    monkeypatch.setattr(app_module.chat, "answer", fake_answer)
     client = TestClient(app_module.app)
     client.post("/api/login", json={"user_id": "SB260003", "password": "x"})
     s["client"] = client
     return s
 
 
+def _ok(state="answered", code=None, merged=False):
+    return {"masked_query": "q", "query_tokens": [], "docs": [], "answer": "네", "notice": None,
+            "state": state, "clarify_code": code, "merged": merged}
+
+
 def test_api_need_more_and_follow_up(api):
-    api["result"] = {"masked_query": "알려줘", "query_tokens": [], "docs": [], "answer": "어떤 문서를…",
-                     "notice": None, "state": "clarify", "clarify_code": "too_vague"}
+    api["result"] = _ok("clarify", "too_vague")
     first = api["client"].post("/api/chat", json={"query": "알려줘"}).json()
     assert first["need_more"] is True and first["clarify_code"] == "too_vague"
-    api["result"] = {"masked_query": "보이스피싱 피해 접수", "query_tokens": [], "docs": [], "answer": "네",
-                     "notice": None, "state": "answered", "clarify_code": None}
-    second = api["client"].post("/api/chat", json={"query": "보이스피싱 피해 접수", "follow_up_of": first["request_id"]}).json()
-    assert second["need_more"] is False
+    api["result"] = _ok(merged=True)
+    second = api["client"].post("/api/chat", json={"query": "010-1234-4123", "follow_up_of": first["request_id"]}).json()
+    assert second["need_more"] is False and second["merged"] is True
     assert api["rows"][1]["follow_up_of"] == first["request_id"] and api["rows"][0]["follow_up_of"] is None
+    assert api["contexts"][1]["masked_query"].startswith(TOK)      # 직전 가명 질문이 chat.answer 로 넘어감
+
+
+@pytest.mark.parametrize("prev_code, age, passed", [
+    ("ask_person", 1.0, True),        # 동명이인 재질문 직후 → 이어받기
+    ("too_vague", 1.0, False),        # 막연한 질문은 이어받을 조건이 없음
+    ("keyword", 1.0, False),          # 표현 불일치는 새 질문으로
+    (None, 1.0, False),               # 직전이 정상 답변
+    ("ask_person", 30.0, False),      # 시간이 지남
+])
+def test_api_context_rules(api, prev_code, age, passed):
+    api["prev_code"], api["age"], api["result"] = prev_code, age, _ok()
+    api["client"].post("/api/chat", json={"query": "010-1234-4123", "follow_up_of": "req_20261124_0123456789ab"})
+    assert (api["contexts"][0] is not None) is passed
 
 
 def test_api_drops_follow_up_of_other_user(api):
     api["own"] = False                              # 남의 질문 id 라고 가정
-    api["result"] = {"masked_query": "q", "query_tokens": [], "docs": [], "answer": "네",
-                     "notice": None, "state": "answered", "clarify_code": None}
+    api["result"] = _ok()
     api["client"].post("/api/chat", json={"query": "q", "follow_up_of": "req_20261123_0123456789ab"})
-    assert api["rows"][0]["follow_up_of"] is None   # 연결하지 않는다
+    assert api["rows"][0]["follow_up_of"] is None and api["contexts"][0] is None   # 연결도 이어받기도 안 함
 
 
 def test_api_rejects_bad_follow_up_format(api):
-    api["result"] = {"masked_query": "q", "query_tokens": [], "docs": [], "answer": "네",
-                     "notice": None, "state": "answered", "clarify_code": None}
+    api["result"] = _ok()
     r = api["client"].post("/api/chat", json={"query": "q", "follow_up_of": "DROP TABLE"})
     assert r.status_code == 422                     # 형식이 틀리면 요청 자체를 거절
+
+
+# ---------------------------------------------------------------- 이전 질문 이어받기 (merge_query)
+
+PHONE1, PHONE2 = "<PHONE_NUMBER_aaaa11112222>", "<PHONE_NUMBER_bbbb33334444>"   # 가상의 전화번호 토큰
+
+
+def _merge(prev_masked, prev_tokens, cur_masked, cur_tokens, code="ask_person"):
+    from starter.bm25 import extract_terms         # 실제 Kiwi 로 키워드를 뽑는다
+    return clarify.merge_query(prev_masked, prev_tokens, cur_masked, cur_tokens, extract_terms(cur_masked), code)
+
+
+def test_merge_phone_only():
+    merged = _merge(f"{TOK} 고객 상담 내역 알려줘", [TOK], PHONE1, [PHONE1])
+    assert merged == (f"{TOK} 고객 상담 내역 알려줘 {PHONE1}", sorted([TOK, PHONE1]))
+
+
+def test_merge_replaces_same_kind_token():
+    merged = _merge(f"{TOK} 고객 {PHONE1} 상담 내역", [TOK, PHONE1], PHONE2, [PHONE2])
+    assert PHONE1 not in merged[0] and PHONE1 not in merged[1] and PHONE2 in merged[1]   # 새 번호로 교체
+
+
+def test_merge_role_only_replaces_role():
+    merged = _merge(f"직원 {TOK} 기록 보여줘", [TOK], "고객이요", [], code="role")
+    assert merged[0] == f"{TOK} 기록 보여줘 고객이요"   # 이전 역할 '직원'을 빼고 새 역할
+
+
+def test_merge_region_only_replaces_region():
+    merged = _merge(f"제주 사는 {TOK} 고객 상담 내역", [TOK], "서울", [], code="region")
+    assert "제주" not in merged[0] and merged[0].endswith("서울")
+
+
+def test_full_new_question_is_not_merged():
+    assert _merge(f"{TOK} 고객 상담 내역 알려줘", [TOK], "법인카드 사용 보고서 찾아줘", []) is None
+
+
+def test_doc_type_answer_after_ask_doc_type():
+    merged = _merge("민원 내역 보여줘", [], "민원처리", [], code="ask_doc_type")
+    assert merged == ("민원 내역 보여줘 민원처리", [])
+
+
+def test_not_merged_after_non_mergeable_code():
+    assert _merge("알려줘", [], PHONE1, [PHONE1], code="too_vague") is None
+
+
+def test_search_uses_merged_query(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(search.config, "meta_on", lambda name: name == "PERSON_DICT")
+    monkeypatch.setattr(search, "mask_query", lambda q, with_records=False: (PHONE1, [PHONE1], [{"token": PHONE1, "label": "phone_number"}]))
+
+    def fake_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None):
+        calls.update(masked_q=masked_q, tokens=q_tokens, records=q_records, query=query)
+        return masked_q, q_tokens, [], {}
+    monkeypatch.setattr(search, "_search_masked", fake_masked)
+    ctx = {"masked_query": f"{TOK} 고객 상담 내역 알려줘", "query_tokens": [TOK], "clarify_code": "ask_person"}
+    _, _, _, meta = search.search("010-1234-4123", 3, with_meta=True, context=ctx)
+    assert calls["masked_q"].startswith(TOK) and calls["tokens"] == sorted([TOK, PHONE1]) and meta["merged"] is True
+    assert {"token": TOK, "label": "person"} in calls["records"]      # 이름 토큰이 인물 후보 조회에 쓰이게
+    assert "010" not in calls["query"]                                # 원문은 다시 쓰지 않는다
