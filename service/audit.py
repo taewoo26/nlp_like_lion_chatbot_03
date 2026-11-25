@@ -19,7 +19,7 @@
   예외 메시지 전체와 질문 원문은 어디에도 남기지 않는다.
 - clarify_code·follow_up_of: 재질문 원인과 '재질문 → 보충 질문' 연결 (infra/init/05_audit.sql).
   지난 행의 state 는 고치지 않는다. 두 행을 follow_up_of 로 묶어 '재질문 후 해결'을 센다.
-- 기록 계정: 지금은 rag_user(db.rag_conn, audit 스키마 소유자). 고도화 때 app_search 로 바꾼다.
+- 기록 계정: app_search(db.search_conn, query_log INSERT 만). SEARCH_DSN 이 없으면 rag_user 로 대체.
 """
 import json
 import logging
@@ -127,7 +127,7 @@ def write_query_log(row, conn=None):
     """DB에 1행 INSERT. conn 을 넘기면 커밋하지 않는다 (호출한 쪽이 정함, 테스트는 롤백)."""
     params = dict(row, recheck_labels=Jsonb(row["recheck_labels"]))
     own = conn is None
-    conn = conn or db.rag_conn()
+    conn = conn or db.search_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(_INSERT, params)

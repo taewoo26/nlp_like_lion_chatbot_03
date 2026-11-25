@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from service import app as app_module
 from service import audit
-from starter import db
+from starter import config, db
 
 LV2 = {"user_id": "SB260001", "user_name": "가상", "team_cd": "DEPT_RISK", "team_name": "리스크팀",
        "position": "팀장", "grade": "부장", "access_level": 2, "is_admin": True}
@@ -183,13 +183,14 @@ def test_chat_restore_failure_keeps_tokens(env, monkeypatch):
     assert len(env["errors"]) == 1 and body["request_id"] in env["errors"][0]
 
 
-# ---- 실제 DB (없으면 건너뜀). db.restore_conn() 으로 접속하고 끝나면 롤백 ----
+# ---- 실제 DB (없으면 건너뜀). 테스트 데이터를 직접 넣어야 해서 관리자 접속을 쓰고 끝나면 롤백.
+#      app_search 가 이 함수들을 실행할 수 있는지는 test_db_accounts.py 에서 확인한다 ----
 @pytest.fixture
 def conn():
     try:
-        c = db.restore_conn()
+        c = psycopg.connect(config._SUPERUSER_DSN, connect_timeout=5)
     except psycopg.OperationalError as e:
-        pytest.skip(f"DB 연결(db.restore_conn)에 실패했습니다: {e}")
+        pytest.skip(f"DB 연결(관리자 계정)에 실패했습니다: {e}")
     with c.cursor() as cur:
         cur.execute("SELECT to_regprocedure('vault.restore_token(text,text,text)') IS NOT NULL")
         if not cur.fetchone()[0]:

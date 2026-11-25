@@ -29,7 +29,7 @@
         POST /api/restore-tokens {"request_id", "tokens": [...]} → {"map": {토큰: 원문}}
   복원은 vault.restore_token()으로만 한다. 토큰마다 audit.restore_log 1행이 남고 request_id 로 query_log 와 이어진다.
   기록에 실패하면 복원도 실패한다(화면에는 토큰 그대로). query_log 와 달리 실명이 나가는 쪽이라 기록 없는 복원은 하지 않는다.
-  DB 접속은 db.restore_conn() (지금 관리자 계정, 권한 정리 때 pii_search 로 교체).
+  DB 접속은 db.restore_conn() (app_search 계정. SEARCH_DSN 이 없으면 관리자 계정으로 대체).
 - 이름 부분 공개(Lv1 + 2차 인증): POST /api/verify-password {"password"} → 세션에 partial_verified
         POST /api/partial-tokens {"request_id", "tokens": [...]} → {"map": {토큰: "윤*영"}}
   vault.partial_token()으로만 한다. DB 함수가 Lv1 확인 → 본인 질문(query_log) 확인 → 이름 토큰이고 그 답변에 나온
@@ -413,14 +413,14 @@ def admin(request: Request):
 def admin_stats(user: dict = Depends(admin_required)):
     from starter import db
     stats = {}
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
         stats["total_docs"] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks WHERE created_at::date = CURRENT_DATE")
         stats["today_docs"] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM rag.chunks")
         stats["total_chunks"] = cur.fetchone()[0]
-    with db.vault_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM vault.token_map")
         stats["total_tokens"] = cur.fetchone()[0]
         cur.execute("""
@@ -476,7 +476,7 @@ def admin_docs(
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sort_col = _DOCS_SORT_COLS.get(sort, "MIN(created_at)")
     sort_dir = "ASC" if order == "asc" else "DESC"
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(DISTINCT doc_id) FROM rag.chunks {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -496,7 +496,7 @@ def admin_docs(
 @app.get("/api/admin/docs/{doc_id}")
 def admin_doc_detail(doc_id: str, user: dict = Depends(admin_required)):
     from starter import db
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT doc_type, chunk_idx, masked_text, tokens
               FROM rag.chunks WHERE doc_id = %s ORDER BY chunk_idx
@@ -758,7 +758,7 @@ def admin_logs_query(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.query_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -797,7 +797,7 @@ def admin_logs_restore(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.restore_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -830,7 +830,7 @@ def admin_logs_policy(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.policy_change_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -870,7 +870,7 @@ def admin_users(
     elif active == "false":
         conditions.append("NOT u.is_active")
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.auth_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM policy.users u {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -910,7 +910,7 @@ def admin_user_update(user_id: str, body: _UserUpdateBody, user: dict = Depends(
         params["active"] = body.is_active
     if not sets:
         raise HTTPException(status_code=400, detail="변경할 항목이 없습니다.")
-    with db.auth_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(
             f"UPDATE policy.users SET {', '.join(sets)} WHERE user_id = %(uid)s RETURNING user_id",
             params,
