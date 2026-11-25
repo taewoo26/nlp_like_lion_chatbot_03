@@ -16,6 +16,9 @@ python -m eval.integration.run --rebuild-db --yes --holdout data/holdout/다른�
 python -m eval.integration.run --run-id it3 --rebuild-db --yes --only search
 python -m eval.integration.run --run-id it3 --resume --rebuild-db --yes --only answer
 python -m eval.integration.run --run-id it3 --resume --only security
+
+# 다중 턴 대화만 (ITM01~05, 인물사전 ON 설정 R1·R3 × Lv0·Lv1·Lv2 = 30개 대화, LLM 최대 60번)
+python -m eval.integration.run --run-id it3 --resume --rebuild-db --yes --only dialog
 #   두 번째 명령: 지금 DB(검색이 끝난 인물사전 ON 적재)로 R1·R3 답변을 먼저 하고, R0·R2 답변 때만 OFF로 다시 적재합니다.
 #   --rebuild-db 를 빼면 DB가 맞지 않는 R0·R2 는 '미실행'으로 남고 안내가 나옵니다. 남은 질문이 없는 적재는 다시 적재하지 않습니다.
 
@@ -94,12 +97,14 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 | 준비 | `validate_data.py` | 데이터가 설계와 맞는지 검사 |
 | 준비 | `simulate_person_rules.py` | DB 없이 인물사전 v3 규칙 회귀 검사 |
 | 실행 | `run.py` | 적재 → 설정별 질문 실행(검색 k=20 / 답변: 서비스 API를 사용자 레벨마다 호출, 단계별 후보·LLM 입력·감사 로그 기록) → 인물 판정·가명처리 본문 수집 → 권한 API → 보고 |
+| 실행 | `run.py` (대화) | 다중 턴 대화: 1턴 응답이 되묻기(need_more)면 2턴에 `follow_up_of` 를 붙여 보냄. R1·R3 × Lv0~2 |
 | 실행 | `security.py` | 권한 API 22개 케이스 (FastAPI TestClient, 서버 안 띄움) |
 | 채점 | `score_detection.py` | 01 탐지 P·R·F1, 실제 가명처리 본문의 원문 잔존·토큰 일관성·삭제 대상 |
 | 채점 | `score_person.py` | 02 실제 관계 기준 판별(B-cubed, 기존 문서 인물 오병합) + v3 규칙 회귀 |
 | 채점 | `score_query.py` | 03 질문 토큰, 실행 당시 키워드, 조건·부정 보존 (설정별) |
 | 채점 | `score_retrieval.py` | 04 Hit@1·Recall@3·MRR·Confuse@3, 시나리오별 판정, X07 BM25 탈락 |
 | 채점 | `score_answer.py` | 05·06 상태, 필수·금지 사실(금액·날짜·부정 비교), 유출, 재질문, 공통 검사 |
+| 채점 | `score_dialog.py` | 03 다중 턴 대화(Q10~Q13): 턴 수, 1턴 되묻기, 2턴 이어받기(follow_up_of)·합치기(Q10·Q12), 최종 상태, 근거 문서(동명이인 문서 제외), 필수·금지 사실, X04·X06(검사 대상 없으면 미검증) |
 | 보고 | `report.py` | `summary.md`, 04 시트 형식 CSV 2개, `coverage.csv`, 필수 보안 판정 |
 | 테스트 | `test_scoring.py` | 잘못된 답·결과가 통과로 처리되지 않는지 채점 로직 테스트 |
 | 공통 | `common.py` | 경로, 설정, DB 상태, 실행 대상 목록, 토큰 계산, LLM 호출 관리 |
@@ -107,6 +112,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 ## 결과 (`outputs/it/<실행ID>/`)
 
 - `manifest.json`: 실행 조건 (설정별 환경값, 기존 문서, 실행 환경, DB 상태, 커밋, 데이터 해시, 실행 대상 목록, 세션별 LLM 통계, 상태)
+- `traces/dialog_<설정>.jsonl`: 대화별 기록 (턴마다 API 응답 전체·내부 상태·이어받기 여부·감사 로그 대조)
 - `traces/search_<설정>.jsonl`, `traces/answer_<설정>.jsonl`: 질문별 단계 기록 (가명처리 질문, 토큰, 실행 당시 키워드, BM25 전후 후보, 검색 순위, LLM 입력 문서, 답변, 상태, 재검사)
 - `llm_calls.jsonl`: LLM 오류·재시도 기록
 - `pseudo_off/on.jsonl`, `masked_off/on.jsonl`, `person_rows.json`, `security.jsonl`
@@ -121,7 +127,8 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 3. 01 시트 영역별 현황, 04 시트 설정별 비교·보안 검증 목록이 채워집니다. 검증 키 = `실행 ID|케이스 ID|실행 설정|실행 권한·계정|시나리오 ID`
    (질문은 권한 Lv0~Lv2, API는 사번). 엑셀 보안 판정과 `summary.md` 의 필수 보안 판정은 같은 범위로 셉니다:
    필수 API 18건(케이스·X04·X06, ITP20은 X06 제외) + R0~R3 질문 472건(X04·X06) + 질문 추가 보안 검사 32건(G12~G15).
-4. 설계서를 고친 뒤 원본을 다시 내보낼 때: `python eval/integration/export_design_csv.py --xlsx 통합테스트_설계서_v4.3.xlsx --out data/integration_v1/it_source`
+   대화(실행 단위 '대화')의 X04·X06 실패도 보안 판정을 미충족으로 만들지만 필수 개수에는 넣지 않습니다 (엑셀 v4.4부터 04 시트 E173).
+4. 설계서를 고친 뒤 원본을 다시 내보낼 때: `python eval/integration/export_design_csv.py --xlsx 통합테스트_설계서_v4.4.xlsx --out data/integration_v1/it_source`
    (v4.2 이후 표 헤더 기준, 필요한 열이 없으면 멈춤) → `run.py --prepare-data`
 
 ## 설정
@@ -141,7 +148,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 - 답변은 서비스 API(`/api/chat`)를 사용자 레벨 계정마다 따로 호출합니다 (R0~R3 기준 472회 = 질문 × 설정 × 사용자). X04(원문 유출)는 실제 API 응답 전체(답변·문서 조각·가명처리 질문 등 모든 문자열)를, X06(감사 로그)은 요청마다 `audit.query_log` 를 실제 API 응답(상태·반환 문서)과 대조해 채점합니다. 문서 접근 필터(G01·G02·G16)가 생기면 같은 경로로 바로 검증됩니다.
 - 권한 API는 `--api-config`(기본 R2) 설정으로 돌고, 결과 행의 실행 설정에 그 값이 들어갑니다. 실행 전에 DB의 인물사전 적재 상태가 그 설정과 같은지 확인합니다. 전체 실행에서는 그 설정의 적재를 마지막에 두어 재적재 없이 이어서 돌고, 다르면 `--rebuild-db` 일 때만 다시 적재합니다 (아니면 권한 API를 건너뛰고 보고서에 이유를 남김). `security` 를 따로 돌릴 때도 다르면 멈춥니다.
 - 문맥 판단이 필요한 금지 사실(한 문서의 다른 고객 정보 등)은 비고에 "수동 확인 필요"로 표시됩니다.
-- 다중 턴 대화 5개(Q12·Q13)는 실행 경로가 없어 채점하지 않습니다.
+- 다중 턴 대화 5개(ITM01~05)는 develop b4a465d(PR #23)의 재질문·보충 답 이어받기로 실행합니다. 동명이인 되묻기는 인물사전 ON에서만 나오므로 R1·R3에서 돌리고, 사용자는 Lv0·Lv1·Lv2 전부입니다. 정답지(기대 결과)는 기능이 생기기 전 설계 그대로 씁니다.
 - 권한 API 비밀번호는 시연 계정 규칙(qwer + 사번 끝 4자리)을 쓰고, 다르면 환경변수 `IT_PW_<사번>` 으로 넣습니다.
 
 ## 채점 범위 (시나리오 89개 + 공통 검사 7개)
@@ -190,10 +197,10 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 | Q07 | 동명이인 재질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | Q08 | 부서·역할로 특정 가능한 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | Q09 | 지역이 모호한 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
-| Q10 | 필수 조건이 빠진 질문 | `score_answer` | 기대 상태 (재질문 기능 없음 → 실행 대기 판정) |
-| Q11 | 의미가 불명확한 질문 | `score_answer` | 기대 상태 (재질문 기능 없음 → 실행 대기 판정) |
-| Q12 | 다중 턴: 추가 정보 제공 후 답변 | **채점 미구현** | 다중 턴 대화 실행 경로 없음 (it_dialogs 실행 대기) |
-| Q13 | 다중 턴: 추가 정보로도 특정 불가 | **채점 미구현** | 다중 턴 대화 실행 경로 없음 (it_dialogs 실행 대기) |
+| Q10 | 필수 조건이 빠진 질문 | `score_answer·score_dialog` | 질문: 기대 상태 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기·합치기(merged) → 최종 상태·근거 문서·사실 |
+| Q11 | 의미가 불명확한 질문 | `score_answer·score_dialog` | 질문: 기대 상태 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실 |
+| Q12 | 다중 턴: 추가 정보 제공 후 답변 | `score_dialog` | 대화 ITM01·02: 1턴 되묻기 → 2턴 follow_up_of = 1턴 request_id → 직전 질문과 합쳐 찾음(merged) → 기대 문서만 근거로 answered, 필수·금지 사실 |
+| Q13 | 다중 턴: 추가 정보로도 특정 불가 | `score_dialog` | 대화 ITM03: 보충 답으로도 특정 불가 → 다시 되묻기·보류, 특정 인물 문서 인용 없음 |
 | Q14 | 역할을 지정한 질문·전체 이력 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | Q15 | 신청인·대리인 구분 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | S01 | 단일 정답 문서 | `score_retrieval` | 정답 문서 1위 |
@@ -242,7 +249,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 | X01 | 토큰 유지 | `score_answer` | 답변 토큰 ⊆ 질문·근거 문서 토큰 |
 | X02 | 출처 인용 | `score_answer` | 인용 문서 ⊆ 근거 문서, 근거로 받은 정답 문서 중 하나 이상 인용 |
 | X03 | 불필요한 재질문 | `score_answer` | 기대 상태에 clarify 가 없는데 clarify 면 실패 |
-| X04 | 개인정보 유출 | `score_answer·security` | 실제 API 응답 전체에 원문(기존 문서 포함) 0 |
+| X04 | 개인정보 유출 | `score_answer·score_dialog·security` | 실제 API 응답 전체(질문·대화·권한 API)에 원문(기존 문서 포함) 0 |
 | X05 | 재검사 오탐 | `score_answer` | 재검사 동작 건수 기록 (오탐 여부는 수동 확인) |
-| X06 | 감사 로그 완전성 | `security` | 권한 API 케이스의 restore_log·query_log 행만 확인 (일부) |
+| X06 | 감사 로그 완전성 | `score_answer·score_dialog·security` | 요청마다 query_log 1행·응답과 일치(질문·대화), 대화 2턴 follow_up_of, 권한 API restore_log 행 수 |
 | X07 | BM25 정답 탈락 | `score_retrieval` | BM25 적용 전 후보에 있던 정답이 BM25·컷오프 뒤 빠진 질문 0 (단계별 후보 직접 측정) |

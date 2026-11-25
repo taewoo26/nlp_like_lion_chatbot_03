@@ -23,12 +23,12 @@ import datetime as dt
 import json
 import pathlib
 
-from . import score_answer, score_detection, score_person, score_query, score_retrieval
+from . import score_answer, score_detection, score_dialog, score_person, score_query, score_retrieval
 from .common import (EXCEL_RESULT_COLS, EXCEL_SET_COLS, EXEC_ERROR, MANUAL, NOT_IMPL, NOT_RUN, Gold, csv_write,
                      jl_read, load_plan, result_row)
 
 SCORERS = [("01 탐지", score_detection), ("02 인물 판별", score_person), ("03 질문 처리", score_query),
-           ("04 검색", score_retrieval), ("05·06 답변·보안", score_answer)]
+           ("04 검색", score_retrieval), ("05·06 답변·보안", score_answer), ("03 다중 턴 대화", score_dialog)]
 UNIMPLEMENTED = ["G01 문서 접근 필터", "G02 미등록 유형 기본 거부", "G16 고객·직원 문서 혼합 차단"]
 FULL_CONFIGS = ("R0", "R1", "R2", "R3")
 PERF = ("통과", "실패")
@@ -60,10 +60,11 @@ COVERAGE = {
     "Q05": ("score_query", "가명처리 질문에 날짜·금액·유형 조건이 그대로 남음"),
     "Q06": ("score_query", "부정 어미(않·안 되·못·없·미-)와 부정되는 어간이 실행 당시 키워드에 남음"),
     "Q07": _ST, "Q08": _ST, "Q09": _ST, "Q14": _ST, "Q15": _ST,
-    "Q10": ("score_answer", "기대 상태 (재질문 기능 없음 → 실행 대기 판정)"),
-    "Q11": ("score_answer", "기대 상태 (재질문 기능 없음 → 실행 대기 판정)"),
-    "Q12": (NOT_IMPL, "다중 턴 대화 실행 경로 없음 (it_dialogs 실행 대기)"),
-    "Q13": (NOT_IMPL, "다중 턴 대화 실행 경로 없음 (it_dialogs 실행 대기)"),
+    "Q10": ("score_answer·score_dialog", "질문: 기대 상태 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기·합치기(merged) → 최종 상태·근거 문서·사실"),
+    "Q11": ("score_answer·score_dialog", "질문: 기대 상태 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실"),
+    "Q12": ("score_dialog", "대화 ITM01·02 (R1·R3 × Lv0~2): 1턴 되묻기 → 2턴 follow_up_of = 1턴 request_id → 직전 질문과 합쳐 찾음(merged) → 기대 문서만 근거로 answered, "
+                            "필수 사실·금지 사실"),
+    "Q13": ("score_dialog", "대화 ITM03: 1턴 되묻기 → 보충 답으로도 특정 불가 → 다시 되묻기·보류, 특정 인물 문서 인용 없음"),
     "S01": ("score_retrieval", "정답 문서 1위"),
     "S02": ("score_retrieval", "정답 1위 + 다른 인물 조합 문서 상위 3위 0"),
     "S03": ("score_retrieval", "정답 문서 전부 상위 3위"),
@@ -92,9 +93,10 @@ COVERAGE = {
     "X01": ("score_answer", "답변 토큰 ⊆ 질문·근거 문서 토큰"),
     "X02": ("score_answer", "인용 문서 ⊆ 근거 문서, 근거로 받은 정답 문서 중 하나 이상 인용"),
     "X03": ("score_answer", "기대 상태에 clarify 가 없는데 clarify 면 실패"),
-    "X04": ("score_answer·security", "답변·조각·가명처리 질문·API 응답에 원문(기존 문서 포함) 0"),
+    "X04": ("score_answer·score_dialog·security", "실제 API 응답 전체(질문·대화·권한 API)에 원문(기존 문서 포함) 0"),
     "X05": ("score_answer", "재검사 동작 건수 기록 (오탐 여부는 수동 확인)"),
-    "X06": ("security", "권한 API 케이스의 restore_log·query_log 행만 확인 (일부)"),
+    "X06": ("score_answer·score_dialog·security", "요청마다 query_log 1행·응답과 일치(질문·대화), 대화 2턴 follow_up_of, "
+                                                    "권한 API restore_log 행 수"),
     "X07": ("score_retrieval", "BM25 적용 전 후보에 있던 정답이 BM25·컷오프 뒤 빠진 질문 0 (단계별 후보 직접 측정)"),
 }
 
@@ -235,7 +237,7 @@ def _security_verdict(sec, answer_rows, required_ids, answer_done=None, q_extra=
 def _completion(run_dir, summary, sec):
     """영역·설정별 실행 완료율 (성능 지표와 별개). 대상은 실행 전에 확정한 실행 대상 목록(plan)."""
     out = []
-    for area, key in (("04 검색", "04 검색"), ("05 답변", "05·06 답변·보안")):
+    for area, key in (("04 검색", "04 검색"), ("05 답변", "05·06 답변·보안"), ("03 대화", "03 다중 턴 대화")):
         for cfg, v in (summary.get(key) or {}).items():
             if isinstance(v, dict) and isinstance(v.get("실행"), dict):
                 e = v["실행"]
@@ -300,7 +302,7 @@ def build(run_dir):
     sec_rows, sec = _security_rows(run_dir)
     all_rows += sec_rows
     g = Gold()
-    answer_rows = [r for r in all_rows if r["실행 단위"] == "질문"]
+    answer_rows = [r for r in all_rows if r["실행 단위"] in ("질문", "대화")]   # 대화의 유출·감사 로그 실패도 보안 판정에 반영
     required_ids = [c["id"] for c in g.access if c["required"] == "필수"]
     summary["필수 보안 판정"] = _security_verdict(sec, answer_rows, required_ids, answer_coverage(all_rows, g),
                                              question_security_extra(all_rows, g))
@@ -350,7 +352,7 @@ def build(run_dir):
         L += ["", "**채점 오류로 평가 불가인 영역** (실행 기록은 남아 있으니 원인을 고친 뒤 `report --run` 으로 다시 채점):", ""]
         L += [f"- {k}: {v}" for k, v in errs.items()]
         L += [""]
-    L += [f"- **필수 보안 판정: {sv['verdict']}** (필수 API {sv['passed']}/{sv['required']} 통과, 질문 X04·X06 실패 {sv['answer_leak_rows']}건, "
+    L += [f"- **필수 보안 판정: {sv['verdict']}** (필수 API {sv['passed']}/{sv['required']} 통과, 질문·대화 X04·X06 실패 {sv['answer_leak_rows']}건, "
           f"질문 보안 검사 {sv['answer_checked'][0]}/{sv['answer_checked'][1]})", ""]
     sv_pending = sv["exec_error"] + sv["not_run"]
     if sv_pending:
@@ -420,6 +422,13 @@ def build(run_dir):
               f"이름 미탐 언급 {len(per['missed_mentions'])}개 (재현율에 반영)",
               f"- 문서 내 귀속 정밀도 {per['attribution']['precision']}, 재현율 {per['attribution']['recall']}, "
               f"v3 예상과 다른 것 {len(per['attribution']['v3_diff'])}건"]
+    dl = summary.get("03 다중 턴 대화") or {}
+    if dl and not dl.get("skipped") and not dl.get("error"):
+        L += ["", "## 다중 턴 대화 (대화 × 레벨, R1·R3)", "", "| 설정 | 정상 실행 | 통과 | 실패 | 수동 확인 |", "|---|---|---|---|---|"]
+        for cfg, v in dl.items():
+            ex, jd = v.get("실행") or {}, v.get("판정") or {}
+            L.append(f"| {cfg} | {ex.get('정상 실행', 0)}/{ex.get('대상', 0)} | {jd.get('통과', 0)} | {jd.get('실패', 0)} | "
+                     f"{jd.get(MANUAL, 0)} |")
     q = summary.get("03 질문 처리") or {}
     if q and not q.get("skipped"):
         L += ["", "## 질문 처리 (통과/채점 수)", "", "- " + ", ".join(f"{k} {v}" for k, v in q.items())]

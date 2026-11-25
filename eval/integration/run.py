@@ -24,7 +24,9 @@
 DB 안전장치: --rebuild-db 는 지울 DB에 홀드아웃·통합 테스트가 아닌 문서가 있으면 멈춘다 (--wipe-other-data 로만 진행).
 적재 순서: 지금 DB와 같은 적재부터 실행하고, 남은 질문이 없는 적재는 재적재·실행을 생략한다.
 
-답변 실행: 서비스 API(/api/chat)를 사용자 레벨 계정(Lv0·Lv1·Lv2)마다 호출한다 (R0~R3 472회). chat._answer 를 감싸
+답변 실행: 서비스 API(/api/chat)를 사용자 레벨 계정(Lv0·Lv1·Lv2)마다 호출한다 (R0~R3 472회).
+다중 턴 대화(it_dialogs ITM01~05): 인물사전 ON 설정(R1·R3) × Lv0·Lv1·Lv2. 1턴 응답이 되묻기(need_more)면 화면처럼
+2턴에 follow_up_of(1턴 request_id)를 붙여 보낸다. 되묻지 않았으면 2턴을 새 질문으로 보낸다 (대화는 1턴 실패로 채점). chat._answer 를 감싸
 LLM 입력 문서·메타·재검사 결과를, 요청마다 audit.query_log 를 대조해 감사 로그(X06)를 남긴다. 권한 API는 --api-config(기본 R2).
 
 실행 대상 목록과 중간 결과
@@ -58,6 +60,7 @@ LLM 호출 관리 (저장소 chat._post_llm 은 고치지 않고 평가 실행 �
   manifest.json            실행 조건 (설정별 환경값, 기존 문서, 실행 환경, DB 상태, 커밋, 데이터 해시, 실행 대상 목록, 세션, 상태)
   traces/search_<설정>.jsonl  질문별 검색 기록 (k=20, LLM 없음, probe 포함)
   traces/answer_<설정>.jsonl  질문별 답변 기록 (k=3, LLM 호출, LLM 입력 문서·probe 포함). 실행 오류 행은 exec_error
+  traces/dialog_<설정>.jsonl  대화별 기록 (턴마다 API 응답 전체·내부 상태·감사 로그 대조, key = 대화ID|레벨)
   llm_calls.jsonl          LLM 오류·재시도 기록 (HTTP 상태, 오류 코드·메시지, 대기 시간)
   pseudo_off/on.jsonl      84건 탐지·가명처리 결과 · masked_off/on.jsonl 84건 실제 가명처리 본문
   person_rows.json         인물사전 ON 적재의 판정 결과 (vault.person_info, 기존 문서 포함)
@@ -75,7 +78,7 @@ import subprocess
 import sys
 import time
 
-from .common import (CONFIGS, DATA, INGEST_ENV, OUT, PHASE, ROOT, UNAVAILABLE, LLMCallError, LLMGuard, apply_env,
+from .common import (CONFIGS, DATA, DIALOG_CONFIGS, DIALOG_LEVELS, INGEST_ENV, OUT, PHASE, ROOT, UNAVAILABLE, LLMCallError, LLMGuard, apply_env,
                      config_env, db_state, exec_error_info, holdout_info, holdout_raw, is_exec_error, jl_read, jl_write,
                      latest)
 
@@ -238,10 +241,13 @@ def _done(path, key="qid"):
     return {q for q, r in latest(rows, key).items() if "exec_error" not in r}
 
 
-def phase_todo(group, cases, run_dir, do_search, do_answer):
-    """이 적재(설정 묶음)에서 아직 정상 실행되지 않은 검색·답변 수."""
+def phase_todo(group, cases, run_dir, do_search, do_answer, dialogs=()):
+    """이 적재(설정 묶음)에서 아직 정상 실행되지 않은 검색·답변·대화 수."""
     n = 0
     for cfg in group:
+        if dialogs and cfg in DIALOG_CONFIGS:
+            done = _done(run_dir / "traces" / f"dialog_{cfg}.jsonl", "key")
+            n += sum(1 for d in dialogs for lv in DIALOG_LEVELS if answer_key(d["id"], lv) not in done)
         if do_search:
             done = _done(run_dir / "traces" / f"search_{cfg}.jsonl")
             n += sum(1 for c in cases if cfg in c["search_configs"] and c["qid"] not in done)
@@ -359,6 +365,99 @@ def audit_check(request_id, user_id, level, api_state, api_doc_ids, raw_values, 
                    state_ok=ui_state(st) == api_state, docs_ok=list(docs or []) == list(api_doc_ids),
                    raw_in_masked=sum(1 for v in raw_values if v and v in (mq or "")))
     return out
+
+
+def follow_up_check(request_id, expected_prev):
+    """2턴 감사 로그의 follow_up_of 가 1턴 request_id 인지. 열이 없는 옛 DB면 None (미검증)."""
+    from starter import db
+    try:
+        with db.auth_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT follow_up_of FROM audit.query_log WHERE request_id = %s", (request_id,))
+            rows = cur.fetchall()
+    except Exception:
+        return None
+    return len(rows) == 1 and rows[0][0] == expected_prev
+
+
+def run_dialogs_api(cfg, run_dir, dialogs, guard, breaker):
+    """다중 턴 대화를 서비스 API 로 실행한다 (사용자 레벨마다). 화면 동작 그대로: 1턴 응답의 need_more 가 True 면
+    2턴에 follow_up_of = 1턴 request_id 를 붙이고, 아니면 붙이지 않는다. 턴마다 API 응답 전체·내부 상태·감사 로그를 남긴다."""
+    from fastapi.testclient import TestClient
+    from service.app import app, _ui_state
+    from .common import Gold
+    from .security import USERS, pw
+    apply_env(config_env(cfg))
+    tdir = run_dir / "traces"
+    tdir.mkdir(exist_ok=True)
+    dp = tdir / f"dialog_{cfg}.jsonl"
+    done = _done(dp, "key")
+    todo = [(d, lv) for d in dialogs for lv in DIALOG_LEVELS if answer_key(d["id"], lv) not in done]
+    print(f"\n[대화] {cfg}: {len(todo)}개 (대화 × 레벨, LLM 호출 최대 {2 * len(todo)}번)"
+          + (f"  · 이미 정상 실행: {len(done)}" if done else ""))
+    if not todo:
+        return
+    raw_values = Gold().raw_values() | set(holdout_raw(run_dir))
+    with TestClient(app), AnswerSpy() as spy:
+        clients = {}
+
+        def client(level):
+            if level not in clients:
+                uid = USERS[level]
+                c = TestClient(app)
+                r = c.post("/api/login", json={"user_id": uid, "password": pw(uid)})
+                if r.status_code != 200:
+                    raise RuntimeError(f"{level}({uid}) 로그인 실패 HTTP {r.status_code}")
+                clients[level] = c
+            return clients[level]
+
+        for d, level in todo:
+            user_id = USERS[level]
+            row = {"key": answer_key(d["id"], level), "dialog": d["id"], "level": level, "user_id": user_id,
+                   "config": cfg, "turns": []}
+            guard.context = f"{cfg}/{d['id']}/{level}"
+            t0, err, prev = time.perf_counter(), None, None
+            try:
+                for i, q in enumerate(d["turns"]):
+                    failed0 = guard.stats["failed"]
+                    spy.take()
+                    follow = prev["request_id"] if prev and prev.get("need_more") and prev.get("request_id") else None
+                    payload = {"query": q, "restore": False, **({"follow_up_of": follow} if follow else {})}
+                    r = client(level).post("/api/chat", json=payload)
+                    body = r.json() if r.content else {}
+                    res = spy.take().get("res") or {}
+                    turn = {"turn": i + 1, "http": r.status_code, "follow_up_of": follow, "api_body": body,
+                            "request_id": body.get("request_id"), "need_more": bool(body.get("need_more")),
+                            "merged": bool(body.get("merged")), "clarify_code": body.get("clarify_code"),
+                            "state": res.get("state") if r.status_code == 200 else "error",
+                            "llm_input_doc_ids": [x["doc_id"] for x in res.get("docs") or []]}
+                    if guard.stats["failed"] > failed0:              # LLM 호출이 끝내 실패 → 실행 오류
+                        e = guard.last_error
+                        row["exec_error"] = e.info() if e else {"kind": "llm", "message": f"HTTP {r.status_code}"}
+                        err = e
+                    elif r.status_code != 200:
+                        turn["error"] = str(body.get("detail"))[:200]
+                    if turn["request_id"] and "exec_error" not in row:
+                        turn["audit"] = audit_check(turn["request_id"], user_id, level, body.get("state"),
+                                                    [x.get("doc_id") for x in body.get("docs") or []], raw_values, _ui_state)
+                        if follow:
+                            turn["audit"]["follow_up_ok"] = follow_up_check(turn["request_id"], follow)
+                    row["turns"].append(turn)
+                    prev = turn
+                    if "exec_error" in row:
+                        break
+            except Exception as exc:
+                err = exc
+                if is_exec_error(exc):
+                    row["exec_error"] = exec_error_info(exc)
+                else:
+                    row.update(error=f"{type(exc).__name__}: {str(exc)[:150]}")
+            row["ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            jl_write(dp, [row], "a")                          # 대화마다 바로 저장
+            if row.get("exec_error"):
+                breaker.fail(err or RuntimeError(str(row["exec_error"])), f"{cfg}/{d['id']}/{level} 대화")
+            else:
+                breaker.ok()
+    guard.context = ""
 
 
 def run_answers_api(cfg, todo, ap, guard, breaker, probe):
@@ -518,11 +617,12 @@ def _runtime():
 
 
 def _merge_plan(old, new):
-    out = {"search": {}, "answer": {}, "security": sorted(set((old or {}).get("security", [])) | set(new["security"]))}
-    for area in ("search", "answer"):
+    out = {"search": {}, "answer": {}, "dialog": {},
+           "security": sorted(set((old or {}).get("security", [])) | set(new["security"]))}
+    for area in ("search", "answer", "dialog"):
         cfgs = set((old or {}).get(area, {})) | set(new[area])
         for c in cfgs:
-            out[area][c] = sorted(set((old or {}).get(area, {}).get(c, [])) | set(new[area].get(c, [])))
+            out[area][c] = sorted(set((old or {}).get(area, {}).get(c, [])) | set(new.get(area, {}).get(c, [])))
     return out
 
 
@@ -543,13 +643,14 @@ def main():
                     help="--rebuild-db 로 지울 Docker 프로젝트 (기본 IT_COMPOSE_PROJECT 또는 pii_starter)")
     ap.add_argument("--wipe-other-data", action="store_true",
                     help="지울 DB에 테스트와 관계없는 문서가 있어도 --rebuild-db 를 진행")
-    ap.add_argument("--only", choices=["all", "search", "answer", "security"], default="all",
-                    help="search: 검색 평가만(LLM 없음), answer: 답변 평가만, security: 권한 API만")
+    ap.add_argument("--only", choices=["all", "search", "answer", "dialog", "security"], default="all",
+                    help="search: 검색 평가만(LLM 없음), answer: 답변 평가만, dialog: 다중 턴 대화만(R1·R3), "
+                         "security: 권한 API만")
     ap.add_argument("--api-config", default="R2",
                     help="권한 API 케이스를 돌릴 실행 설정 (기본 R2 = 현재 시스템). 엑셀 04 시트 E6 'API 평가 설정'과 같게")
     ap.add_argument("--split", choices=["dev", "check", "all"], default="all")
     ap.add_argument("--limit", type=int, help="질문 수 제한 (빠른 점검용)")
-    ap.add_argument("--skip-answers", action="store_true", help="LLM 답변 실행 생략 (검색만)")
+    ap.add_argument("--skip-answers", action="store_true", help="LLM 답변·대화 실행 생략 (검색만)")
     ap.add_argument("--skip-security", action="store_true")
     ap.add_argument("--prepare-data", action="store_true", help="원본(it_source)에서 파생 JSONL을 다시 만들고 검사한 뒤 실행")
     ap.add_argument("--skip-validate", action="store_true", help="--prepare-data 때 정합성 검사 생략")
@@ -559,7 +660,8 @@ def main():
     do_search = a.only in ("all", "search")
     do_answer = a.only in ("all", "answer") and not a.skip_answers
     do_security = a.only in ("all", "security") and not a.skip_security
-    do_questions = do_search or do_answer
+    do_dialog = a.only in ("all", "dialog") and not a.skip_answers
+    do_questions = do_search or do_answer or do_dialog
 
     configs = [c.strip() for c in a.configs.split(",") if c.strip()]
     for c in configs:
@@ -597,6 +699,10 @@ def main():
         cases = [c for c in cases if c["split"] == a.split]
     if a.limit:
         cases = cases[: a.limit]
+    dialogs = jl_read(DATA / "it_dialogs.jsonl") if do_dialog else []
+    if dialogs and a.split != "all":
+        from .score_dialog import dialog_split
+        dialogs = [d for d in dialogs if dialog_split(d) == a.split]
 
     def git(*args):
         try:
@@ -613,6 +719,7 @@ def main():
     access_ids = [c["id"] for c in jl_read(DATA / "it_access_cases.jsonl")]
     plan = {"search": {c: [x["qid"] for x in cases if c in x["search_configs"]] for c in configs} if do_search else {},
             "answer": {c: [x["qid"] for x in cases if c in x["answer_configs"]] for c in configs} if do_answer else {},
+            "dialog": {c: [d["id"] for d in dialogs] for c in configs if c in DIALOG_CONFIGS} if do_dialog else {},
             "security": access_ids if do_security else []}
     if prev:
         _check_resume(prev, manifest, configs, a.allow_mismatch)
@@ -666,10 +773,10 @@ def main():
             api_phase = PHASE[a.api_config]
             phases = tuple(p for p in phases if p != api_phase) + (api_phase,)
         for phase in phases if do_questions else ():
-            group = [c for c in configs if PHASE[c] == phase]
+            group = [c for c in configs if PHASE[c] == phase and (do_search or do_answer or c in DIALOG_CONFIGS)]
             if not group:
                 continue
-            todo = phase_todo(group, cases, run_dir, do_search, do_answer)
+            todo = phase_todo(group, cases, run_dir, do_search, do_answer, dialogs)
             extra = (not (run_dir / f"masked_{phase}.jsonl").exists()
                      or (phase == "on" and not (run_dir / "person_rows.json").exists()))
             if todo == 0 and not extra:
@@ -720,7 +827,10 @@ def main():
                 dump_masked(run_dir, phase)
             save("running")
             for cfg in group:
-                run_questions(cfg, cases, run_dir, bool(prev), do_search, do_answer, guard, breaker)
+                if do_search or do_answer:
+                    run_questions(cfg, cases, run_dir, bool(prev), do_search, do_answer, guard, breaker)
+                if dialogs and cfg in DIALOG_CONFIGS:
+                    run_dialogs_api(cfg, run_dir, dialogs, guard, breaker)
             if phase == "on" and not (run_dir / "person_rows.json").exists():
                 dump_person_rows(run_dir)
             save("running")
