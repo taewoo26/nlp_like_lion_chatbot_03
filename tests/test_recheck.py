@@ -315,7 +315,7 @@ def test_build_row_without_recheck():
 @pytest.fixture
 def conn():
     try:
-        c = db.rag_conn()
+        c = db.rag_conn()  # 제약 조건 검증용: 넣은 행을 읽어야 해서 소유자 접속 (app_search 권한은 test_db_accounts.py)
     except psycopg.OperationalError as e:
         pytest.skip(f"DB 연결(db.rag_conn)에 실패했습니다: {e}")
     with c.cursor() as cur:

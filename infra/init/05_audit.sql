@@ -229,6 +229,122 @@ $$;
 ALTER FUNCTION vault.partial_token(text, text, text) OWNER TO vault_user;
 REVOKE ALL ON FUNCTION vault.partial_token(text, text, text) FROM PUBLIC;
 
+-- 탐지 검수: 문서 토큰(NER 탐지 결과)이 올바른지 확인하는 기록. 문서 단위로 토큰마다 1행
+CREATE TABLE IF NOT EXISTS audit.detection_review (
+    detection_review_id  BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    doc_id               TEXT        NOT NULL,
+    token                TEXT        NOT NULL,
+    verdict              TEXT        NOT NULL,
+    new_label            TEXT,
+    reviewer             TEXT        NOT NULL,
+    note                 TEXT,
+    CONSTRAINT detection_review_verdict_chk CHECK (verdict IN ('confirmed', 'rejected', 'relabeled')),
+    CONSTRAINT detection_review_token_fmt CHECK (token ~ '^<[A-Z_]+_[0-9A-Za-z]+>$'),
+    CONSTRAINT detection_review_relabel_chk CHECK (
+        (verdict = 'relabeled' AND new_label IS NOT NULL) OR
+        (verdict != 'relabeled' AND new_label IS NULL)),
+    CONSTRAINT detection_review_unique UNIQUE (doc_id, token)
+);
+ALTER TABLE audit.detection_review OWNER TO rag_user;
+CREATE INDEX IF NOT EXISTS detection_review_doc ON audit.detection_review (doc_id);
+CREATE INDEX IF NOT EXISTS detection_review_reviewer ON audit.detection_review (reviewer, created_at);
+
+COMMENT ON TABLE audit.detection_review IS '탐지 검수 기록 (문서 토큰별)';
+COMMENT ON COLUMN audit.detection_review.detection_review_id IS '행 번호';
+COMMENT ON COLUMN audit.detection_review.created_at IS '검수 시각';
+COMMENT ON COLUMN audit.detection_review.doc_id IS '문서 ID';
+COMMENT ON COLUMN audit.detection_review.token IS '검수 대상 토큰';
+COMMENT ON COLUMN audit.detection_review.verdict IS '판정: confirmed(정탐) / rejected(오탐) / relabeled(라벨 수정)';
+COMMENT ON COLUMN audit.detection_review.new_label IS '수정된 라벨 (relabeled인 경우만)';
+COMMENT ON COLUMN audit.detection_review.reviewer IS '검수자 사번';
+COMMENT ON COLUMN audit.detection_review.note IS '검수 메모';
+
+-- 문서 업로드 로그: 관리자가 업로드한 문서의 감사 기록. 메모리가 아닌 DB에 영구 보관
+CREATE TABLE IF NOT EXISTS audit.upload_log (
+    upload_log_id  BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id        TEXT        NOT NULL,
+    job_id         TEXT        NOT NULL UNIQUE,
+    doc_ids        TEXT[]      NOT NULL DEFAULT '{}',
+    doc_count      INT         NOT NULL,
+    data_file      TEXT        NOT NULL,
+    status         TEXT        NOT NULL DEFAULT 'processing',
+    finished_at    TIMESTAMPTZ,
+    error_summary  TEXT,
+    CONSTRAINT upload_log_status_chk CHECK (status IN ('processing', 'done', 'failed')),
+    CONSTRAINT upload_log_doc_count_chk CHECK (doc_count >= 0)
+);
+ALTER TABLE audit.upload_log OWNER TO rag_user;
+CREATE INDEX IF NOT EXISTS upload_log_user_created ON audit.upload_log (user_id, created_at);
+
+COMMENT ON TABLE audit.upload_log IS '문서 업로드 감사 로그';
+COMMENT ON COLUMN audit.upload_log.upload_log_id IS '행 번호';
+COMMENT ON COLUMN audit.upload_log.created_at IS '업로드 시작 시각';
+COMMENT ON COLUMN audit.upload_log.user_id IS '업로더 사번';
+COMMENT ON COLUMN audit.upload_log.job_id IS '업로드 작업 ID';
+COMMENT ON COLUMN audit.upload_log.doc_ids IS '업로드한 문서 ID 목록';
+COMMENT ON COLUMN audit.upload_log.doc_count IS '문서 수';
+COMMENT ON COLUMN audit.upload_log.data_file IS '저장된 JSONL 파일명';
+COMMENT ON COLUMN audit.upload_log.status IS '처리 상태: processing → done / failed';
+COMMENT ON COLUMN audit.upload_log.finished_at IS '완료 시각';
+COMMENT ON COLUMN audit.upload_log.error_summary IS '오류 요약';
+
+-- ── 인물 병합 이력 ──
+CREATE TABLE IF NOT EXISTS audit.person_merge_log (
+    merge_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewer        TEXT NOT NULL,
+    target_reg_id   TEXT NOT NULL,
+    target_person_id TEXT NOT NULL,
+    source_person_ids TEXT[] NOT NULL,
+    note            TEXT,
+    CONSTRAINT person_merge_log_target_reg_fmt CHECK (target_reg_id LIKE 'reg\_%')
+);
+ALTER TABLE audit.person_merge_log OWNER TO rag_user;
+COMMENT ON TABLE  audit.person_merge_log IS '인물 병합 감사 로그';
+COMMENT ON COLUMN audit.person_merge_log.merge_id IS '행 번호';
+COMMENT ON COLUMN audit.person_merge_log.reviewer IS '병합 수행자 ID';
+COMMENT ON COLUMN audit.person_merge_log.target_reg_id IS '병합 대상 확정 인물 reg_id';
+COMMENT ON COLUMN audit.person_merge_log.target_person_id IS '병합 대상 person_id';
+COMMENT ON COLUMN audit.person_merge_log.source_person_ids IS '병합된 출처 person_id 목록';
+COMMENT ON COLUMN audit.person_merge_log.note IS '메모';
+
+-- ── 인물 분리 이력 ──
+CREATE TABLE IF NOT EXISTS audit.person_split_log (
+    split_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewer          TEXT NOT NULL,
+    source_reg_id     TEXT NOT NULL,
+    detach_person_ids TEXT[] NOT NULL,
+    note              TEXT
+);
+ALTER TABLE audit.person_split_log OWNER TO rag_user;
+COMMENT ON TABLE  audit.person_split_log IS '인물 분리 감사 로그';
+COMMENT ON COLUMN audit.person_split_log.split_id IS '행 번호';
+COMMENT ON COLUMN audit.person_split_log.reviewer IS '분리 수행자 ID';
+COMMENT ON COLUMN audit.person_split_log.source_reg_id IS '분리 전 소속 reg_id';
+COMMENT ON COLUMN audit.person_split_log.detach_person_ids IS '분리된 person_id 목록';
+COMMENT ON COLUMN audit.person_split_log.note IS '메모';
+
+-- ── 챗봇 피드백 ──
+CREATE TABLE IF NOT EXISTS audit.feedback (
+    feedback_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    request_id   TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    comment      TEXT,
+    CONSTRAINT feedback_kind_chk CHECK (kind IN ('good', 'bad'))
+);
+ALTER TABLE audit.feedback OWNER TO rag_user;
+CREATE INDEX IF NOT EXISTS feedback_request_id ON audit.feedback (request_id);
+COMMENT ON TABLE  audit.feedback IS '챗봇 답변 피드백';
+COMMENT ON COLUMN audit.feedback.request_id IS '질의 로그 request_id';
+COMMENT ON COLUMN audit.feedback.user_id IS '피드백 제출자';
+COMMENT ON COLUMN audit.feedback.kind IS 'good(도움 됨) / bad(틀린 답 신고)';
+COMMENT ON COLUMN audit.feedback.comment IS '추가 의견 (선택)';
+
 -- 설명 (테이블 정의서 기준)
 COMMENT ON TABLE audit.query_log IS '챗봇 질의·응답 대화 로그';
 COMMENT ON COLUMN audit.query_log.query_log_id IS '행 번호';

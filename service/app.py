@@ -29,7 +29,7 @@
         POST /api/restore-tokens {"request_id", "tokens": [...]} → {"map": {토큰: 원문}}
   복원은 vault.restore_token()으로만 한다. 토큰마다 audit.restore_log 1행이 남고 request_id 로 query_log 와 이어진다.
   기록에 실패하면 복원도 실패한다(화면에는 토큰 그대로). query_log 와 달리 실명이 나가는 쪽이라 기록 없는 복원은 하지 않는다.
-  DB 접속은 db.restore_conn() (지금 관리자 계정, 권한 정리 때 pii_search 로 교체).
+  DB 접속은 db.restore_conn() (app_search 계정. SEARCH_DSN 이 없으면 관리자 계정으로 대체).
 - 이름 부분 공개(Lv1 + 2차 인증): POST /api/verify-password {"password"} → 세션에 partial_verified
         POST /api/partial-tokens {"request_id", "tokens": [...]} → {"map": {토큰: "윤*영"}}
   vault.partial_token()으로만 한다. DB 함수가 Lv1 확인 → 본인 질문(query_log) 확인 → 이름 토큰이고 그 답변에 나온
@@ -127,6 +127,12 @@ class Ask(BaseModel):
 
 class VerifyPassword(BaseModel):
     password: str = Field(min_length=1, max_length=200)
+
+
+class FeedbackBody(BaseModel):
+    request_id: str = Field(pattern=r"^req_[0-9]{8}_[0-9a-f]{12}$")
+    kind: str = Field(pattern=r"^(good|bad)$")
+    comment: str | None = Field(default=None, max_length=500)
 
 
 class RestoreTokens(BaseModel):
@@ -356,6 +362,18 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
             "merged": bool(res.get("merged"))}                  # True 면 이전 질문과 합쳐서 찾았다는 안내를 보여 준다
 
 
+@app.post("/api/feedback")
+def submit_feedback(body: FeedbackBody, user: dict = Depends(login_required)):
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO audit.feedback (request_id, user_id, kind, comment) VALUES (%s,%s,%s,%s)",
+            (body.request_id, user["user_id"], body.kind, body.comment),
+        )
+        conn.commit()
+    return {"ok": True}
+
+
 def _previous_request(request_id, user_id):
     """follow_up_of 로 받은 request_id 의 감사 로그 행 (이 사용자의 질문일 때만). 아니면 None.
 
@@ -409,18 +427,26 @@ def admin(request: Request):
     return FileResponse(STATIC / "admin.html")
 
 
+@app.get("/api/doc-count")
+def doc_count(user: dict = Depends(login_required)):
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
+        return {"count": cur.fetchone()[0]}
+
+
 @app.get("/api/admin/stats")
 def admin_stats(user: dict = Depends(admin_required)):
     from starter import db
     stats = {}
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
         stats["total_docs"] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks WHERE created_at::date = CURRENT_DATE")
         stats["today_docs"] = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM rag.chunks")
         stats["total_chunks"] = cur.fetchone()[0]
-    with db.vault_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM vault.token_map")
         stats["total_tokens"] = cur.fetchone()[0]
         cur.execute("""
@@ -433,6 +459,23 @@ def admin_stats(user: dict = Depends(admin_required)):
         stats["review_resolved"] = review.get("resolved", 0)
         stats["review_unresolved"] = review.get("unresolved", 0)
     stats["fail_docs"] = 0
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            WITH doc_tokens AS (
+                SELECT doc_id, COUNT(DISTINCT tok) AS total
+                FROM rag.chunks, unnest(tokens) AS tok GROUP BY doc_id
+            ), reviewed AS (
+                SELECT doc_id, COUNT(*) AS cnt
+                FROM audit.detection_review GROUP BY doc_id
+            )
+            SELECT COALESCE(SUM(dt.total - COALESCE(r.cnt, 0)), 0)
+            FROM doc_tokens dt LEFT JOIN reviewed r ON r.doc_id = dt.doc_id
+        """)
+        stats["detection_unreviewed"] = cur.fetchone()[0]
+        cur.execute("SELECT kind, COUNT(*) FROM audit.feedback GROUP BY kind")
+        fb = {row[0]: row[1] for row in cur.fetchall()}
+        stats["feedback_good"] = fb.get("good", 0)
+        stats["feedback_bad"] = fb.get("bad", 0)
     return stats
 
 
@@ -449,6 +492,15 @@ _DOCS_SORT_COLS = {
     "created_at": "MIN(created_at)",
     "chunk_count": "COUNT(*)",
 }
+
+
+@app.get("/api/admin/doc-types")
+def admin_doc_types(user: dict = Depends(admin_required)):
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT doc_type FROM rag.chunks WHERE doc_type IS NOT NULL ORDER BY doc_type")
+        types = [r[0] for r in cur.fetchall()]
+    return {"doc_types": types}
 
 
 @app.get("/api/admin/docs")
@@ -476,7 +528,7 @@ def admin_docs(
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sort_col = _DOCS_SORT_COLS.get(sort, "MIN(created_at)")
     sort_dir = "ASC" if order == "asc" else "DESC"
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(DISTINCT doc_id) FROM rag.chunks {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -496,7 +548,7 @@ def admin_docs(
 @app.get("/api/admin/docs/{doc_id}")
 def admin_doc_detail(doc_id: str, user: dict = Depends(admin_required)):
     from starter import db
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT doc_type, chunk_idx, masked_text, tokens
               FROM rag.chunks WHERE doc_id = %s ORDER BY chunk_idx
@@ -733,6 +785,322 @@ def admin_person_list(
     return {"items": items, "total": total, "page": page, "size": size}
 
 
+# --- 인물 병합 ---
+
+class _PersonMergeBody(BaseModel):
+    target_person_id: str
+    source_person_ids: list[str]
+    note: str = None
+
+
+@app.get("/api/admin/persons/merge-preview")
+def admin_merge_preview(
+    ids: str = Query(..., description="comma-separated person_ids"),
+    user: dict = Depends(admin_required),
+):
+    pid_list = [p.strip() for p in ids.split(",") if p.strip()]
+    if len(pid_list) < 2:
+        raise HTTPException(status_code=400, detail="2건 이상의 person_id가 필요합니다.")
+    from starter import db
+    placeholders = ",".join(["%s"] * len(pid_list))
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT p.person_id, p.token, t.normalized, p.resolution_status,
+                   p.doc_id, p.role, p.reg_id, p.info_label
+              FROM vault.person_info p
+              LEFT JOIN vault.token_map t ON p.token = t.token
+             WHERE p.person_id IN ({placeholders})
+             ORDER BY p.created_at
+        """, pid_list)
+        rows = cur.fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "person_id": r[0], "token": r[1], "normalized": r[2] or "",
+            "status": r[3], "doc_ids": r[4] or [], "role": r[5] or "",
+            "reg_id": r[6] or "", "info_label": r[7] or [],
+        })
+    return {"items": items}
+
+
+@app.post("/api/admin/persons/merge")
+def admin_person_merge(body: _PersonMergeBody, user: dict = Depends(admin_required)):
+    import uuid as _uuid
+    import json as _json
+    if not body.source_person_ids:
+        raise HTTPException(status_code=400, detail="source_person_ids가 비어 있습니다.")
+    if body.target_person_id in body.source_person_ids:
+        raise HTTPException(status_code=400, detail="target이 source에 포함될 수 없습니다.")
+    from starter import db
+
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT reg_id, resolution_status FROM vault.person_info WHERE person_id = %s",
+                    (body.target_person_id,))
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="대상 인물을 찾을 수 없습니다.")
+        reg_id = target[0]
+        if not reg_id:
+            reg_id = f"reg_{_uuid.uuid4()}"
+            cur.execute(
+                "INSERT INTO vault.person_registry (reg_id, reason) VALUES (%s, %s::jsonb)",
+                (reg_id, _json.dumps({"method": "merge", "reviewer": user["user_id"]})),
+            )
+            cur.execute(
+                "UPDATE vault.person_info SET reg_id = %s, resolution_status = 'resolved' WHERE person_id = %s",
+                (reg_id, body.target_person_id),
+            )
+
+        placeholders = ",".join(["%s"] * len(body.source_person_ids))
+        cur.execute(
+            f"UPDATE vault.person_info SET reg_id = %s, resolution_status = 'resolved' WHERE person_id IN ({placeholders})",
+            [reg_id] + body.source_person_ids,
+        )
+        updated = cur.rowcount
+        conn.commit()
+
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        placeholders = ",".join(["%s"] * len(body.source_person_ids))
+        cur.execute(
+            f"UPDATE rag.look_up SET reg_id = %s WHERE person_id IN ({placeholders})",
+            [reg_id] + body.source_person_ids,
+        )
+        cur.execute(
+            "UPDATE rag.look_up SET reg_id = %s WHERE person_id = %s AND reg_id IS DISTINCT FROM %s",
+            (reg_id, body.target_person_id, reg_id),
+        )
+        cur.execute(
+            "INSERT INTO audit.person_merge_log (reviewer, target_reg_id, target_person_id, source_person_ids, note) VALUES (%s,%s,%s,%s,%s)",
+            (user["user_id"], reg_id, body.target_person_id, body.source_person_ids, body.note),
+        )
+        conn.commit()
+
+    return {"ok": True, "reg_id": reg_id, "merged_count": updated}
+
+
+# --- 인물 분리 ---
+
+class _PersonSplitBody(BaseModel):
+    reg_id: str
+    detach_person_ids: list[str]
+    note: str = None
+
+
+@app.get("/api/admin/persons/split-preview")
+def admin_split_preview(
+    person_id: str = Query(...),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT reg_id FROM vault.person_info WHERE person_id = %s", (person_id,))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            raise HTTPException(status_code=400, detail="확정(reg_id 연결) 상태가 아닙니다.")
+        reg_id = row[0]
+        cur.execute("""
+            SELECT p.person_id, p.token, t.normalized, p.resolution_status,
+                   p.doc_id, p.role, p.reg_id
+              FROM vault.person_info p
+              LEFT JOIN vault.token_map t ON p.token = t.token
+             WHERE p.reg_id = %s
+             ORDER BY p.created_at
+        """, (reg_id,))
+        rows = cur.fetchall()
+    if len(rows) < 2:
+        raise HTTPException(status_code=400, detail="이 reg_id에 속한 인물이 1건뿐이라 분리할 수 없습니다.")
+    items = []
+    for r in rows:
+        items.append({
+            "person_id": r[0], "token": r[1], "normalized": r[2] or "",
+            "status": r[3], "doc_ids": r[4] or [], "role": r[5] or "",
+            "reg_id": r[6] or "",
+        })
+    return {"reg_id": reg_id, "items": items}
+
+
+@app.post("/api/admin/persons/split")
+def admin_person_split(body: _PersonSplitBody, user: dict = Depends(admin_required)):
+    if not body.detach_person_ids:
+        raise HTTPException(status_code=400, detail="detach_person_ids가 비어 있습니다.")
+    from starter import db
+
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM vault.person_info WHERE reg_id = %s", (body.reg_id,))
+        total = cur.fetchone()[0]
+        if len(body.detach_person_ids) >= total:
+            raise HTTPException(status_code=400, detail="전부 분리할 수 없습니다. 최소 1건은 남겨야 합니다.")
+
+        placeholders = ",".join(["%s"] * len(body.detach_person_ids))
+        cur.execute(
+            f"UPDATE vault.person_info SET reg_id = NULL, resolution_status = 'unresolved' WHERE person_id IN ({placeholders}) AND reg_id = %s",
+            body.detach_person_ids + [body.reg_id],
+        )
+        detached = cur.rowcount
+
+        cur.execute("SELECT COUNT(*) FROM vault.person_info WHERE reg_id = %s", (body.reg_id,))
+        remaining = cur.fetchone()[0]
+        if remaining == 0:
+            cur.execute("DELETE FROM vault.person_registry WHERE reg_id = %s", (body.reg_id,))
+        conn.commit()
+
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        placeholders = ",".join(["%s"] * len(body.detach_person_ids))
+        cur.execute(
+            f"UPDATE rag.look_up SET reg_id = NULL WHERE person_id IN ({placeholders})",
+            body.detach_person_ids,
+        )
+        cur.execute(
+            "INSERT INTO audit.person_split_log (reviewer, source_reg_id, detach_person_ids, note) VALUES (%s,%s,%s,%s)",
+            (user["user_id"], body.reg_id, body.detach_person_ids, body.note),
+        )
+        conn.commit()
+
+    return {"ok": True, "detached_count": detached}
+
+
+# --- 탐지 검수 ---
+
+class _DetectionVerdictBody(BaseModel):
+    doc_id: str
+    token: str
+    verdict: str
+    new_label: str = None
+    note: str = None
+
+
+@app.get("/api/admin/detection-review")
+def admin_detection_review_list(
+    q: str = Query(""),
+    status: str = Query(""),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    params: dict = {"size": size, "offset": (page - 1) * size}
+    q_cond = ""
+    if q.strip():
+        q_cond = "WHERE c.doc_id ILIKE %(q)s"
+        params["q"] = f"%{q.strip()}%"
+    status_cond = ""
+    if status == "unreviewed":
+        status_cond = "WHERE dt.total_tokens > COALESCE(rc.reviewed_count, 0)"
+    elif status == "reviewed":
+        status_cond = "WHERE dt.total_tokens = COALESCE(rc.reviewed_count, 0) AND dt.total_tokens > 0"
+    base_cte = f"""
+        WITH doc_tokens AS (
+            SELECT c.doc_id,
+                   COUNT(DISTINCT tok) AS total_tokens,
+                   MIN(c.doc_type) AS doc_type,
+                   MIN(c.created_at)::date AS created_at
+            FROM rag.chunks c, unnest(c.tokens) AS tok
+            {q_cond}
+            GROUP BY c.doc_id
+        ),
+        review_counts AS (
+            SELECT doc_id, COUNT(*) AS reviewed_count
+            FROM audit.detection_review GROUP BY doc_id
+        )
+    """
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"""
+            {base_cte}
+            SELECT COUNT(*) FROM doc_tokens dt
+            LEFT JOIN review_counts rc ON rc.doc_id = dt.doc_id
+            {status_cond}
+        """, params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            {base_cte}
+            SELECT dt.doc_id, dt.doc_type, dt.created_at,
+                   dt.total_tokens, COALESCE(rc.reviewed_count, 0)
+            FROM doc_tokens dt
+            LEFT JOIN review_counts rc ON rc.doc_id = dt.doc_id
+            {status_cond}
+            ORDER BY (dt.total_tokens - COALESCE(rc.reviewed_count, 0)) DESC, dt.doc_id
+            LIMIT %(size)s OFFSET %(offset)s
+        """, params)
+        docs = [{
+            "doc_id": r[0], "doc_type": r[1] or "미지정",
+            "created_at": str(r[2]) if r[2] else "",
+            "total_tokens": r[3], "reviewed_count": r[4],
+        } for r in cur.fetchall()]
+    return {"docs": docs, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/detection-review/{doc_id}")
+def admin_detection_review_detail(doc_id: str, user: dict = Depends(admin_required)):
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT chunk_id, chunk_idx, masked_text, tokens, doc_type
+            FROM rag.chunks WHERE doc_id = %s ORDER BY chunk_idx
+        """, (doc_id,))
+        rows = cur.fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+    doc_type = rows[0][4] or "미지정"
+    chunks, all_tokens = [], set()
+    for r in rows:
+        toks = r[3] or []
+        all_tokens.update(toks)
+        chunks.append({"chunk_id": r[0], "chunk_idx": r[1], "masked_text": r[2], "tokens": toks})
+    token_info = {}
+    if all_tokens:
+        with db.vault_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT token, label, normalized FROM vault.token_map WHERE token = ANY(%s)",
+                        (list(all_tokens),))
+            for tok, label, norm in cur.fetchall():
+                token_info[tok] = {"label": label, "normalized": norm}
+    verdicts = {}
+    if all_tokens:
+        with db.rag_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT token, verdict, new_label, reviewer, created_at FROM audit.detection_review WHERE doc_id = %s",
+                        (doc_id,))
+            for tok, v, nl, rev, ca in cur.fetchall():
+                verdicts[tok] = {"verdict": v, "new_label": nl, "reviewer": rev, "reviewed_at": str(ca)}
+    tokens = []
+    for tok in sorted(all_tokens):
+        info = token_info.get(tok, {})
+        vd = verdicts.get(tok)
+        tokens.append({
+            "token": tok, "label": info.get("label", "unknown"),
+            "normalized": info.get("normalized", ""),
+            "verdict": vd["verdict"] if vd else None,
+            "new_label": vd.get("new_label") if vd else None,
+            "reviewer": vd.get("reviewer") if vd else None,
+            "reviewed_at": vd.get("reviewed_at") if vd else None,
+        })
+    return {"doc_id": doc_id, "doc_type": doc_type, "chunks": chunks,
+            "tokens": tokens, "total_tokens": len(all_tokens), "reviewed_count": len(verdicts)}
+
+
+@app.patch("/api/admin/detection-review/verdict")
+def admin_detection_review_verdict(body: _DetectionVerdictBody, user: dict = Depends(admin_required)):
+    if body.verdict not in ("confirmed", "rejected", "relabeled"):
+        raise HTTPException(400, "verdict는 confirmed, rejected, relabeled만 가능합니다.")
+    if body.verdict == "relabeled" and not body.new_label:
+        raise HTTPException(400, "relabeled 판정에는 new_label이 필요합니다.")
+    if body.verdict != "relabeled":
+        body.new_label = None
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM rag.chunks WHERE doc_id = %s AND %s = ANY(tokens) LIMIT 1",
+                    (body.doc_id, body.token))
+        if not cur.fetchone():
+            raise HTTPException(404, "해당 문서에 토큰이 없습니다.")
+        cur.execute("""
+            INSERT INTO audit.detection_review (doc_id, token, verdict, new_label, reviewer, note)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (doc_id, token) DO UPDATE
+            SET verdict = EXCLUDED.verdict, new_label = EXCLUDED.new_label,
+                reviewer = EXCLUDED.reviewer, note = EXCLUDED.note, created_at = now()
+        """, (body.doc_id, body.token, body.verdict, body.new_label, user["user_id"], body.note))
+        conn.commit()
+    return {"ok": True, "doc_id": body.doc_id, "token": body.token, "verdict": body.verdict}
+
+
 @app.get("/api/admin/logs/query")
 def admin_logs_query(
     user_id: str = Query(None),
@@ -758,7 +1126,7 @@ def admin_logs_query(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.query_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -797,7 +1165,7 @@ def admin_logs_restore(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.restore_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -830,7 +1198,7 @@ def admin_logs_policy(
         conditions.append("created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.rag_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM audit.policy_change_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -844,6 +1212,38 @@ def admin_logs_policy(
                  "old_value": r[3], "new_value": r[4],
                  "policy_version": r[5],
                  "created_at": r[6].isoformat() if r[6] else ""}
+                for r in cur.fetchall()]
+    return {"items": rows, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/feedback")
+def admin_feedback_list(
+    kind: str = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if kind and kind in ("good", "bad"):
+        conditions.append("f.kind = %(kind)s")
+        params["kind"] = kind
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM audit.feedback f {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT f.request_id, f.user_id, f.kind, f.comment, f.created_at,
+                   q.masked_query
+              FROM audit.feedback f
+              LEFT JOIN audit.query_log q ON f.request_id = q.request_id
+              {where}
+             ORDER BY f.created_at DESC
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = [{"request_id": r[0], "user_id": r[1], "kind": r[2],
+                 "comment": r[3] or "", "created_at": r[4].isoformat() if r[4] else "",
+                 "masked_query": r[5] or ""}
                 for r in cur.fetchall()]
     return {"items": rows, "total": total, "page": page, "size": size}
 
@@ -870,7 +1270,7 @@ def admin_users(
     elif active == "false":
         conditions.append("NOT u.is_active")
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    with db.auth_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM policy.users u {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
@@ -910,7 +1310,7 @@ def admin_user_update(user_id: str, body: _UserUpdateBody, user: dict = Depends(
         params["active"] = body.is_active
     if not sets:
         raise HTTPException(status_code=400, detail="변경할 항목이 없습니다.")
-    with db.auth_conn() as conn, conn.cursor() as cur:
+    with db.admin_conn() as conn, conn.cursor() as cur:
         cur.execute(
             f"UPDATE policy.users SET {', '.join(sets)} WHERE user_id = %(uid)s RETURNING user_id",
             params,
@@ -964,6 +1364,21 @@ def _run_ingest_subprocess(job_id: str, data_path: str):
         logging.exception("업로드 ingest 실패: %s", job_id)
         job["status"] = "failed"
         job["current_step"] = f"오류: {exc}"
+    _update_upload_log(job_id, job["status"], job.get("current_step", ""))
+
+
+def _update_upload_log(job_id: str, status: str, error_summary: str):
+    try:
+        with db.rag_conn() as conn, conn.cursor() as cur:
+            cur.execute("""
+                UPDATE audit.upload_log
+                SET status = %s, finished_at = now(),
+                    error_summary = CASE WHEN %s = 'failed' THEN %s ELSE NULL END
+                WHERE job_id = %s
+            """, (status, status, error_summary, job_id))
+            conn.commit()
+    except Exception:
+        logging.exception("업로드 감사 로그 갱신 실패 (job_id=%s)", job_id)
 
 
 @app.post("/api/admin/upload")
@@ -1074,6 +1489,16 @@ async def admin_upload(
         "data_file": data_path.name,
         "errors": errors, "output": "",
     }
+    doc_id_list = [d["id"] for d in documents]
+    try:
+        with db.rag_conn() as conn, conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit.upload_log (user_id, job_id, doc_ids, doc_count, data_file)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user["user_id"], job_id, doc_id_list, len(documents), data_path.name))
+            conn.commit()
+    except Exception:
+        logging.exception("업로드 감사 로그 기록 실패 (job_id=%s)", job_id)
     threading.Thread(
         target=_run_ingest_subprocess,
         args=(job_id, str(data_path)), daemon=True,
@@ -1110,3 +1535,28 @@ def admin_upload_job_detail(job_id: str, user: dict = Depends(admin_required)):
     if not job:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     return job
+
+
+@app.get("/api/admin/upload/history")
+def admin_upload_history(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=50),
+    user: dict = Depends(admin_required),
+):
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM audit.upload_log")
+        total = cur.fetchone()[0]
+        cur.execute("""
+            SELECT user_id, job_id, doc_ids, doc_count, data_file,
+                   status, created_at, finished_at, error_summary
+            FROM audit.upload_log
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """, (size, (page - 1) * size))
+        items = [{
+            "user_id": r[0], "job_id": r[1], "doc_ids": r[2] or [],
+            "doc_count": r[3], "data_file": r[4], "status": r[5],
+            "created_at": str(r[6]), "finished_at": str(r[7]) if r[7] else None,
+            "error_summary": r[8],
+        } for r in cur.fetchall()]
+    return {"items": items, "total": total, "page": page, "size": size}
