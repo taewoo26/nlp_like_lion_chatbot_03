@@ -45,6 +45,6 @@ Thumbs.db
 /outputs/
 /backup_*/
 
-tests/
-docs/
-results/
+/tests/
+/docs/
+/results/
