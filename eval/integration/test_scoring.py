@@ -391,6 +391,25 @@ def test_dialog_follow_merge_turns_and_unverified():
     assert SDG.judge(d, no_audit, {})[4][0] == "미검증"
 
 
+def test_dialog_same_person_docs_and_canned_text():
+    """실제 실행 반례: 대상 인물 본인의 다른 문서는 동명이인 문서가 아니고, 고정 안내문에는 금지 사실 검사를 하지 않는다."""
+    from . import score_dialog as SDG
+    t1 = _turn(1, need_more=True, state="clarify")
+    d5 = _dlg("ITM05")                                             # 채윤호(PS17) 문서 IT0015~0018 → IT0018 은 본인 문서
+    same = {"turns": [t1, _turn(2, follow="req_1", merged=False, docs=["IT0017", "IT0018"],
+                                answer="카드 재발급은 11월 11일 예정 [IT0017] [IT0018]")]}
+    res, actual, _, _, _ = SDG.judge(d5, same, {})
+    assert res == "통과" and "다른 사람" not in actual, actual
+    d1 = _dlg("ITM01")                                             # 오태린 PS03(IT0019) / PS04(IT0020)
+    homonym = {"turns": [t1, _turn(2, follow="req_1", docs=["IT0019", "IT0020"], answer="2,500만 원 [IT0019]")]}
+    res, actual, stage, _, _ = SDG.judge(d1, homonym, {})
+    assert res == "실패" and stage == "검색" and "IT0020" in actual   # 동명이인 문서는 여전히 실패
+    canned = {"turns": [t1, _turn(2, need_more=True, state="no_result", follow="req_1",
+                                  answer="문서를 찾지 못했습니다. (예: VOC요약, 피해접수, 카드분실상담)")]}
+    res, actual, stage, _, _ = SDG.judge(d1, canned, {})
+    assert "금지 사실" not in actual and stage == "재질문·이어받기", actual   # 실패 이유는 상태, 안내문 속 '분실' 아님
+
+
 if __name__ == "__main__":                                # monkeypatch 를 쓰는 테스트가 있어 pytest 로 실행한다
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

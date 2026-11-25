@@ -9,9 +9,11 @@
   합치기    : 2턴이 빠진 조건만 채우는 조각인 시나리오(MERGE_SCENARIOS: Q10 필수 조건 보충, Q12 추가 정보 제공)는
              2턴 응답이 직전 질문과 합쳐서 찾았다(merged=True)여야 한다. Q11(2턴이 완전한 질문)·Q13(특정 불가)은 보지 않는다
   최종 상태 : 마지막 턴의 상태(chat 내부 state)가 기대 목록 안. 기대에 clarify 가 있으면 되묻기 응답(need_more)도 인정
-  근거 문서 : 기대 문서가 있으면 마지막 턴 API 응답 문서에 전부 있고, 같은 이름의 다른 사람 문서는 없어야 한다.
+  근거 문서 : 기대 문서가 있으면 마지막 턴 API 응답 문서에 전부 있고, 같은 이름의 다른 사람(동명이인) 문서는 없어야 한다.
+             대상 인물 = 기대 문서에 나오는 같은 이름 인물. 대상 인물 본인의 다른 문서는 '다른 사람 문서'로 보지 않는다.
              기대 문서가 없으면(특정 불가) 답변이 같은 이름 인물의 문서를 근거로 인용하지 않아야 한다
-  필수·금지 : 질문 채점과 같은 비교 (score_answer.fact_status / forbid_status, 마지막 턴 답변 기준)
+  필수·금지 : 질문 채점과 같은 비교 (score_answer.fact_status / forbid_status, 마지막 턴 답변 기준).
+             LLM 이 쓴 답(answered·withheld)에만 적용한다. 되묻기·문서 없음 안내문은 고정 문구라 보지 않는다
   X04      : 모든 턴의 API 응답 전체에 개인정보 원문 0 (기존 문서 포함). 검사할 응답이 없으면 미검증
   X06      : 턴마다 query_log 1행·사용자·레벨·상태·문서 일치·원문 0, 2턴이 이어받은 질문이면 follow_up_of = 1턴 request_id.
              검사할 감사 로그가 없으면 미검증
@@ -90,7 +92,10 @@ def judge(d, t, raw):
     answer = body.get("answer") or ""
     returned = [x.get("doc_id") for x in body.get("docs") or []]
     final_docs = _as_list(exp.get("final_docs"))
-    other = {x for p in _named_persons(d, g) for x in _docs_of(p)} - set(final_docs)   # 같은 이름의 다른 사람 문서
+    named = _named_persons(d, g)
+    target = [p for p in named if set(_docs_of(p)) & set(final_docs)]                  # 기대 문서의 주인 (같은 이름)
+    other = ({x for p in named if p not in target for x in _docs_of(p)}               # 같은 이름의 다른 사람 문서
+             - {x for p in target for x in _docs_of(p)} - set(final_docs))
     if final_docs:
         miss = sorted(set(final_docs) - set(returned))
         wrong = sorted(other & set(returned))
@@ -102,11 +107,12 @@ def judge(d, t, raw):
         checks.append(("LLM 답변", not cited))
         parts.append(f"특정 인물 인용 {','.join(cited) or '없음'}")
     outputs = " ".join(_strings(body))
-    fs = [fact_status({"fact_id": f"F{i}", "desc": f, "match": [f]}, answer) for i, f in enumerate(exp.get("facts") or [])]
+    llm_text = st in ("answered", "withheld")                       # 고정 안내문(되묻기·문서 없음)에는 사실 검사를 하지 않는다
+    fs = [] if not llm_text else [fact_status({"fact_id": f"F{i}", "desc": f, "match": [f]}, answer) for i, f in enumerate(exp.get("facts") or [])]
     if fs:
         checks.append(("LLM 답변", "manual" if "manual" in fs and "miss" not in fs else "miss" not in fs))
         parts.append(f"필수 사실 {fs.count('hit')}/{len(fs)}")
-    bs = [forbid_status({"fact_id": f"B{i}", "desc": f, "match": [f]}, answer, outputs)
+    bs = [] if not llm_text else [forbid_status({"fact_id": f"B{i}", "desc": f, "match": [f]}, answer, outputs)
           for i, f in enumerate(exp.get("forbid") or [])]
     if bs:
         checks.append(("LLM 답변", "manual" if "manual" in bs and "hit" not in bs else "hit" not in bs))

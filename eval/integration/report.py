@@ -424,7 +424,7 @@ def build(run_dir):
               f"v3 예상과 다른 것 {len(per['attribution']['v3_diff'])}건"]
     dl = summary.get("03 다중 턴 대화") or {}
     if dl and not dl.get("skipped") and not dl.get("error"):
-        L += ["", "## 다중 턴 대화 (대화 × 레벨, R1·R3)", "", "| 설정 | 정상 실행 | 통과 | 실패 | 수동 확인 |", "|---|---|---|---|---|"]
+        L += ["", "## 다중 턴 대화 (대화 × 레벨)", "", "| 설정 | 정상 실행 | 통과 | 실패 | 수동 확인 |", "|---|---|---|---|---|"]
         for cfg, v in dl.items():
             ex, jd = v.get("실행") or {}, v.get("판정") or {}
             L.append(f"| {cfg} | {ex.get('정상 실행', 0)}/{ex.get('대상', 0)} | {jd.get('통과', 0)} | {jd.get('실패', 0)} | "
