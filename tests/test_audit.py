@@ -91,7 +91,7 @@ def test_record_both_fail_is_lost(files, monkeypatch, tmp_path):
 def test_write_query_log_sql_and_commit(monkeypatch):
     conn = MagicMock()
     cur = conn.cursor.return_value.__enter__.return_value
-    monkeypatch.setattr(audit.db, "rag_conn", lambda: conn)
+    monkeypatch.setattr(audit.db, "search_conn", lambda: conn)
     audit.write_query_log(audit.build_row("req_sql", USER, result=RESULT))
     sql, params = cur.execute.call_args.args
     assert "audit.query_log" in sql and "policy.policy_state" in sql
@@ -120,7 +120,7 @@ def test_error_log_file_is_written(tmp_path, monkeypatch):
 @pytest.fixture
 def conn():
     try:
-        c = db.rag_conn()
+        c = db.rag_conn()  # 제약 조건 검증용: 넣은 행을 읽어야 해서 소유자 접속 (app_search 권한은 test_db_accounts.py)
     except psycopg.OperationalError as e:
         pytest.skip(f"DB 연결(db.rag_conn)에 실패했습니다: {e}")
     with c.cursor() as cur:

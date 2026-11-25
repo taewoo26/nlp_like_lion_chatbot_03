@@ -1,22 +1,45 @@
-"""DB 연결. 검색용(rag_user), 매핑용(vault_user) 계정을 따로 쓰고, 로그인 판정은 지금 관리자 계정을 씁니다.
+"""DB 연결. 웹 서비스는 app_search 계정, 적재는 app_ingest·app_reset 계정을 씁니다(권한은 infra/init/06_grants.sh).
 
 - rag_conn()   : rag.chunks 읽기/쓰기. vault 스키마에는 접근할 수 없습니다.
 - vault_conn() : vault.token_map 읽기/쓰기. 적재(가명처리) 단계에서만 사용합니다.
   검색·답변 단계 코드는 vault_conn() 을 쓰지 않아야 합니다. 실명 복원은 restore_conn() 으로 합니다.
-- auth_conn()  : 로그인 판정(service/auth.py) 전용. 지금은 관리자 계정(POSTGRES_USER)으로 연결합니다(구조 단순화).
-  고도화 때 config.AUTH_DSN 만 app_search 로 바꾸면 됩니다(권한은 infra/init/06_grants.sh 에 있음).
+- search_conn(): 웹 서비스가 쓰는 app_search 접속(감사 로그 기록 등). SEARCH_DSN 이 없으면 rag_conn() 으로 대체하고 경고합니다.
+- admin_conn() : 관리자 화면(/api/admin/*) 전용 app_admin 접속. ADMIN_DSN 이 없으면 관리자 계정으로 대체하고 경고합니다.
+- auth_conn()  : 로그인 판정(service/auth.py) 전용. config.AUTH_DSN = app_search (없으면 관리자 계정으로 대체).
 - restore_conn(): 실명 복원(service/app.py) 전용. vault.restore_token() 만 호출합니다(토큰마다 audit.restore_log 기록).
-  지금은 관리자 계정(AUTH_DSN 과 같은 접속)을 씁니다. 권한 정리 때 pii_search 계정(app_search)으로 바꿉니다.
+  auth_conn() 과 같은 접속(app_search)입니다.
   함수는 SECURITY DEFINER(소유자 vault_user)라 내부 조회·기록은 접속 계정과 상관없이 vault_user 권한으로 실행됩니다.
 """
+import logging
+
 import psycopg
 from pgvector.psycopg import register_vector
 
 from . import config
 
+log = logging.getLogger(__name__)
+_warned = set()
+
+
+def _warn_once(key, msg):
+    if key not in _warned:
+        _warned.add(key)
+        log.warning(msg)
+
 
 def rag_conn():
     conn = psycopg.connect(config.RAG_DSN, autocommit=False, connect_timeout=5,
+                           options="-c statement_timeout=30000")
+    register_vector(conn)
+    return conn
+
+
+def search_conn():
+    """웹 서비스용 접속(app_search). 벡터 컬럼을 읽을 수 있게 register_vector 를 건다."""
+    if not config.SEARCH_DSN:
+        _warn_once("search", "SEARCH_DSN/APP_SEARCH_PASSWORD 가 없어 rag_user 로 접속합니다. .env 를 확인하세요.")
+        return rag_conn()
+    conn = psycopg.connect(config.SEARCH_DSN, autocommit=False, connect_timeout=5,
                            options="-c statement_timeout=30000")
     register_vector(conn)
     return conn
@@ -47,11 +70,23 @@ def reset_conn():
 
 
 def auth_conn():
+    if not config.SEARCH_DSN:
+        _warn_once("auth", "SEARCH_DSN/APP_SEARCH_PASSWORD 가 없어 관리자 계정으로 접속합니다. .env 를 확인하세요.")
     return psycopg.connect(config.AUTH_DSN, autocommit=False, connect_timeout=5,
                            options="-c statement_timeout=30000")
 
 
+def admin_conn():
+    """관리자 화면용. app_admin: rag·audit·policy 조회, 인물 검토 상태·사용자 레벨/활성 수정. 토큰 원문(originals)은 못 읽는다."""
+    dsn = config.ADMIN_DSN
+    if not dsn:
+        _warn_once("admin", "ADMIN_DSN/APP_ADMIN_PASSWORD 가 없어 관리자 계정으로 접속합니다. .env 를 확인하세요.")
+        dsn = config._SUPERUSER_DSN
+    return psycopg.connect(dsn, autocommit=False, connect_timeout=5,
+                           options="-c statement_timeout=30000")
+
+
 def restore_conn():
-    # 권한 정리 때 이 접속만 pii_search 계정으로 바꾼다 (지금은 로그인 판정과 같은 관리자 계정)
+    # 로그인 판정과 같은 접속(app_search). SEARCH_DSN 이 없으면 관리자 계정으로 대체된다.
     return psycopg.connect(config.AUTH_DSN, autocommit=False, connect_timeout=5,
                            options="-c statement_timeout=30000")

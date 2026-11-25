@@ -189,7 +189,7 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
     if dict_on and mode == "boost":
         raise ValueError("PERSON_DICT=on은 인물 조건을 유지하기 위해 SEARCH_MODE=and만 지원합니다.")
     own = conn is None
-    conn = conn or db.rag_conn()
+    conn = conn or db.search_conn()   # app_search: rag.chunks·look_up·role_master 읽기만
     try:
         with conn.cursor() as cur:
             if mode == "boost" and q_tokens:
