@@ -246,6 +246,37 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
 
 /* ── 일괄 변경 바 ── */
 .batch-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 20px;background:#edf5f5;border:2px solid var(--cap);border-radius:var(--radius);margin-bottom:16px}
+
+/* ── 인물 검수 상세 ── */
+.review-row{position:relative}
+.review-row .expand-icon{display:inline-block;width:16px;font-size:11px;color:var(--ink2);transition:transform .2s;margin-right:4px}
+.review-row.open .expand-icon{transform:rotate(90deg)}
+.review-detail td{padding:0 !important;border-bottom:1px solid var(--line)}
+.review-detail .detail-inner{overflow:hidden;transition:max-height .25s ease,padding .25s ease;max-height:0;padding:0 16px}
+.review-detail.open .detail-inner{max-height:300px;padding:12px 16px}
+.detail-inner{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;background:var(--bg2);border-radius:0 0 8px 8px}
+.detail-item{display:flex;flex-direction:column;gap:2px;min-width:120px}
+.detail-item .detail-label{font-size:11px;color:var(--ink2);font-weight:600;letter-spacing:.5px}
+.detail-item .detail-value{font-size:13px;color:var(--ink)}
+
+/* ── 검수 액션 버튼 ── */
+.btn-resolve{font-family:"Noto Sans KR";font-weight:600;font-size:12px;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;white-space:nowrap}
+.btn-resolve.ok{background:#e6f4ed;color:#2d7a50;border:1px solid #c3e0d0}
+.btn-resolve.ok:hover{background:#d0ead8}
+.btn-resolve.fail{background:#fde8e5;color:#c0392b;border:1px solid #f0cbc7}
+.btn-resolve.fail:hover{background:#f8d5d0}
+
+/* ── 토큰 말줄임 ── */
+.token-mono{font-family:monospace;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+.pid-short{font-family:monospace;font-size:12.5px}
+
+/* ── 초기화 버튼 ── */
+.btn-reset{font-family:"Noto Sans KR";font-size:13px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--wall);color:var(--ink2);cursor:pointer;white-space:nowrap}
+.btn-reset:hover{background:var(--bg2)}
+
+/* ── 결과 건수 ── */
+.result-count{font-size:12.5px;color:var(--ink2);margin-bottom:12px}
+.result-count b{color:var(--ink);font-weight:700}
 </style>
 </head>
 <body>
@@ -275,8 +306,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
       <nav>
         <a href="#dashboard" class="active"><span class="icon">📊</span>대시보드</a>
         <a href="#docs"><span class="icon">📄</span>문서 관리</a>
-        <a href="#review"><span class="icon">🔍</span>탐지 검수</a>
-        <a href="#tokens"><span class="icon">🏷️</span>토큰·인물 관리</a>
+                <a href="#tokens"><span class="icon">🏷️</span>토큰·인물 관리</a>
         <a href="#logs"><span class="icon">📋</span>질의·감사 로그</a>
         <a href="#users"><span class="icon">👥</span>사용자 권한</a>
       </nav>
@@ -312,8 +342,8 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         </div>
       </div>
 
-      <div class="review-banner">
-        <div class="label">탐지 검수 대기</div>
+      <div class="review-banner" style="cursor:pointer" onclick="showTokenReview()">
+        <div class="label">인물 검수 대기</div>
         <div class="value" id="reviewCount">-<small>건</small></div>
         <div class="sub" id="reviewSub">조회 중…</div>
       </div>
@@ -353,12 +383,15 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
             <option value="">전체</option>
           </select>
         </div>
+        <!-- 적재 상태 필터: 업로드 파이프라인 구현 후 활성화 -->
+        <!--
         <div class="filter-group">
           <label>적재 상태</label>
           <select id="filterStatus">
             <option>전체</option><option>완료</option><option>대기</option><option>실패</option>
           </select>
         </div>
+        -->
         <div class="filter-group">
           <label>적재 시작일</label>
           <input type="date" id="filterDateFrom">
@@ -405,102 +438,48 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
       <div class="drop-zone" id="dropZone">
         <span class="icon-upload">⬆</span>
         <p>파일을 끌어다 놓거나 눌러서 선택</p>
-        <small>지원 형식 · txt, docx, pdf 등 · 한 번에 여러 개 가능</small>
+        <small>지원 형식 · txt, json, jsonl · 한 번에 여러 개 가능</small>
       </div>
-      <input type="file" class="file-input" id="fileInput" multiple>
+      <input type="file" class="file-input" id="fileInput" multiple accept=".txt,.json,.jsonl">
 
       <div class="upload-files-section" id="selectedFiles" style="display:none">
-        <h3>선택한 파일 · doc type 지정</h3>
+        <h3>선택한 파일 · id / doc type 지정</h3>
         <table class="data-table">
-          <thead><tr><th>파일</th><th>doc type</th><th>작업</th></tr></thead>
+          <thead><tr><th style="width:36px"><input type="checkbox" id="uploadCheckAll" checked onchange="toggleAllUpload(this)"></th><th>파일</th><th>id</th><th>doc type</th><th>상태</th><th>작업</th></tr></thead>
           <tbody id="fileListBody"></tbody>
         </table>
+        <div id="uploadWarnings" style="display:none;margin:10px 0;font-size:13px;padding:10px 14px;border-radius:8px"></div>
         <div class="upload-note">doc type은 접근 권한 범위의 기준이 돼요. 업로드하는 사람이 가진 doc type 안에서만 고를 수 있어요.</div>
         <div class="upload-actions">
-          <button class="btn-primary" onclick="startUpload()"><span id="uploadCountBtn">0</span>건 업로드 시작</button>
+          <button class="btn-primary" id="uploadStartBtn" onclick="startUpload()" disabled><span id="uploadCountBtn">0</span>건 업로드 시작</button>
         </div>
       </div>
 
       <div id="processSection" style="display:none">
-        <div class="process-card">
-          <div class="process-header">
-            <strong>D0149 · 상담기록</strong>
-            <span class="status-text ok">적재 완료</span>
-          </div>
-          <div class="process-steps">
-            <span class="ps done">업로드</span>
-            <span class="ps done">탐지</span>
-            <span class="ps done">검수 없음</span>
-            <span class="ps done">가명처리</span>
-            <span class="ps done">적재</span>
-          </div>
-        </div>
-        <div class="process-card pending">
-          <div class="process-header">
-            <strong>D0150 · 민원</strong>
-            <span class="status-text wait">검수 대기 · 애매한 구간 2개</span>
-          </div>
-          <div class="process-steps">
-            <span class="ps done">업로드</span>
-            <span class="ps done">탐지</span>
-            <span class="ps current">검수 대기</span>
-            <span class="ps">가명처리</span>
-            <span class="ps">적재</span>
-          </div>
-          <a class="process-link" href="#" onclick="event.preventDefault();showPage('review')">탐지 검수에서 확인하기 →</a>
-        </div>
-        <div class="process-note">검수 대기 문서는 검수가 끝나기 전까지 챗봇 검색에 나오지 않아요. 원본 파일을 처리 후에 보관할지는 팀에서 정해야 해요.</div>
+        <div id="processCards"></div>
       </div>
     </section>
 
-    <!-- ═══ 탐지 검수 ═══ -->
-    <section id="page-review" class="page-section">
-      <div class="main-header">
-        <h2>탐지 검수</h2>
-        <span class="scope">Lv2 · 검수 대기 <b id="reviewTotal">-</b>건</span>
-      </div>
-
-      <div class="filter-bar">
-        <div class="filter-group">
-          <label>검수 상태</label>
-          <select id="filterReviewStatus">
-            <option value="">전체</option>
-            <option value="pending">미결</option>
-            <option value="unresolved">미해결</option>
-            <option value="resolved">해결</option>
-          </select>
-        </div>
-        <button class="btn-primary" onclick="loadReviews(1)">조회</button>
-      </div>
-
-      <table class="data-table" id="reviewTable">
-        <thead>
-          <tr><th>인물 ID</th><th>토큰</th><th>라벨</th><th>역할</th><th>관련 문서</th><th>상태</th><th>검수 처리</th></tr>
-        </thead>
-        <tbody id="reviewBody"></tbody>
-      </table>
-      <div class="pagination" id="reviewPagination"></div>
-    </section>
-
-    <!-- ═══ 토큰·인물 관리 (목업) ═══ -->
+    <!-- ═══ 토큰·인물 관리 ═══ -->
     <section id="page-tokens" class="page-section">
       <div class="main-header">
         <h2>토큰·인물 관리</h2>
-        <span class="scope">Lv2 전용 · vault 접근 · 인물 사전 연동 예정</span>
+        <span class="scope">Lv2 전용 · vault 접근 · 인물 사전 연동</span>
       </div>
 
       <!-- 탭 -->
       <div style="display:flex;gap:4px;margin-bottom:20px">
         <button class="log-tab active" onclick="switchTokenTab('search',this)">토큰 검색</button>
         <button class="log-tab" onclick="switchTokenTab('person',this)">인물 사전</button>
+        <button class="log-tab" onclick="switchTokenTab('review',this)">인물 검수 <b id="reviewTotal" style="font-size:11px;margin-left:2px">-</b></button>
       </div>
 
-      <!-- 토큰 검색 (목업) -->
+      <!-- 토큰 검색 -->
       <div id="tokenTab-search">
         <div class="filter-bar">
           <div class="filter-group">
-            <label>토큰 또는 라벨</label>
-            <input type="text" id="tokenSearchInput" placeholder="예: <PERSON_08492518f893> 또는 PERSON" style="min-width:280px">
+            <label>토큰 또는 정규화 값</label>
+            <input type="text" id="tokenSearchInput" placeholder="예: PERSON_08492518f893 또는 김민준" style="min-width:280px">
           </div>
           <div class="filter-group">
             <label>라벨 유형</label>
@@ -510,99 +489,81 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
               <option>ACCOUNT</option><option>ADDRESS</option><option>CARD_NUMBER</option>
             </select>
           </div>
-          <button class="btn-primary" disabled style="opacity:.5">조회 (준비 중)</button>
+          <button class="btn-primary" onclick="searchTokens(1)">조회</button>
+          <button class="btn-reset" onclick="resetTokenFilter()">초기화</button>
         </div>
 
-        <table class="data-table">
+        <div class="result-count" id="tokenResultCount"></div>
+        <table class="data-table" id="tokenTable">
           <thead>
-            <tr><th>토큰</th><th>라벨</th><th>정규화 값</th><th>원문 표기</th><th>등록일</th><th>작업</th></tr>
+            <tr><th>토큰</th><th>라벨</th><th>정규화 값</th><th>원문 표기</th><th>등록일</th></tr>
           </thead>
-          <tbody>
-            <tr>
-              <td style="font-family:monospace;font-size:12.5px">&lt;PERSON_08492518f893&gt;</td>
-              <td><span class="token-badge person">PERSON 이름</span></td>
-              <td>김민준</td>
-              <td style="font-size:13px;color:var(--ink2)">김민준, 김 민준</td>
-              <td>2026-11-09</td>
-              <td><button class="action-link" disabled style="opacity:.5">복원 이력</button></td>
-            </tr>
-            <tr>
-              <td style="font-family:monospace;font-size:12.5px">&lt;PHONE_NUMBER_350482f302da&gt;</td>
-              <td><span class="token-badge phone">PHONE 전화</span></td>
-              <td>010-1234-5678</td>
-              <td style="font-size:13px;color:var(--ink2)">010-1234-5678, 01012345678</td>
-              <td>2026-11-09</td>
-              <td><button class="action-link" disabled style="opacity:.5">복원 이력</button></td>
-            </tr>
-            <tr>
-              <td style="font-family:monospace;font-size:12.5px">&lt;EMAIL_685fed205901&gt;</td>
-              <td><span class="token-badge email">EMAIL 이메일</span></td>
-              <td>example@company.com</td>
-              <td style="font-size:13px;color:var(--ink2)">example@company.com</td>
-              <td>2026-11-08</td>
-              <td><button class="action-link" disabled style="opacity:.5">복원 이력</button></td>
-            </tr>
-            <tr>
-              <td style="font-family:monospace;font-size:12.5px">&lt;ACCOUNT_a3b4c5d6e7f8&gt;</td>
-              <td><span class="token-badge account">ACCOUNT 계좌</span></td>
-              <td>110-432-789012</td>
-              <td style="font-size:13px;color:var(--ink2)">110-432-789012</td>
-              <td>2026-11-08</td>
-              <td><button class="action-link" disabled style="opacity:.5">복원 이력</button></td>
-            </tr>
+          <tbody id="tokenBody">
+            <tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
           </tbody>
         </table>
-        <p class="process-note" style="margin-top:16px">토큰 검색·복원 이력 조회 기능은 vault API 연동 후 활성화됩니다.</p>
+        <div class="pagination" id="tokenPagination"></div>
       </div>
 
-      <!-- 인물 사전 (목업) -->
+      <!-- 인물 사전 -->
       <div id="tokenTab-person" style="display:none">
         <div class="filter-bar">
           <div class="filter-group">
             <label>인물 검색</label>
-            <input type="text" placeholder="이름 또는 person_id" style="min-width:220px">
+            <input type="text" id="personSearchInput" placeholder="이름 또는 person_id" style="min-width:220px">
           </div>
           <div class="filter-group">
             <label>상태</label>
-            <select>
-              <option>전체</option><option>확정</option><option>임시</option>
+            <select id="personStatusFilter">
+              <option value="">전체</option>
+              <option value="resolved">확정</option>
+              <option value="pending">임시</option>
             </select>
           </div>
-          <button class="btn-primary" disabled style="opacity:.5">조회 (준비 중)</button>
+          <button class="btn-primary" onclick="searchPersons(1)">조회</button>
+          <button class="btn-reset" onclick="resetPersonFilter()">초기화</button>
         </div>
 
-        <table class="data-table">
+        <div class="result-count" id="personResultCount"></div>
+        <table class="data-table" id="personTable">
           <thead>
-            <tr><th>person_id</th><th>대표 토큰</th><th>상태</th><th>관련 문서</th><th>역할</th><th>작업</th></tr>
+            <tr><th>person_id</th><th>토큰</th><th>정규화 이름</th><th>상태</th><th>관련 문서</th><th>역할</th></tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><b>P-0001</b></td>
-              <td style="font-family:monospace;font-size:12.5px">&lt;PERSON_08492518f893&gt;</td>
-              <td><span class="badge badge-ok">확정</span></td>
-              <td>H0069, H0042, H0075</td>
-              <td>발신자</td>
-              <td><button class="action-link" disabled style="opacity:.5">병합</button><span class="action-sep">·</span><button class="action-link" disabled style="opacity:.5">분리</button></td>
-            </tr>
-            <tr>
-              <td><b>P-0002</b></td>
-              <td style="font-family:monospace;font-size:12.5px">&lt;PERSON_5907344b7d39&gt;</td>
-              <td><span class="badge badge-wait">임시</span></td>
-              <td>H0042</td>
-              <td>수신자</td>
-              <td><button class="action-link" disabled style="opacity:.5">병합</button><span class="action-sep">·</span><button class="action-link" disabled style="opacity:.5">분리</button></td>
-            </tr>
-            <tr>
-              <td><b>P-0003</b></td>
-              <td style="font-family:monospace;font-size:12.5px">&lt;PERSON_091f01bdf1d1&gt;</td>
-              <td><span class="badge badge-wait">임시</span></td>
-              <td>H0075</td>
-              <td>수신자</td>
-              <td><button class="action-link" disabled style="opacity:.5">병합</button><span class="action-sep">·</span><button class="action-link" disabled style="opacity:.5">분리</button></td>
-            </tr>
+          <tbody id="personBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
           </tbody>
         </table>
-        <p class="process-note" style="margin-top:16px">인물 사전 관리(병합·분리) 기능은 PERSON_DICT 파이프라인 구현 후 활성화됩니다.</p>
+        <div class="pagination" id="personPagination"></div>
+      </div>
+
+      <!-- 인물 검수 -->
+      <div id="tokenTab-review" style="display:none">
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>이름 또는 문서 ID</label>
+            <input type="text" id="reviewSearchInput" placeholder="예: 김하늘 또는 TEST001" style="min-width:200px">
+          </div>
+          <div class="filter-group">
+            <label>검수 상태</label>
+            <select id="filterReviewStatus">
+              <option value="">전체</option>
+              <option value="pending">미결</option>
+              <option value="unresolved">미해결</option>
+              <option value="resolved">해결</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="loadReviews(1)">조회</button>
+          <button class="btn-reset" onclick="resetReviewFilter()">초기화</button>
+        </div>
+
+        <div class="result-count" id="reviewResultCount"></div>
+        <table class="data-table" id="reviewTable">
+          <thead>
+            <tr><th style="width:28px"></th><th>이름</th><th>역할</th><th>문서 ID</th><th>판정</th><th>상태</th><th>검수 처리</th></tr>
+          </thead>
+          <tbody id="reviewBody"></tbody>
+        </table>
+        <div class="pagination" id="reviewPagination"></div>
       </div>
     </section>
 
@@ -798,17 +759,23 @@ function applyWatermark(){
 applyWatermark();
 setInterval(applyWatermark, 60000);
 
-/* ── 세션 타이머 ── */
-let remaining = 30 * 60;
+/* ── 세션 타이머 (API 활동 시 리셋) ── */
+const SESSION_SECONDS = 30 * 60;
+let remaining = SESSION_SECONDS;
 const timerEl = document.getElementById("timer");
+function resetTimer(){ remaining = SESSION_SECONDS; }
 function tick(){
-  if(remaining <= 0){ alert("세션이 만료되었습니다. 다시 로그인해 주세요."); window.location.href = "/login"; return; }
+  if(remaining <= 0){ window.location.href = "/login"; return; }
   remaining--;
   const m = Math.floor(remaining / 60);
   const s = remaining % 60;
   timerEl.textContent = `${m}:${String(s).padStart(2,"0")}`;
 }
 setInterval(tick, 1000);
+const _origFetch = window.fetch;
+window.fetch = function(...args){
+  return _origFetch.apply(this, args).then(res => { if(res.ok) resetTimer(); return res; });
+};
 
 /* ── 페이지 전환 ── */
 function showPage(id){
@@ -817,7 +784,7 @@ function showPage(id){
   if(el) el.classList.add("active");
   if(id === "dashboard") loadStats();
   if(id === "docs") loadDocs(1);
-  if(id === "review") loadReviews(1);
+  if(id === "tokens") searchTokens(1);
   if(id === "logs") loadQueryLogs(1);
   if(id === "users") loadUsers(1);
   const sidebarId = (id === "upload") ? "docs" : id;
@@ -842,8 +809,10 @@ document.addEventListener("click", e => {
 });
 
 /* ── 로그아웃 ── */
-document.getElementById("logoutBtn").addEventListener("click", () => {
-  if(confirm("로그아웃 하시겠어요?")) window.location.href = "/";
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  if(!confirm("로그아웃 하시겠어요?")) return;
+  try { await fetch("/api/logout", {method:"POST"}); } catch(e){}
+  window.location.href = "/login";
 });
 
 /* ── 모바일 메뉴 ── */
@@ -878,10 +847,8 @@ async function loadDocs(page){
   _docsPage = page || 1;
   document.getElementById("docsBody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
   const docType = document.getElementById("filterDocType").value;
-  const status = document.getElementById("filterStatus").value;
   const params = new URLSearchParams({page: _docsPage, size: 20});
   if(docType) params.set("doc_type", docType);
-  if(status && status !== "전체") params.set("status", status);
   const dateFrom = document.getElementById("filterDateFrom").value;
   const dateTo = document.getElementById("filterDateTo").value;
   if(dateFrom) params.set("date_from", dateFrom);
@@ -1067,16 +1034,52 @@ async function restoreDetailTokens(docId, tokenSet){
   }
 }
 
-/* ── 탐지 검수: API 연동 ── */
+/* ── 인물 검수: API 연동 ── */
 const _STATUS_BADGE = {pending:"badge-wait", resolved:"badge-ok", unresolved:"badge-fail"};
 const _STATUS_LABEL = {pending:"미결", resolved:"해결", unresolved:"미해결"};
+const _ROLE_KR = {employee:"직원", customer:"고객", agent:"상담원", guardian:"법정대리인", unknown:"미확인"};
+const _LEVEL_KR = {high:"확정", mid:"추정", hold:"보류", none:"근거 없음"};
+const _LEVEL_CLS = {high:"badge-ok", mid:"badge-wait", hold:"badge-wait", none:"badge-fail"};
 let _reviewPage = 1;
+
+function _renderClues(clues, infoLabel){
+  const parts = [];
+  clues.forEach(c => {
+    if(c.label && c.normalized) parts.push(`${c.label}: ${c.normalized}`);
+  });
+  infoLabel.forEach(il => {
+    if(il.label && il.normalized && !parts.some(p => p.includes(il.normalized)))
+      parts.push(`${il.label}: ${il.normalized}`);
+  });
+  return parts.length ? parts.join(", ") : "-";
+}
+
+function _renderEvDetail(item){
+  const ev = item.evidence || {};
+  let cards = [];
+  if(ev.dept) cards.push(`<div class="detail-item"><span class="detail-label">부서</span><span class="detail-value">${esc(ev.dept)}</span></div>`);
+  const clueText = _renderClues(item.clues || [], item.info_label || []);
+  if(clueText !== "-") cards.push(`<div class="detail-item"><span class="detail-label">식별 단서</span><span class="detail-value">${esc(clueText)}</span></div>`);
+  if(ev.rule) cards.push(`<div class="detail-item"><span class="detail-label">판정 규칙</span><span class="detail-value">${esc(ev.rule)}</span></div>`);
+  if(ev.matched && ev.matched.length) cards.push(`<div class="detail-item"><span class="detail-label">확정 연결</span><span class="detail-value">${ev.matched.map(m => '<span class="pid-short">' + esc(m.slice(0,12)) + '…</span>').join(", ")}</span></div>`);
+  if(ev.mid_matched && Object.keys(ev.mid_matched).length){
+    const mid = Object.entries(ev.mid_matched).map(([k,v]) => `<span class="pid-short">${esc(k.slice(0,12))}…</span>(${esc(v)})`).join(", ");
+    cards.push(`<div class="detail-item"><span class="detail-label">추정 연결</span><span class="detail-value">${mid}</span></div>`);
+  }
+  if(ev.chunk_ids && ev.chunk_ids.length) cards.push(`<div class="detail-item"><span class="detail-label">출처 청크</span><span class="detail-value">${ev.chunk_ids.map(esc).join(", ")}</span></div>`);
+  if(item.reg_id) cards.push(`<div class="detail-item"><span class="detail-label">등록 ID</span><span class="detail-value pid-short">${esc(item.reg_id.slice(0,12))}…</span></div>`);
+  if(!cards.length) cards.push(`<div class="detail-item"><span class="detail-value" style="color:var(--ink2)">판정 근거 없음</span></div>`);
+  return cards.join("");
+}
 
 async function loadReviews(page){
   _reviewPage = page || 1;
-  document.getElementById("reviewBody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const tbody = document.getElementById("reviewBody");
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const q = document.getElementById("reviewSearchInput").value;
   const status = document.getElementById("filterReviewStatus").value;
   const params = new URLSearchParams({page: _reviewPage, size: 20});
+  if(q) params.set("q", q);
   if(status) params.set("status", status);
   try {
     const res = await fetch("/api/admin/review?" + params);
@@ -1084,44 +1087,58 @@ async function loadReviews(page){
     const data = await res.json();
 
     document.getElementById("reviewTotal").textContent = data.total.toLocaleString();
-
-    const tbody = document.getElementById("reviewBody");
+    const countEl = document.getElementById("reviewResultCount");
+    countEl.innerHTML = `검색 결과 <b>${data.total.toLocaleString()}</b>건`;
     tbody.innerHTML = "";
     if(!data.items.length){
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 검수 항목이 없어요.</td></tr>';
+      renderLogPagination("reviewPagination", 0, 1, 20, "loadReviews");
+      return;
     }
     data.items.forEach(item => {
       const tr = document.createElement("tr");
-      const docLinks = item.doc_ids.map(d => `<button class="action-link" onclick="showPage('docs');loadDocs(1)">${d}</button>`).join(", ");
+      tr.className = "review-row";
+      tr.style.cursor = "pointer";
+      const roleKr = _ROLE_KR[item.role] || item.role || "-";
+      const docList = item.doc_ids.join(", ") || "-";
+      const levelKr = _LEVEL_KR[item.evidence.level] || item.evidence.level || "-";
+      const levelCls = _LEVEL_CLS[item.evidence.level] || "";
       const badgeCls = _STATUS_BADGE[item.status] || "badge-wait";
       const statusText = _STATUS_LABEL[item.status] || item.status;
       let actions = "";
-      if(item.status === "pending"){
-        actions = `<button class="action-link" style="color:var(--ok)" onclick="updateReviewStatus('${item.person_id}','resolved',this)">해결</button><span class="action-sep">·</span><button class="action-link" style="color:var(--ink-red)" onclick="updateReviewStatus('${item.person_id}','unresolved',this)">미해결</button>`;
-      } else if(item.status === "unresolved"){
-        actions = `<button class="action-link" style="color:var(--ok)" onclick="updateReviewStatus('${item.person_id}','resolved',this)">해결</button>`;
+      if(item.status === "pending" || item.status === "unresolved"){
+        actions = `<button class="btn-resolve ok" onclick="event.stopPropagation();updateReviewStatus('${item.person_id}','resolved',this)">해결</button>`;
+        if(item.status === "pending"){
+          actions += ` <button class="btn-resolve fail" onclick="event.stopPropagation();updateReviewStatus('${item.person_id}','unresolved',this)">미해결</button>`;
+        }
       } else {
         actions = '<span style="color:var(--ink2);font-size:12.5px">처리 완료</span>';
       }
-      tr.innerHTML = `<td><b>${esc(item.person_id)}</b></td><td style="font-family:monospace;font-size:12.5px">${esc(item.token)}</td><td>${esc(item.label)}</td><td>${esc(item.role || "-")}</td><td>${docLinks || "-"}</td><td><span class="badge ${badgeCls}">${statusText}</span></td><td>${actions}</td>`;
+      tr.innerHTML = `<td><span class="expand-icon">▶</span></td>`
+        + `<td><b>${esc(item.normalized || item.token)}</b></td>`
+        + `<td>${esc(roleKr)}</td>`
+        + `<td>${esc(docList)}</td>`
+        + `<td><span class="badge ${levelCls}">${esc(levelKr)}</span></td>`
+        + `<td><span class="badge ${badgeCls}">${statusText}</span></td>`
+        + `<td>${actions}</td>`;
       tbody.appendChild(tr);
+
+      const detailTr = document.createElement("tr");
+      detailTr.className = "review-detail";
+      detailTr.innerHTML = `<td colspan="7"><div class="detail-inner">${_renderEvDetail(item)}</div></td>`;
+      tbody.appendChild(detailTr);
+
+      tr.addEventListener("click", () => {
+        const isOpen = tr.classList.toggle("open");
+        detailTr.classList.toggle("open", isOpen);
+      });
     });
 
-    renderReviewPagination(data.total, data.page, data.size);
+    renderLogPagination("reviewPagination", data.total, data.page, data.size, "loadReviews");
   } catch(e){
     console.warn("검수 목록 조회 실패:", e);
-    document.getElementById("reviewBody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-red);padding:32px">검수 목록을 불러오지 못했어요.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-red);padding:32px">검수 목록을 불러오지 못했어요.</td></tr>';
   }
-}
-
-function renderReviewPagination(total, page, size){
-  const pages = Math.ceil(total / size);
-  const el = document.getElementById("reviewPagination");
-  if(pages <= 1){ el.innerHTML = ""; return; }
-  let html = `<button ${page<=1?"disabled":""} onclick="loadReviews(${page-1})">◀ 이전</button>`;
-  html += `<span class="page-info">${page} / ${pages}</span>`;
-  html += `<button ${page>=pages?"disabled":""} onclick="loadReviews(${page+1})">다음 ▶</button>`;
-  el.innerHTML = html;
 }
 
 async function updateReviewStatus(personId, newStatus, btn){
@@ -1141,7 +1158,7 @@ async function updateReviewStatus(personId, newStatus, btn){
     if(newStatus === "resolved"){
       row.cells[6].innerHTML = '<span style="color:var(--ink2);font-size:12.5px">처리 완료</span>';
     } else {
-      row.cells[6].innerHTML = `<button class="action-link" style="color:var(--ok)" onclick="updateReviewStatus('${personId}','resolved',this)">해결</button>`;
+      row.cells[6].innerHTML = `<button class="btn-resolve ok" onclick="event.stopPropagation();updateReviewStatus('${personId}','resolved',this)">해결</button>`;
     }
   } catch(e){
     console.warn("검수 상태 변경 실패:", e);
@@ -1150,19 +1167,50 @@ async function updateReviewStatus(personId, newStatus, btn){
   }
 }
 
+function resetReviewFilter(){
+  document.getElementById("reviewSearchInput").value = "";
+  document.getElementById("filterReviewStatus").value = "";
+  loadReviews(1);
+}
+
+let _reviewSearchTimer = null;
+document.getElementById("reviewSearchInput").addEventListener("input", () => {
+  clearTimeout(_reviewSearchTimer);
+  _reviewSearchTimer = setTimeout(() => loadReviews(1), 300);
+});
+document.getElementById("reviewSearchInput").addEventListener("keydown", e => { if(e.key === "Enter") loadReviews(1); });
+document.getElementById("filterReviewStatus").addEventListener("change", () => loadReviews(1));
+
 /* ── 문서 업로드 ── */
 function showUpload(){ showPage("upload"); resetUpload(); }
 function backToDocs(){ showPage("docs"); }
 function resetUpload(){
+  _pendingFiles = [];
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer = null; }
   ["uploadStep1","uploadStep2","uploadStep3"].forEach(id => {
     document.getElementById(id).className = "step";
   });
   document.getElementById("uploadStep1").classList.add("active");
   document.getElementById("selectedFiles").style.display = "none";
   document.getElementById("processSection").style.display = "none";
+  document.getElementById("processCards").innerHTML = "";
   document.getElementById("fileListBody").innerHTML = "";
 }
+function resetUploadFull(){
+  resetUpload();
+  _currentJobId = null;
+  document.getElementById("dropZone").style.pointerEvents = "";
+  document.getElementById("dropZone").style.opacity = "";
+  document.getElementById("fileInput").disabled = false;
+  document.getElementById("uploadStartBtn").disabled = true;
+  document.getElementById("uploadCountBtn").textContent = "0";
+  const warnEl = document.getElementById("uploadWarnings");
+  if(warnEl) warnEl.style.display = "none";
+  const checkAll = document.getElementById("uploadCheckAll");
+  if(checkAll) checkAll.checked = true;
+}
 const DOC_TYPES = ["상담기록","메일","민원","회의록"];
+let _pendingFiles = [];
 (function(){
   const dz = document.getElementById("dropZone");
   const fi = document.getElementById("fileInput");
@@ -1179,27 +1227,277 @@ function addFiles(files){
   document.getElementById("uploadStep2").className = "step active";
   document.getElementById("selectedFiles").style.display = "block";
   const tbody = document.getElementById("fileListBody");
-  const opts = DOC_TYPES.map(t => "<option>" + t + "</option>").join("");
+  const opts = '<option value="">-- 선택 --</option>' + DOC_TYPES.map(t => "<option>" + t + "</option>").join("");
   Array.from(files).forEach(f => {
-    const tr = document.createElement("tr");
-    const guess = DOC_TYPES.find(t => f.name.includes(t)) || DOC_TYPES[0];
-    tr.innerHTML = "<td>" + f.name + "</td><td><select style='font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px'>" + opts.replace("<option>" + guess, "<option selected>" + guess) + "</select></td><td><button class='action-link' onclick='removeFile(this)'>빼기</button></td>";
-    tbody.appendChild(tr);
+    const ext = f.name.split(".").pop().toLowerCase();
+    if(!["txt","json","jsonl"].includes(ext)){
+      alert(f.name + ": 지원하지 않는 형식입니다. (txt, json, jsonl만 가능)");
+      return;
+    }
+    const idx = _pendingFiles.length;
+    _pendingFiles.push(f);
+    if(ext === "txt"){
+      const tr = document.createElement("tr");
+      tr.dataset.fileIdx = idx;
+      tr.dataset.fileType = "txt";
+      const guess = DOC_TYPES.find(t => f.name.includes(t)) || "";
+      tr.innerHTML = "<td><input type='checkbox' class='upload-check' checked onchange='validateUpload()'></td>"
+        + "<td>" + esc(f.name) + "</td>"
+        + '<td><input type="text" class="upload-id-input" placeholder="문서 ID 입력" style="font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;width:120px" oninput="validateUpload()"></td>'
+        + "<td><select class='upload-type-sel' style='font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px' onchange='validateUpload()'>" + (guess ? opts.replace("<option>" + guess, "<option selected>" + guess) : opts) + "</select></td>"
+        + "<td><span class='upload-status'></span></td>"
+        + "<td><button class='action-link' onclick='removeFile(this)'>빼기</button></td>";
+      tbody.appendChild(tr);
+    } else {
+      const tr = document.createElement("tr");
+      tr.dataset.fileIdx = idx;
+      tr.dataset.fileType = "jsonl";
+      tr.innerHTML = "<td><input type='checkbox' class='upload-check' checked onchange='validateUpload()'></td><td>" + esc(f.name) + "</td><td class='jsonl-id-summary' style='font-size:13px'>검증 중…</td><td class='jsonl-type-summary' style='font-size:13px'></td><td><span class='upload-status'></span></td><td><button class='action-link' onclick='removeFile(this)'>빼기</button></td>";
+      tbody.appendChild(tr);
+      f.text().then(async text => {
+        const lines = text.trim().split("\n").filter(l => l.trim());
+        const missing = [];
+        const seenIds = new Set();
+        const validIds = [];
+        lines.forEach((l, i) => {
+          try {
+            const obj = JSON.parse(l.trim());
+            const lacks = ["id","text","doc_type"].filter(k => !obj[k]);
+            if(lacks.length) missing.push("line " + (i+1) + ": " + lacks.join(", ") + " 누락");
+            if(obj.id && seenIds.has(obj.id)) missing.push("line " + (i+1) + ": " + obj.id + " 중복 ID");
+            if(obj.id){ seenIds.add(obj.id); validIds.push(obj.id); }
+          } catch(e){ missing.push("line " + (i+1) + ": JSON 파싱 실패"); }
+        });
+        if(!missing.length && validIds.length){
+          try {
+            const res = await fetch("/api/admin/upload/check-ids", {
+              method:"POST", headers:{"Content-Type":"application/json"},
+              body: JSON.stringify({ids: validIds})
+            });
+            if(res.ok){
+              const data = await res.json();
+              data.duplicates.forEach(did => missing.push(did + ": 이미 적재된 문서 ID"));
+            } else {
+              console.warn("check-ids 응답 오류:", res.status);
+            }
+          } catch(e){ console.warn("check-ids 호출 실패:", e); }
+        }
+        if(missing.length){
+          tr.querySelector(".jsonl-id-summary").innerHTML = '<span style="color:var(--ink-red);font-size:12px">' + missing.slice(0,5).map(m => esc(m)).join("<br>") + (missing.length > 5 ? "<br>… 외 " + (missing.length-5) + "건" : "") + '</span>';
+          tr.querySelector(".jsonl-type-summary").textContent = "";
+          const hasMissing = missing.some(m => m.includes("누락") || m.includes("파싱"));
+          const cb = tr.querySelector(".upload-check");
+          if(hasMissing){
+            tr.querySelector(".upload-status").innerHTML = '<span style="color:var(--ink-red)">누락 있음</span>';
+            tr.dataset.valid = "false";
+            cb.checked = false;
+            cb.disabled = true;
+          } else {
+            tr.querySelector(".upload-status").innerHTML = '<span style="color:var(--warn)">중복 제외 적재</span>';
+            tr.dataset.valid = "true";
+          }
+        } else {
+          const ids = [];
+          const types = new Set();
+          lines.forEach(l => { try { const o = JSON.parse(l.trim()); ids.push(o.id); types.add(o.doc_type); } catch(e){} });
+          const idSummary = ids.length <= 2 ? ids.join(", ") : ids[0] + " 외 " + (ids.length-1) + "건";
+          const typeSummary = [...types].join(", ");
+          tr.querySelector(".jsonl-id-summary").textContent = idSummary;
+          tr.querySelector(".jsonl-type-summary").textContent = typeSummary;
+          tr.querySelector(".upload-status").innerHTML = '<span style="color:var(--ok)">OK</span>';
+          tr.dataset.valid = "true";
+        }
+        validateUpload();
+      });
+    }
   });
-  updateFileCount();
+  validateUpload();
 }
-function removeFile(btn){ btn.closest("tr").remove(); updateFileCount(); }
+function removeFile(btn){ const tr = btn.closest("tr"); _pendingFiles[parseInt(tr.dataset.fileIdx)] = null; tr.remove(); updateFileCount(); validateUpload(); }
 function updateFileCount(){
   const n = document.getElementById("fileListBody").children.length;
   document.getElementById("uploadCountBtn").textContent = n;
   if(!n) resetUpload();
 }
-function startUpload(){
-  if(!document.getElementById("fileListBody").children.length) return;
+function validateUpload(){
+  const rows = Array.from(document.getElementById("fileListBody").children);
+  if(!rows.length){ document.getElementById("uploadStartBtn").disabled = true; document.getElementById("uploadCountBtn").textContent = 0; return; }
+  let checkedCount = 0;
+  let checkedValid = true;
+  rows.forEach(tr => {
+    const cb = tr.querySelector(".upload-check");
+    if(!cb || !cb.checked) return;
+    checkedCount++;
+    if(tr.dataset.fileType === "txt"){
+      const idInput = tr.querySelector(".upload-id-input");
+      const typeSel = tr.querySelector(".upload-type-sel");
+      const status = tr.querySelector(".upload-status");
+      const msgs = [];
+      if(!idInput || !idInput.value.trim()) msgs.push("id");
+      if(!typeSel || !typeSel.value) msgs.push("doc_type");
+      if(msgs.length){
+        status.innerHTML = '<span style="color:var(--ink-red)">' + msgs.join(", ") + ' 필요</span>';
+        checkedValid = false;
+      } else {
+        status.innerHTML = '<span style="color:var(--ok)">OK</span>';
+      }
+    } else if(tr.dataset.fileType === "jsonl"){
+      if(tr.dataset.valid !== "true") checkedValid = false;
+    }
+  });
+  document.getElementById("uploadCountBtn").textContent = checkedCount;
+  document.getElementById("uploadStartBtn").disabled = !checkedCount || !checkedValid;
+  const warnEl = document.getElementById("uploadWarnings");
+  const hasDisabled = rows.some(tr => { const cb = tr.querySelector(".upload-check"); return cb && cb.disabled; });
+  const hasDup = rows.some(tr => tr.dataset.valid === "true" && tr.querySelector(".upload-status")?.textContent.includes("중복"));
+  const msgs = [];
+  if(hasDisabled) msgs.push('⛔ 필수 항목(id, text, doc_type)이 누락된 파일은 업로드할 수 없습니다. 문서를 수정 후 다시 시도해주세요.');
+  if(hasDup) msgs.push('⚠ 이미 적재된 문서 ID는 중복으로 처리되어 DB에 저장되지 않습니다.');
+  if(checkedCount && !checkedValid) msgs.push('⛔ 선택한 파일의 id와 doc_type을 입력해주세요.');
+  if(msgs.length){
+    warnEl.style.display = "block";
+    warnEl.innerHTML = msgs.map(m => {
+      const isError = m.startsWith("⛔");
+      return '<div style="padding:4px 0;color:' + (isError ? 'var(--ink-red)' : 'var(--warn)') + '">' + m + '</div>';
+    }).join("");
+  } else {
+    warnEl.style.display = "none";
+  }
+}
+function toggleAllUpload(master){
+  document.querySelectorAll("#fileListBody .upload-check").forEach(cb => {
+    if(!cb.disabled){ cb.checked = master.checked; }
+  });
+  validateUpload();
+}
+let _currentJobId = null;
+let _pollTimer = null;
+
+async function startUpload(){
+  const rows = Array.from(document.getElementById("fileListBody").children);
+  if(!rows.length) return;
+
+  const formData = new FormData();
+  const docTypes = [];
+  const docIds = [];
+  rows.forEach(tr => {
+    const cb = tr.querySelector(".upload-check");
+    if(!cb || !cb.checked) return;
+    const idx = parseInt(tr.dataset.fileIdx);
+    const file = _pendingFiles[idx];
+    if(!file) return;
+    if(tr.dataset.fileType === "txt"){
+      const idInput = tr.querySelector(".upload-id-input");
+      const typeSel = tr.querySelector(".upload-type-sel");
+      docIds.push(idInput ? idInput.value.trim() : "");
+      docTypes.push(typeSel ? typeSel.value : "");
+    } else {
+      docIds.push("");
+      docTypes.push("");
+    }
+    formData.append("files", file);
+  });
+  formData.append("doc_types", docTypes.join(","));
+  formData.append("doc_ids_str", docIds.join(","));
+
   document.getElementById("uploadStep2").className = "step done";
   document.getElementById("uploadStep3").className = "step active";
   document.getElementById("selectedFiles").style.display = "none";
   document.getElementById("processSection").style.display = "block";
+  document.getElementById("processCards").innerHTML = '<p style="color:var(--ink2);text-align:center;padding:32px">업로드 중…</p>';
+
+  try {
+    const res = await fetch("/api/admin/upload", {method:"POST", body: formData});
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.detail || "업로드 실패");
+    }
+    const data = await res.json();
+    _currentJobId = data.job_id;
+    if(data.errors && data.errors.length){
+      document.getElementById("processCards").insertAdjacentHTML("afterbegin",
+        '<div class="process-note" style="margin-bottom:14px;color:var(--warn)">⚠ ' + data.errors.map(e => esc(e)).join("<br>") + '</div>');
+    }
+    startPolling();
+  } catch(e){
+    document.getElementById("processCards").innerHTML = '<div class="process-note" style="color:var(--ink-red)">업로드 실패: ' + esc(e.message) + '</div>';
+  }
+}
+
+function startPolling(){
+  if(!_currentJobId) return;
+  pollOnce();
+  _pollTimer = setInterval(pollOnce, 1500);
+}
+
+async function pollOnce(){
+  if(!_currentJobId) return;
+  try {
+    const res = await fetch("/api/admin/upload/jobs/" + _currentJobId);
+    if(!res.ok) return;
+    const job = await res.json();
+    renderJobProgress(job);
+    if(job.status !== "processing"){
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    }
+  } catch(e){}
+}
+
+function renderJobProgress(job){
+  const container = document.getElementById("processCards");
+  const isDone = job.status === "done";
+  const isFail = job.status === "failed";
+  const isRunning = job.status === "processing";
+
+  const STEPS = ["파일 저장","탐지·가명처리","임베딩","적재"];
+  const step = job.current_step || "";
+  let activeIdx = 0;
+  if(step.includes("ingest")) activeIdx = 1;
+  if(step.includes("임베딩")) activeIdx = 2;
+  if(step.includes("적재") && !isDone) activeIdx = 3;
+
+  let html = '<div class="process-card' + (isRunning ? " pending" : "") + '">';
+  html += '<div class="process-header">';
+  html += '<strong>' + esc(job.data_file || "upload") + ' · ' + job.total_docs + '건</strong>';
+  const statusCls = isDone ? "ok" : (isFail ? "" : "wait");
+  const statusText = isDone ? "적재 완료" : (isFail ? "실패" : "처리 중");
+  html += '<span class="status-text ' + statusCls + '"' + (isFail ? ' style="color:var(--ink-red)"' : '') + '>' + statusText + '</span>';
+  html += '</div>';
+
+  html += '<div class="process-steps">';
+  for(let i = 0; i < STEPS.length; i++){
+    let cls = "";
+    if(isDone) cls = "done";
+    else if(isFail && i > activeIdx) cls = "";
+    else if(i < activeIdx) cls = "done";
+    else if(i === activeIdx && isRunning) cls = "current";
+    html += '<span class="ps ' + cls + '">' + STEPS[i] + '</span>';
+  }
+  html += '</div>';
+
+  if(isRunning){
+    html += '<div style="margin-top:10px;font-size:13px;color:var(--ink2)">📋 ' + esc(step) + '</div>';
+  }
+  if(isDone){
+    html += '<div style="margin-top:10px;font-size:13px;color:var(--ok)">문서 ' + job.total_docs + '건 적재가 완료되었습니다.</div>';
+  }
+  if(isFail){
+    html += '<div style="margin-top:10px;font-size:13px;color:var(--ink-red)">' + esc(step) + '</div>';
+    if(job.output) html += '<pre style="margin-top:8px;font-size:12px;color:var(--ink2);background:var(--bg);padding:12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap">' + esc(job.output.slice(-500)) + '</pre>';
+  }
+  html += '</div>';
+
+  if(!isRunning){
+    html += '<div class="process-note" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">';
+    html += '<a href="#" onclick="event.preventDefault();showPage(\'docs\')" style="color:var(--cap);font-weight:600">문서 관리에서 확인 →</a>';
+    html += '<button class="btn-primary" style="font-size:13px;padding:6px 16px" onclick="resetUploadFull()">새 업로드</button>';
+    html += '</div>';
+    document.getElementById("dropZone").style.pointerEvents = "none";
+    document.getElementById("dropZone").style.opacity = "0.4";
+    document.getElementById("fileInput").disabled = true;
+  }
+  container.innerHTML = html;
 }
 
 /* ── 대시보드 통계 조회 ── */
@@ -1360,14 +1658,142 @@ function renderLogPagination(elId, total, page, size, fnName){
   el.innerHTML = `<button ${page<=1?"disabled":""} onclick="${fnName}(${page-1})">◀ 이전</button><span class="page-info">${page} / ${pages}</span><button ${page>=pages?"disabled":""} onclick="${fnName}(${page+1})">다음 ▶</button>`;
 }
 
-/* ── 토큰·인물 관리 (목업 탭 전환) ── */
+/* ── 토큰·인물 관리 ── */
 function switchTokenTab(tab, btn){
   document.querySelectorAll("#page-tokens .log-tab").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  ["search","person"].forEach(t => {
+  if(btn) btn.classList.add("active");
+  else document.querySelectorAll("#page-tokens .log-tab").forEach(b => {
+    if(b.textContent.includes(tab === "search" ? "토큰" : tab === "person" ? "인물 사전" : "인물 검수")) b.classList.add("active");
+  });
+  ["search","person","review"].forEach(t => {
     document.getElementById("tokenTab-" + t).style.display = t === tab ? "" : "none";
   });
+  if(tab === "search") searchTokens(1);
+  if(tab === "person") searchPersons(1);
+  if(tab === "review") loadReviews(1);
 }
+
+function showTokenReview(){
+  showPage("tokens");
+  switchTokenTab("review", null);
+}
+
+const _TOKEN_BADGE = {
+  PERSON: "person", PHONE_NUMBER: "phone", EMAIL: "email",
+  ACCOUNT: "account", ADDRESS: "address", CARD_NUMBER: "card",
+};
+const _TOKEN_LABEL_KR = {
+  PERSON: "이름", PHONE_NUMBER: "전화", EMAIL: "이메일",
+  ACCOUNT: "계좌", ADDRESS: "주소", CARD_NUMBER: "카드",
+};
+
+async function searchTokens(page){
+  const tbody = document.getElementById("tokenBody");
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const q = document.getElementById("tokenSearchInput").value;
+  const label = document.getElementById("tokenLabelFilter").value;
+  const params = new URLSearchParams({page, size: 20});
+  if(q) params.set("q", q);
+  if(label) params.set("label", label);
+  try {
+    const res = await fetch("/api/admin/tokens?" + params);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById("tokenResultCount").innerHTML = `검색 결과 <b>${data.total.toLocaleString()}</b>건`;
+    tbody.innerHTML = "";
+    if(!data.items.length){
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 토큰이 없어요.</td></tr>';
+    }
+    data.items.forEach(item => {
+      const tr = document.createElement("tr");
+      const badgeCls = _TOKEN_BADGE[item.label] || "";
+      const labelKr = _TOKEN_LABEL_KR[item.label] || "";
+      const badgeText = item.label + (labelKr ? " " + labelKr : "");
+      const origText = item.originals.join(", ") || "-";
+      tr.innerHTML = `<td><span class="token-mono" title="${esc(item.token)}">${esc(item.token)}</span></td>`
+        + `<td><span class="token-badge ${badgeCls}">${esc(badgeText)}</span></td>`
+        + `<td>${esc(item.normalized)}</td>`
+        + `<td style="font-size:13px;color:var(--ink2)">${esc(origText)}</td>`
+        + `<td>${esc(item.created_at)}</td>`;
+      tbody.appendChild(tr);
+    });
+    renderLogPagination("tokenPagination", data.total, data.page, data.size, "searchTokens");
+  } catch(e){
+    console.warn("토큰 검색 실패:", e);
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-red);padding:32px">토큰 목록을 불러오지 못했어요.</td></tr>';
+  }
+}
+
+function resetTokenFilter(){
+  document.getElementById("tokenSearchInput").value = "";
+  document.getElementById("tokenLabelFilter").value = "";
+  searchTokens(1);
+}
+
+let _tokenSearchTimer = null;
+document.getElementById("tokenSearchInput").addEventListener("input", () => {
+  clearTimeout(_tokenSearchTimer);
+  _tokenSearchTimer = setTimeout(() => searchTokens(1), 300);
+});
+document.getElementById("tokenSearchInput").addEventListener("keydown", e => { if(e.key === "Enter") searchTokens(1); });
+document.getElementById("tokenLabelFilter").addEventListener("change", () => searchTokens(1));
+
+/* ── 인물 사전 ── */
+async function searchPersons(page){
+  const tbody = document.getElementById("personBody");
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const q = document.getElementById("personSearchInput").value;
+  const status = document.getElementById("personStatusFilter").value;
+  const params = new URLSearchParams({page, size: 20});
+  if(q) params.set("q", q);
+  if(status) params.set("status", status);
+  try {
+    const res = await fetch("/api/admin/persons?" + params);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById("personResultCount").innerHTML = `검색 결과 <b>${data.total.toLocaleString()}</b>건`;
+    tbody.innerHTML = "";
+    if(!data.items.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 인물이 없어요.</td></tr>';
+    }
+    const roleKr = _ROLE_KR || {};
+    data.items.forEach(item => {
+      const tr = document.createElement("tr");
+      const isResolved = item.status === "resolved";
+      const badgeCls = isResolved ? "badge-ok" : "badge-wait";
+      const statusText = isResolved ? "확정" : "임시";
+      const docList = item.doc_ids.join(", ") || "-";
+      const shortPid = item.person_id.length > 12 ? item.person_id.slice(0,12) + "…" : item.person_id;
+      const shortToken = item.token.length > 20 ? item.token.slice(0,20) + "…" : item.token;
+      const rKr = (_ROLE_KR[item.role]) || item.role || "-";
+      tr.innerHTML = `<td><b class="pid-short" title="${esc(item.person_id)}">${esc(shortPid)}</b></td>`
+        + `<td><span class="token-mono" title="${esc(item.token)}">${esc(shortToken)}</span></td>`
+        + `<td>${esc(item.normalized || "-")}</td>`
+        + `<td><span class="badge ${badgeCls}">${statusText}</span></td>`
+        + `<td>${esc(docList)}</td>`
+        + `<td>${esc(rKr)}</td>`;
+      tbody.appendChild(tr);
+    });
+    renderLogPagination("personPagination", data.total, data.page, data.size, "searchPersons");
+  } catch(e){
+    console.warn("인물 사전 조회 실패:", e);
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-red);padding:32px">인물 목록을 불러오지 못했어요.</td></tr>';
+  }
+}
+
+function resetPersonFilter(){
+  document.getElementById("personSearchInput").value = "";
+  document.getElementById("personStatusFilter").value = "";
+  searchPersons(1);
+}
+
+let _personSearchTimer = null;
+document.getElementById("personSearchInput").addEventListener("input", () => {
+  clearTimeout(_personSearchTimer);
+  _personSearchTimer = setTimeout(() => searchPersons(1), 300);
+});
+document.getElementById("personSearchInput").addEventListener("keydown", e => { if(e.key === "Enter") searchPersons(1); });
+document.getElementById("personStatusFilter").addEventListener("change", () => searchPersons(1));
 
 /* ── 사용자 권한 ── */
 const _LV_CLASS = ["lv0","lv1","lv2"];

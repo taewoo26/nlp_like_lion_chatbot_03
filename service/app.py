@@ -43,7 +43,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -521,6 +521,7 @@ def admin_doc_detail(doc_id: str, user: dict = Depends(admin_required)):
 
 @app.get("/api/admin/review")
 def admin_review_list(
+    q: str = Query(""),
     status: str = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
@@ -528,16 +529,24 @@ def admin_review_list(
 ):
     from starter import db
     conditions, params = [], {}
+    if q.strip():
+        conditions.append("(t.normalized ILIKE %(q)s OR %(q_raw)s = ANY(p.doc_id))")
+        params["q"] = f"%{q.strip()}%"
+        params["q_raw"] = q.strip()
     if status:
         conditions.append("p.resolution_status = %(status)s")
         params["status"] = status
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     with db.vault_conn() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT COUNT(*) FROM vault.person_info p {where}", params)
+        cur.execute(f"""
+            SELECT COUNT(*) FROM vault.person_info p
+            LEFT JOIN vault.token_map t ON p.token = t.token
+            {where}
+        """, params)
         total = cur.fetchone()[0]
         cur.execute(f"""
-            SELECT p.person_id, p.token, t.label, p.role, p.doc_id,
-                   p.resolution_status, t.created_at::date
+            SELECT p.person_id, p.token, t.normalized, p.role, p.doc_id,
+                   p.resolution_status, p.info_label, p.evidence, p.reg_id
               FROM vault.person_info p
               LEFT JOIN vault.token_map t ON p.token = t.token
               {where}
@@ -545,16 +554,56 @@ def admin_review_list(
                         WHEN 'pending' THEN 0
                         WHEN 'unresolved' THEN 1
                         ELSE 2 END,
-                      t.created_at DESC NULLS LAST
+                      p.created_at DESC NULLS LAST
              LIMIT %(size)s OFFSET %(offset)s
         """, {**params, "size": size, "offset": (page - 1) * size})
         rows = cur.fetchall()
+        clue_tokens = set()
+        for r in rows:
+            ev = r[7] or {}
+            for c in ev.get("clues", []):
+                clue_tokens.add(c["token"])
+            for tok in (r[6] or []):
+                clue_tokens.add(tok)
+        token_labels = {}
+        if clue_tokens:
+            cur.execute(
+                "SELECT token, label, normalized FROM vault.token_map WHERE token = ANY(%s)",
+                (list(clue_tokens),),
+            )
+            token_labels = {row[0]: {"label": row[1], "normalized": row[2]} for row in cur.fetchall()}
     items = []
     for r in rows:
+        ev = r[7] or {}
+        clues_resolved = []
+        for c in ev.get("clues", []):
+            info = token_labels.get(c["token"], {})
+            clues_resolved.append({
+                "label": info.get("label", ""),
+                "normalized": info.get("normalized", ""),
+            })
+        info_resolved = []
+        for tok in (r[6] or []):
+            info = token_labels.get(tok, {})
+            info_resolved.append({
+                "token": tok,
+                "label": info.get("label", ""),
+                "normalized": info.get("normalized", ""),
+            })
         items.append({
-            "person_id": r[0], "token": r[1], "label": r[2] or "",
+            "person_id": r[0], "token": r[1], "normalized": r[2] or "",
             "role": r[3] or "", "doc_ids": r[4] or [],
-            "status": r[5], "created_at": str(r[6]) if r[6] else "",
+            "status": r[5], "reg_id": r[8] or "",
+            "evidence": {
+                "level": ev.get("level", ""),
+                "rule": ev.get("rule"),
+                "dept": ev.get("dept"),
+                "matched": ev.get("matched", []),
+                "mid_matched": ev.get("mid_matched", {}),
+                "chunk_ids": ev.get("chunk_ids", []),
+            },
+            "clues": clues_resolved,
+            "info_label": info_resolved,
         })
     return {"items": items, "total": total, "page": page, "size": size}
 
@@ -565,18 +614,123 @@ class _ReviewStatusBody(BaseModel):
 
 @app.patch("/api/admin/review/{person_id}")
 def admin_review_update(person_id: str, body: _ReviewStatusBody, user: dict = Depends(admin_required)):
+    import uuid as _uuid
     if body.status not in ("resolved", "unresolved"):
         raise HTTPException(status_code=400, detail="status는 resolved 또는 unresolved만 가능합니다.")
     from starter import db
+    import json as _json
     with db.vault_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE vault.person_info SET resolution_status = %s WHERE person_id = %s RETURNING person_id",
-            (body.status, person_id),
-        )
-        if not cur.fetchone():
+        cur.execute("SELECT reg_id, resolution_status FROM vault.person_info WHERE person_id = %s", (person_id,))
+        row = cur.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="인물 정보를 찾을 수 없습니다.")
+        old_reg_id, old_status = row
+        reg_id = old_reg_id
+        if body.status == "resolved" and not old_reg_id:
+            reg_id = f"reg_{_uuid.uuid4()}"
+            cur.execute(
+                "INSERT INTO vault.person_registry (reg_id, reason) VALUES (%s, %s::jsonb)",
+                (reg_id, _json.dumps({"method": "manual"})),
+            )
+        if body.status == "unresolved" and old_reg_id:
+            cur.execute(
+                "SELECT COUNT(*) FROM vault.person_info WHERE reg_id = %s AND person_id != %s",
+                (old_reg_id, person_id),
+            )
+            other_count = cur.fetchone()[0]
+            reg_id = None
+            if other_count == 0:
+                cur.execute("DELETE FROM vault.person_registry WHERE reg_id = %s", (old_reg_id,))
+        cur.execute(
+            "UPDATE vault.person_info SET resolution_status = %s, reg_id = %s WHERE person_id = %s",
+            (body.status, reg_id, person_id),
+        )
         conn.commit()
-    return {"ok": True, "person_id": person_id, "status": body.status}
+    return {"ok": True, "person_id": person_id, "status": body.status, "reg_id": reg_id or ""}
+
+
+@app.get("/api/admin/tokens")
+def admin_token_list(
+    q: str = Query(""),
+    label: str = Query(""),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if q.strip():
+        conditions.append("(t.token ILIKE %(q)s OR t.normalized ILIKE %(q)s)")
+        params["q"] = f"%{q.strip()}%"
+    if label.strip():
+        conditions.append("t.label = %(label)s")
+        params["label"] = label.strip()
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM vault.token_map t {where}", params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT t.token, t.label, t.normalized, t.originals, t.created_at::date
+              FROM vault.token_map t
+              {where}
+             ORDER BY t.created_at DESC NULLS LAST
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = cur.fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "token": r[0], "label": r[1], "normalized": r[2],
+            "originals": r[3] or [], "created_at": str(r[4]) if r[4] else "",
+        })
+    return {"items": items, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/admin/persons")
+def admin_person_list(
+    q: str = Query(""),
+    status: str = Query(""),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(admin_required),
+):
+    from starter import db
+    conditions, params = [], {}
+    if q.strip():
+        conditions.append("(p.person_id ILIKE %(q)s OR t.normalized ILIKE %(q)s)")
+        params["q"] = f"%{q.strip()}%"
+    if status.strip():
+        if status == "pending":
+            conditions.append("p.resolution_status IN ('pending', 'unresolved')")
+        else:
+            conditions.append("p.resolution_status = %(status)s")
+            params["status"] = status.strip()
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db.vault_conn() as conn, conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT COUNT(*) FROM vault.person_info p
+            LEFT JOIN vault.token_map t ON p.token = t.token
+            {where}
+        """, params)
+        total = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT p.person_id, p.token, t.normalized, p.resolution_status,
+                   p.doc_id, p.role, p.created_at::date
+              FROM vault.person_info p
+              LEFT JOIN vault.token_map t ON p.token = t.token
+              {where}
+             ORDER BY p.created_at DESC NULLS LAST
+             LIMIT %(size)s OFFSET %(offset)s
+        """, {**params, "size": size, "offset": (page - 1) * size})
+        rows = cur.fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "person_id": r[0], "token": r[1], "normalized": r[2] or "",
+            "status": r[3], "doc_ids": r[4] or [], "role": r[5] or "",
+            "created_at": str(r[6]) if r[6] else "",
+        })
+    return {"items": items, "total": total, "page": page, "size": size}
 
 
 @app.get("/api/admin/logs/query")
@@ -765,3 +919,194 @@ def admin_user_update(user_id: str, body: _UserUpdateBody, user: dict = Depends(
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
         conn.commit()
     return {"ok": True, "user_id": user_id}
+
+
+# ═══════════════════════════════════════════════════════════════
+# 문서 업로드 → data/upload_YYYYMMDD_HHmmss.jsonl 저장 → ingest 실행
+# ═══════════════════════════════════════════════════════════════
+
+import json as _json
+import subprocess
+import threading
+from datetime import datetime
+
+_upload_jobs: dict = {}
+DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "uploads"
+
+
+def _run_ingest_subprocess(job_id: str, data_path: str):
+    job = _upload_jobs[job_id]
+    try:
+        job["current_step"] = "ingest 실행 중"
+        venv_python = Path(__file__).resolve().parent.parent / ".venv" / "Scripts" / "python.exe"
+        if not venv_python.exists():
+            venv_python = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "python"
+        proc = subprocess.Popen(
+            [str(venv_python), "-m", "starter.ingest", "--data", data_path, "--source", "upload"],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
+        )
+        output_lines = []
+        for line in proc.stdout:
+            line = line.rstrip()
+            output_lines.append(line)
+            job["current_step"] = line[-80:] if len(line) > 80 else line
+        proc.wait()
+        job["output"] = "\n".join(output_lines[-50:])
+        if proc.returncode == 0:
+            job["status"] = "done"
+            job["current_step"] = "적재 완료"
+        else:
+            job["status"] = "failed"
+            job["current_step"] = f"적재 실패 (exit {proc.returncode})"
+    except Exception as exc:
+        logging.exception("업로드 ingest 실패: %s", job_id)
+        job["status"] = "failed"
+        job["current_step"] = f"오류: {exc}"
+
+
+@app.post("/api/admin/upload")
+async def admin_upload(
+    files: list[UploadFile] = File(...),
+    doc_types: str = Form(""),
+    doc_ids_str: str = Form(""),
+    user: dict = Depends(admin_required),
+):
+    type_list = [t.strip() for t in doc_types.split(",") if t.strip()]
+    doc_ids = [d.strip() for d in (doc_ids_str or "").split(",")]
+    documents: list[dict] = []
+    errors: list[str] = []
+
+    for i, f in enumerate(files):
+        doc_type = type_list[i] if i < len(type_list) else ""
+        doc_id = doc_ids[i] if i < len(doc_ids) else ""
+        fname = f.filename or f"unknown_{i}"
+        ext = Path(fname).suffix.lower()
+        if ext not in (".txt", ".json", ".jsonl"):
+            errors.append(f"{fname}: 지원하지 않는 형식 ({ext})")
+            continue
+        raw = await f.read()
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            errors.append(f"{fname}: UTF-8로 읽을 수 없습니다")
+            continue
+
+        if ext == ".txt":
+            if not doc_id:
+                errors.append(f"{fname}: id가 필요합니다")
+            if not doc_type:
+                errors.append(f"{fname}: doc_type이 필요합니다")
+            if not text.strip():
+                errors.append(f"{fname}: 파일 내용이 비어 있습니다")
+            if doc_id and doc_type and text.strip():
+                documents.append({"id": doc_id, "text": text, "doc_type": doc_type})
+        else:
+            for ln, line in enumerate(text.strip().splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    errors.append(f"{fname}:{ln}: JSON 파싱 실패")
+                    continue
+                missing = [k for k in ("id", "text", "doc_type") if not obj.get(k)]
+                if missing:
+                    errors.append(f"{fname}:{ln}: {', '.join(missing)} 누락")
+                    continue
+                documents.append({
+                    "id": obj["id"], "text": obj["text"],
+                    "doc_type": obj["doc_type"],
+                })
+
+    if not documents:
+        detail = "처리할 문서가 없습니다."
+        if errors:
+            detail += f" ({'; '.join(errors)})"
+        raise HTTPException(status_code=400, detail=detail)
+
+    doc_id_list = [d["id"] for d in documents]
+    seen = set()
+    dup_internal = set()
+    for did in doc_id_list:
+        if did in seen:
+            dup_internal.add(did)
+        seen.add(did)
+
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT doc_id FROM rag.chunks WHERE doc_id = ANY(%s)",
+            (doc_id_list,),
+        )
+        dup_db = {row[0] for row in cur.fetchall()}
+
+    skip_ids = dup_internal | dup_db
+    if skip_ids:
+        for did in dup_internal:
+            errors.append(f"{did}: 파일 내 중복 ID (제외)")
+        for did in dup_db:
+            errors.append(f"{did}: 이미 적재된 문서 ID (제외)")
+        documents = [d for d in documents if d["id"] not in skip_ids]
+
+    if not documents:
+        detail = "중복을 제외하면 적재할 문서가 없습니다."
+        if errors:
+            detail += f" ({'; '.join(errors)})"
+        raise HTTPException(status_code=409, detail=detail)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    data_path = DATA_DIR / f"upload_{ts}.jsonl"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(data_path, "w", encoding="utf-8") as fp:
+        for d in documents:
+            fp.write(_json.dumps(d, ensure_ascii=False) + "\n")
+
+    job_id = secrets.token_hex(4)
+    _upload_jobs[job_id] = {
+        "job_id": job_id, "status": "processing",
+        "current_step": "파일 저장 완료",
+        "user_id": user["user_id"],
+        "created_at": time.time(),
+        "total_docs": len(documents),
+        "data_file": data_path.name,
+        "errors": errors, "output": "",
+    }
+    threading.Thread(
+        target=_run_ingest_subprocess,
+        args=(job_id, str(data_path)), daemon=True,
+    ).start()
+    return {"job_id": job_id, "total_docs": len(documents),
+            "data_file": data_path.name, "errors": errors}
+
+
+@app.post("/api/admin/upload/check-ids")
+async def admin_upload_check_ids(request: Request, user: dict = Depends(admin_required)):
+    body = await request.json()
+    ids = body.get("ids", [])
+    if not ids:
+        return {"duplicates": []}
+    from starter import db
+    with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT doc_id FROM rag.chunks WHERE doc_id = ANY(%s)",
+            (ids,),
+        )
+        existing = [row[0] for row in cur.fetchall()]
+    return {"duplicates": existing}
+
+
+@app.get("/api/admin/upload/jobs")
+def admin_upload_jobs(user: dict = Depends(admin_required)):
+    jobs = sorted(_upload_jobs.values(), key=lambda j: j["created_at"], reverse=True)
+    return {"jobs": jobs[:20]}
+
+
+@app.get("/api/admin/upload/jobs/{job_id}")
+def admin_upload_job_detail(job_id: str, user: dict = Depends(admin_required)):
+    job = _upload_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+    return job

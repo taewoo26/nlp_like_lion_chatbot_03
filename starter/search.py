@@ -415,6 +415,10 @@ def _bm25_cutoff_on():
     return (config.env("BM25_CUTOFF", "on") or "on").strip().lower() == "on"
 
 
+def _bm25_min_keep():
+    return int(config.env("BM25_MIN_KEEP", "5"))
+
+
 def _apply_bm25(masked_q, docs):
     """BM25 점수를 임베딩 점수에 합산하고, 키워드가 있으면 BM25=0 문서를 뺀다.
 
@@ -433,7 +437,10 @@ def _apply_bm25(masked_q, docs):
             d["bm25"] = scores.get(d["doc_id"], 0)
             d["score"] = d["score"] + weight * d["bm25"] / max_bm25
     if _bm25_cutoff_on() and max_bm25 > 0:
-        docs = [d for d in docs if scores.get(d["doc_id"], 0) > 0]
+        kept = [d for d in docs if scores.get(d["doc_id"], 0) > 0]
+        min_keep = _bm25_min_keep()
+        if len(kept) >= min_keep:
+            docs = kept
     return sorted(docs, key=lambda d: -d["score"])
 
 
