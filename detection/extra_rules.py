@@ -32,7 +32,9 @@ SEP = r"[-.\s]"            # 번호 구분자: 하이픈·점·공백 1개
 
 # ---------------------------------------------------------------- 번호
 # 주민·외국인등록번호: 앞 6자리가 실제 날짜, 뒷자리 첫 숫자 1~8 (13자리 계좌와 구별)
-RRN = re.compile(rf"{D}(\d{{2}})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[-.\s]?[1-8]\d{{6}}{E}")
+# 구분자: 없음 / 공백 1~2칸 / 줄바꿈 / 하이픈·점 (앞뒤 공백 허용: 920315 - 1234567)
+RRN = re.compile(rf"{D}(\d{{2}})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])"
+                 rf"(?:[ \t]{{0,2}}[-.][ \t]{{0,2}}|[ \t]{{1,2}}|\n)?[1-8]\d{{6}}{E}")
 
 # 카드: 4-4-4-4 (구분자 섞임 허용) / 15자리 4-6-5
 CARD16 = re.compile(rf"{D}\d{{4}}(?:{SEP}?\d{{4}}){{3}}{E}")
@@ -65,10 +67,11 @@ ACCOUNT_CUE = re.compile(r"(?:계좌|은행|입금|출금|환불|예금|account|
 BIZ_NO = re.compile(r"^\d{3}-\d{2}-\d{5}$")          # 사업자등록번호 (비대상)
 ID_CUE = re.compile(r"(?:주문|접수|승인|문서|민원|결재|관리|송장|운송장|회원|사원|식별|증권|계약|신청|가맹점)\s?(?:번호|No\.?|ID)\s*[:：]?\s*$")
 NON_ACCOUNT_ID = re.compile(
-    r"(?:사건|접수|민원|주문|승인|문서|결재|관리|송장|운송장|회원|사원|식별|계약|신청|가맹점)"
-    r"\s*(?:번호|No\.?|ID)\s*[:：]?", re.IGNORECASE
+    r"(?:사건|접수|민원|주문|승인|문서|결재|관리|송장|운송장|회원|사원|식별|계약|신청|가맹점|거래|상품|사업자\s*등록|사업자)"
+    r"\s*(?:번호|코드|No\.?|ID)\s*[:：]?", re.IGNORECASE
 )
 ACCOUNT_FIELD = re.compile(r"(?:계좌|은행|입금|출금|환불|예금|송금|이체|account)", re.IGNORECASE)
+CARD_FIELD = re.compile(r"(?:카드|card)", re.IGNORECASE)
 
 # ---------------------------------------------------------------- 주소
 SIDO = (r"(?:서울특별시|서울시|서울|부산광역시|부산시|부산|대구광역시|대구시|대구|인천광역시|인천시|인천|"
@@ -149,6 +152,19 @@ NAME_CUE = re.compile(
     r"담당자|작성자|접수자|대상 고객|Full Name|Name)(?:\([^)\n]{1,6}\))?\s*[:：]\s*"
 )
 CUE_VALUE = re.compile(rf"(?:{SURNAME_PAT})(?:\s[가-힣]{{1,2}}|[가-힣]{{1,3}})(?![가-힣])")
+# 로마자 이름: 사람 이름 항목명 바로 뒤의 영문 2~4단어, 대소문자 무관 (NAMGOONG JUN / John Smith / kim minjun)
+#   항목명 앞 단어도 본다: '고객 이름'·'Full Name'은 통과, '상품 이름'·'Product Name'은 제외 (상품명: GOLD PREMIUM)
+#   대소문자는 토큰 생성 때 pii_pipeline.normalize_value 가 대문자로 통일하므로 표기가 달라도 같은 토큰이 된다.
+ROMAN_NAME_CUE = re.compile(
+    r"(?<![가-힣A-Za-z])(?<![가-힣A-Za-z][ \t])"
+    r"(?:(?:고객|영문|한글)\s?(?:성명|성함|이름)|성명|성함|이름|고객명|영문명|예금주|수취인|"
+    r"(?:(?:Full|English|Customer)\s)?Name)"
+    r"(?:\([^)\n]{1,6}\))?[ \t]*[:：][ \t]*"
+)
+#   콜론이 바로 뒤에 붙은 단어는 다음 항목명이라 넣지 않는다 (John Smith, Email: … → John Smith)
+_ROMAN_WORD = r"[A-Za-z][A-Za-z'\-]+(?![A-Za-z'\-])(?![ \t]*[:：])"
+ROMAN_VALUE = re.compile(rf"{_ROMAN_WORD}(?:,?[ \t]+{_ROMAN_WORD}){{1,3}}")
+EMPTY_ROMAN_VALUES = {"NOTPROVIDED", "NOTAVAILABLE", "NOTAPPLICABLE", "NOTGIVEN", "TOBECONFIRMED", "TOBEDETERMINED"}
 EXPLICIT_NAME_FIELD = re.compile(r"(?:고객명|고객 성명|성명|이름|성함)(?:\([^)\n]{1,6}\))?\s*[:：]\s*$")
 FIELD_GIVEN = re.compile(r"[가-힣]{2,3}(?![가-힣])")
 GIVEN_SSI_PARTICLE = re.compile(rf"(?<![가-힣])([가-힣]{{2}})(?=\s?씨{JOSA}(?![가-힣]))")
@@ -156,7 +172,9 @@ EMPTY_NAME_VALUES = {"전체", "미상", "미정", "없음", "불명", "비공�
 KIN_EVENTS = {"조모상", "조부상", "부친상", "모친상", "장인상", "장모상", "빙부상", "빙모상",
               "시부상", "시모상", "본인상", "배우자상", "형제상", "자매상", "자녀상", "외조모상", "외조부상"}
 FORM_LABELS = {"고객명", "성명", "이름", "성함", "성함이", "배송지", "수령지", "청구지", "소명자", "신청인", "수취인",
-               "예금주", "보정자", "담당자", "대상", "직통", "사번", "동호수", "반송일자", "정산월", "신청건"}
+               "예금주", "보정자", "담당자", "대상", "직통", "사번", "동호수", "반송일자", "정산월", "신청건",
+               # 금융 서식 항목명 (성씨로 시작해 이름 후보가 되는 것: 송금액·신청금액 …)
+               "송금액", "송금일", "대출금액", "신청금액", "거래금액", "승인금액", "납입금액", "상품코드"}
 ROLE_WORDS = {"채무자", "채권자", "피보험자", "계약자", "보증인", "주회원", "가족회원", "본인회원", "가맹점",
               "대리인", "신청인", "민원인", "수취인", "예금주", "고객", "회원", "임직원"}
 NAME_CUE_END = re.compile(NAME_CUE.pattern + "$")
@@ -232,7 +250,7 @@ DRIVER_CUE = re.compile(r"(?:운전\s?면허|면허)[^\n]{0,10}$")   # 지역명
 
 
 def extra_spans(text):
-    """보강 규칙으로 찾은 구간 (순서: 운전면허 → 주민 → 카드 → 전화 → 계좌 → 주소 → 이메일 회피 표기 → 항목명 뒤 이름).
+    """보강 규칙으로 찾은 구간 (순서: 운전면허 → 주민 → 카드 → 전화 → 계좌 → 주소 → 이메일 회피 표기 → 항목명 뒤 이름(한글·로마자)).
     번호 규칙은 정규화한 글(norm)에서 찾고, 결과 글자는 원문(text)에서 가져온다."""
     spans = []
     norm = normalize(text)
@@ -293,6 +311,10 @@ def extra_spans(text):
             if toks:
                 continue
         _add(spans, m.start(), m.end(), "person", text)
+    for cue in ROMAN_NAME_CUE.finditer(text):
+        m = ROMAN_VALUE.match(text, cue.end())
+        if m and re.sub(r"[\s,'\-]+", "", m.group()).upper() not in EMPTY_ROMAN_VALUES:
+            _add(spans, m.start(), m.end(), "person", text)
     for m in GIVEN_SSI_PARTICLE.finditer(text):
         _add(spans, m.start(1), m.end(1), "person", text)
     return spans
@@ -326,19 +348,54 @@ def merge_extra(rule_spans, extra):
     return sorted(spans, key=lambda s: (s.start, s.end))
 
 
-def is_non_account_identifier(text, span):
-    """같은 줄에서 번호 바로 앞의 가장 최근 필드가 계좌인지 다른 식별번호인지 구분한다."""
-    line_start = text.rfind("\n", 0, span.start) + 1
-    prefix = text[line_start:span.start]
+def _line_prefix(text, span):
+    return text[text.rfind("\n", 0, span.start) + 1:span.start]
+
+
+def _latest_field_is_id(prefix, field):
+    """같은 줄에서 번호 바로 앞의 가장 최근 항목명이 다른 식별번호(주문·거래·상품코드 …)인가."""
     ids = list(NON_ACCOUNT_ID.finditer(prefix))
     if not ids:
         return False
-    accounts = list(ACCOUNT_FIELD.finditer(prefix))
-    return ids[-1].start() > (accounts[-1].start() if accounts else -1)
+    fields = list(field.finditer(prefix))
+    return ids[-1].start() > (fields[-1].start() if fields else -1)
+
+
+def is_non_account_identifier(text, span):
+    """같은 줄에서 번호 바로 앞의 가장 최근 필드가 계좌인지 다른 식별번호인지 구분한다."""
+    return _latest_field_is_id(_line_prefix(text, span), ACCOUNT_FIELD)
 
 
 def drop_non_account_identifiers(text, spans):
     return [s for s in spans if s.label != "account_number" or not is_non_account_identifier(text, s)]
+
+
+def _luhn_ok(number):
+    digits = [int(c) for c in number if c.isdigit()]
+    total = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2:
+            d = d * 2 - 9 if d > 4 else d * 2
+        total += d
+    return bool(digits) and total % 10 == 0
+
+
+def drop_non_target_identifiers(text, spans):
+    """번호 용도가 다른 식별번호로 적힌 계좌·카드 탐지를 뺀다 (split_v3 마지막 단계, 규칙·모델 출처 무관).
+    - 계좌: 가장 가까운 항목명이 주문·거래·사업자등록번호 등 / 계좌 문맥 없는 사업자번호 모양(123-45-67890)
+    - 카드: 가장 가까운 항목명이 상품코드·주문번호 등이고, 카드번호 검증(Luhn)도 통과하지 못할 때만
+      (항목명이 잘못 적힌 실제 카드번호는 남긴다)"""
+    out = []
+    for s in spans:
+        prefix = _line_prefix(text, s)
+        if s.label == "account_number" and (
+                _latest_field_is_id(prefix, ACCOUNT_FIELD)
+                or (BIZ_NO.match(s.text) and not ACCOUNT_FIELD.search(prefix))):
+            continue
+        if s.label == "card_number" and _latest_field_is_id(prefix, CARD_FIELD) and not _luhn_ok(s.text):
+            continue
+        out.append(s)
+    return out
 
 
 def _name_context_non_person(text, span):
@@ -452,8 +509,8 @@ def combine_models(text, k_raw, v_raw):
     ok_keys = {(x.start, x.end) for x in k_ok if x.label == "person"}
     for k in k_person_raw:                                     # ① 모양 검사에서 떨어졌지만 Veil이 동의 → 살림
         t = tidy_name(text, k)
-        if (t.start, t.end) in ok_keys or "*" in t.text:
-            continue
+        if (t.start, t.end) in ok_keys or "*" in t.text or _name_context_non_person(text, t):
+            continue                                           # 상품명 문맥(도담 체크카드)은 두 모델이 동의해도 살리지 않음
         if any(_overlaps(t, v) for v in v_person_raw) and not any(_overlaps(t, o) for o in out):
             out.append(t)
     for v in v_ok:                                             # ② Veil 결과 추가

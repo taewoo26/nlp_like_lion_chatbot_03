@@ -16,7 +16,8 @@ import re
 import yaml
 
 PLAN_TO_JUDGE = {"실행 대상": "run", "기준선 측정": "baseline", "판정 보류": "hold", "실행 대기": "wait"}
-STATES = {"answered", "clarify", "no_result", "withheld", "search_only", "error"}
+STATES = {"answered", "clarify", "no_result", "withheld", "search_only", "error",
+          "hold"}                                  # hold: 기대 동작이 정의되지 않아 판정 보류 (재질문 정의서에 규칙 없음)
 DEFAULT_OUTPUT = {"Lv0": "token", "Lv1": "token", "Lv2": "token"}   # chat(restore=false)의 허용 출력
 LIST_KEYS = ("p", "rel", "conf", "neutral", "types", "kw", "rm", "cons", "facts", "forbid", "sens")
 

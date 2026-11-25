@@ -2,7 +2,7 @@
 
 clean()               : combo 결과에 마지막으로 적용
   - 추가: 지역번호 유선전화(031·051 …)·070  (02는 규칙에 이미 있음)
-  - 제외: 성+직함(허부장)·성 한 글자 / 대표번호·내선 뒤 번호 / 지점·영업점 이름
+  - 제외: 성+직함(허부장)·성 한 글자 / 대표번호·고객센터·콜센터·내선 뒤 번호 / 지점·영업점 이름
 filter_model_names()  : 규칙이 못 잡고 모델만 잡은 이름을 merge 전에 거름
   - 단어 중간에서 시작(미르보안→보안), 상품명 앞(하린 포인트), 단서 단어(내선·고객명)
   - Kiwi가 동사·어미로 본 것(달래), 단서 없는 1~2글자(을, 이첩), 성씨로 시작하지 않는 3글자 이상(미이수)
@@ -19,12 +19,12 @@ from detection.rule.kiwi_filter import _get_kiwi
 @lru_cache(maxsize=512)
 def _tok(text):
     return tuple(_get_kiwi().tokenize(text))
+from detection.rule.detector import is_public_phone
 from detection.rule.names import SURNAME_PAT, TITLES, has_strong_cue
 
 # ---------- clean() ----------
 LANDLINE = re.compile(r"(?<!\d)(?:0[3-6][1-5]|070)[-. ]?\d{3,4}[-. ]?\d{4}(?!\d)")
 TITLE_ONLY = re.compile(rf"{SURNAME_PAT}(?:\s?{TITLES}님?)?")
-REP_CUE = re.compile(r"(?:대표\s?번호|대표\s?전화|내선)\s*[:：]?\s*\(?$")
 BRANCH_WORDS = r"(?:지점|본점|영업점|영업부|출장소|센터)"
 BRANCH_END = re.compile(rf"{BRANCH_WORDS}$")
 BRANCH_AFTER = re.compile(rf"\s?{BRANCH_WORDS}")
@@ -32,7 +32,9 @@ BRANCH_AFTER = re.compile(rf"\s?{BRANCH_WORDS}")
 # ---------- filter_model_names() ----------
 HONOR_AFTER = re.compile(r"\s?(?:님|씨)")
 PERSON_JOSA_AFTER = re.compile(r"(?:이랑|랑|한테|에게|께서|께|아|야)(?![가-힣])")   # 은서랑, 지영아
-PRODUCT_AFTER = re.compile(r"\s?(?:포인트|카드|통장|적금|예금|보험|대출|펀드|상품|서비스|앱)")
+# 이름 후보 뒤에 금융 상품 종류가 오면 상품명 (하린 포인트 / 도담 체크카드 / 새싹 정기적금)
+PRODUCT_KIND = r"(?:체크|신용|선불|하이브리드|정기|자유|마이너스|주택담보|전세)?\s?(?:카드|통장|적금|예금|보험|대출)"
+PRODUCT_AFTER = re.compile(rf"\s?(?:포인트|{PRODUCT_KIND}|펀드|상품|서비스|앱)")
 CUE_WORDS = re.compile(r"(?:내선|대표\s?번호|대표\s?전화|고객\s?명|성\s?명|이\s?름)")
 STARTS_WITH_SURNAME = re.compile(SURNAME_PAT)
 SURNAME_BEFORE = re.compile(rf"(?:^|(?<=[^가-힣]))({SURNAME_PAT}) $")             # '전 ' + 서윤
@@ -69,8 +71,8 @@ def drop_non_targets(text, spans):
     for s in spans:
         if s.label == "person" and (TITLE_ONLY.fullmatch(s.text) or CUE_WORDS.fullmatch(s.text.replace(" ", ""))):
             continue                                  # 허부장, 허 부장님, 허 / 고객명, 내선
-        if s.label == "phone_number" and REP_CUE.search(text[max(0, s.start - 12):s.start]):
-            continue                                  # 대표번호 02-…, 내선 …
+        if s.label == "phone_number" and is_public_phone(text, s.start):
+            continue                                  # 대표번호 02-…, 고객센터 02-…, 내선 … (보강 규칙·모델이 다시 잡아도 제외)
         if s.label == "address" and (BRANCH_END.search(s.text) or BRANCH_AFTER.match(text, s.end)):
             continue                                  # 여의도 지점
         out.append(s)

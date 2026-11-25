@@ -1,7 +1,13 @@
 # 통합 테스트 (eval/integration)
 
-설계 기준은 `통합테스트_설계서_v4.3.xlsx`, 데이터는 `data/integration_v1/` 입니다.
+설계 기준은 `통합테스트_설계서_v4.5.xlsx`, 데이터는 `data/integration_v1/` 입니다.
 흐름은 **실행 한 번 → 영역별 채점 → 보고서 하나**입니다. 저장소 코드(starter, service, eval/*.py)는 import 해서 쓰기만 하고 고치지 않습니다.
+
+## 재질문 기준 (v4.5)
+
+- 재질문 기대값은 팀 재질문 정의서(CLR-01~10)를 따릅니다. 동명이인(CLR-02)은 전화번호·주소 같은 식별자, 지역, 역할로만 좁히고, 부서·직급·업무 주제만 있으면 인물사전 ON(R1·R3)에서 되묻기가 정답입니다.
+- 정의서에 규칙이 없는 지시어 질문(ITQ068·069 '그 고객', '지난번')은 `state: hold` → 판정 보류. 상태 정확도·재질문 P/R·필수 사실 집계에서 빠지고 보안 검사(X01·X04·X06)는 그대로 채점합니다.
+- 되묻기가 정답인 설정은 필수 사실을 채점하지 않습니다 (금지 사실·유출은 채점).
 
 ## 바로 쓰기 (저장소 루트에서)
 
@@ -17,7 +23,7 @@ python -m eval.integration.run --run-id it3 --rebuild-db --yes --only search
 python -m eval.integration.run --run-id it3 --resume --rebuild-db --yes --only answer
 python -m eval.integration.run --run-id it3 --resume --only security
 
-# 다중 턴 대화만 (ITM01~05, 인물사전 ON 설정 R1·R3 × Lv0·Lv1·Lv2 = 30개 대화, LLM 최대 60번)
+# 다중 턴 대화만 (ITM01~05, 인물사전 ON 설정 R1·R3 × Lv0·Lv1·Lv2 = 30개 대화, LLM 최대 60번, 지역 메타 ON)
 python -m eval.integration.run --run-id it3 --resume --rebuild-db --yes --only dialog
 #   두 번째 명령: 지금 DB(검색이 끝난 인물사전 ON 적재)로 R1·R3 답변을 먼저 하고, R0·R2 답변 때만 OFF로 다시 적재합니다.
 #   --rebuild-db 를 빼면 DB가 맞지 않는 R0·R2 는 '미실행'으로 남고 안내가 나옵니다. 남은 질문이 없는 적재는 다시 적재하지 않습니다.
@@ -104,7 +110,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 | 채점 | `score_query.py` | 03 질문 토큰, 실행 당시 키워드, 조건·부정 보존 (설정별) |
 | 채점 | `score_retrieval.py` | 04 Hit@1·Recall@3·MRR·Confuse@3, 시나리오별 판정, X07 BM25 탈락 |
 | 채점 | `score_answer.py` | 05·06 상태, 필수·금지 사실(금액·날짜·부정 비교), 유출, 재질문, 공통 검사 |
-| 채점 | `score_dialog.py` | 03 다중 턴 대화(Q10~Q13): 턴 수, 1턴 되묻기, 2턴 이어받기(follow_up_of)·합치기(Q10·Q12), 최종 상태, 근거 문서(동명이인 문서 제외), 필수·금지 사실, X04·X06(검사 대상 없으면 미검증) |
+| 채점 | `score_dialog.py` | 03 다중 턴 대화(Q10~Q13): 턴 수, 1턴 되묻기, 2턴 이어받기(follow_up_of)·합치기(정답지 expect.merged: ITM01·ITM02), 최종 상태, 근거 문서(동명이인 문서 제외), 필수·금지 사실, X04·X06(검사 대상 없으면 미검증) |
 | 보고 | `report.py` | `summary.md`, 04 시트 형식 CSV 2개, `coverage.csv`, 필수 보안 판정 |
 | 테스트 | `test_scoring.py` | 잘못된 답·결과가 통과로 처리되지 않는지 채점 로직 테스트 |
 | 공통 | `common.py` | 경로, 설정, DB 상태, 실행 대상 목록, 토큰 계산, LLM 호출 관리 |
@@ -128,7 +134,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
    (질문은 권한 Lv0~Lv2, API는 사번). 엑셀 보안 판정과 `summary.md` 의 필수 보안 판정은 같은 범위로 셉니다:
    필수 API 18건(케이스·X04·X06, ITP20은 X06 제외) + R0~R3 질문 472건(X04·X06) + 질문 추가 보안 검사 32건(G12~G15).
    대화(실행 단위 '대화')의 X04·X06 실패도 보안 판정을 미충족으로 만들지만 필수 개수에는 넣지 않습니다 (엑셀 v4.4부터 04 시트 E173).
-4. 설계서를 고친 뒤 원본을 다시 내보낼 때: `python eval/integration/export_design_csv.py --xlsx 통합테스트_설계서_v4.4.xlsx --out data/integration_v1/it_source`
+4. 설계서를 고친 뒤 원본을 다시 내보낼 때: `python eval/integration/export_design_csv.py --xlsx 통합테스트_설계서_v4.5.xlsx --out data/integration_v1/it_source`
    (v4.2 이후 표 헤더 기준, 필요한 열이 없으면 멈춤) → `run.py --prepare-data`
 
 ## 설정
@@ -148,7 +154,7 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 - 답변은 서비스 API(`/api/chat`)를 사용자 레벨 계정마다 따로 호출합니다 (R0~R3 기준 472회 = 질문 × 설정 × 사용자). X04(원문 유출)는 실제 API 응답 전체(답변·문서 조각·가명처리 질문 등 모든 문자열)를, X06(감사 로그)은 요청마다 `audit.query_log` 를 실제 API 응답(상태·반환 문서)과 대조해 채점합니다. 문서 접근 필터(G01·G02·G16)가 생기면 같은 경로로 바로 검증됩니다.
 - 권한 API는 `--api-config`(기본 R2) 설정으로 돌고, 결과 행의 실행 설정에 그 값이 들어갑니다. 실행 전에 DB의 인물사전 적재 상태가 그 설정과 같은지 확인합니다. 전체 실행에서는 그 설정의 적재를 마지막에 두어 재적재 없이 이어서 돌고, 다르면 `--rebuild-db` 일 때만 다시 적재합니다 (아니면 권한 API를 건너뛰고 보고서에 이유를 남김). `security` 를 따로 돌릴 때도 다르면 멈춥니다.
 - 문맥 판단이 필요한 금지 사실(한 문서의 다른 고객 정보 등)은 비고에 "수동 확인 필요"로 표시됩니다.
-- 다중 턴 대화 5개(ITM01~05)는 develop b4a465d(PR #23)의 재질문·보충 답 이어받기로 실행합니다. 동명이인 되묻기는 인물사전 ON에서만 나오므로 R1·R3에서 돌리고, 사용자는 Lv0·Lv1·Lv2 전부입니다. 정답지(기대 결과)는 기능이 생기기 전 설계 그대로 씁니다.
+- 다중 턴 대화 5개(ITM01~05)는 develop b4a465d(PR #23)의 재질문·보충 답 이어받기로 실행합니다. 동명이인 되묻기는 인물사전 ON에서만 나오므로 R1·R3에서 돌리고, 사용자는 Lv0·Lv1·Lv2 전부입니다. 대화는 지역 메타(REGION_META)를 켜고 질문합니다 (common.DIALOG_ENV, 정의서: 지역 보충은 ON에서만 동작). 단일 질문 설정 R0~R3은 그대로입니다.
 - 권한 API 비밀번호는 시연 계정 규칙(qwer + 사번 끝 4자리)을 쓰고, 다르면 환경변수 `IT_PW_<사번>` 으로 넣습니다.
 
 ## 채점 범위 (시나리오 89개 + 공통 검사 7개)
@@ -197,8 +203,8 @@ CLOVA Studio HCX-007 한도는 테스트 API 키 60 QPM·60,000 TPM, 서비스 A
 | Q07 | 동명이인 재질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | Q08 | 부서·역할로 특정 가능한 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
 | Q09 | 지역이 모호한 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |
-| Q10 | 필수 조건이 빠진 질문 | `score_answer·score_dialog` | 질문: 기대 상태 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기·합치기(merged) → 최종 상태·근거 문서·사실 |
-| Q11 | 의미가 불명확한 질문 | `score_answer·score_dialog` | 질문: 기대 상태 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실 |
+| Q10 | 필수 조건이 빠진 질문 | `score_answer·score_dialog` | 질문: 지시어 질문은 정의서에 규칙이 없어 판정 보류 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기(follow_up_of, 정보 없음 되묻기 뒤라 합치기는 보지 않음) → 최종 상태·근거 문서·사실 |
+| Q11 | 의미가 불명확한 질문 | `score_answer·score_dialog` | 질문: 지시어 질문은 판정 보류 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실 |
 | Q12 | 다중 턴: 추가 정보 제공 후 답변 | `score_dialog` | 대화 ITM01·02: 1턴 되묻기 → 2턴 follow_up_of = 1턴 request_id → 직전 질문과 합쳐 찾음(merged) → 기대 문서만 근거로 answered, 필수·금지 사실 |
 | Q13 | 다중 턴: 추가 정보로도 특정 불가 | `score_dialog` | 대화 ITM03: 보충 답으로도 특정 불가 → 다시 되묻기·보류, 특정 인물 문서 인용 없음 |
 | Q14 | 역할을 지정한 질문·전체 이력 질문 | `score_answer` | 기대 상태(clarify·no_result 등) + 사실·유출 (재질문·특정 질문) |

@@ -31,6 +31,9 @@ CONFIGS = {
 }
 DIALOG_CONFIGS = ("R1", "R3")          # 다중 턴 대화: 동명이인 되묻기(ask_person)는 인물사전 ON 에서만 나온다
 DIALOG_LEVELS = ("Lv0", "Lv1", "Lv2")
+# 대화는 지역 메타를 켜고 질문한다: 재질문 정의서(CLR-01·CLR-02)의 지역 보충('서울 사는 분이요')은 REGION_META=on 에서만 동작
+# (적재는 INGEST_ENV 에서 이미 지역 메타를 저장한다). 단일 질문 채점(R0~R3)의 설정은 그대로다.
+DIALOG_ENV = {"REGION_META": "on"}
 UNAVAILABLE = {"R2′": "개선 코드가 아직 없음", "R3′": "개선 코드가 아직 없음"}
 PHASE = {c: ("on" if v["PERSON_DICT"] == "on" else "off") for c, v in CONFIGS.items()}
 # 적재 때 쓰는 환경 (인물사전 OFF 적재는 지역 메타도 함께 저장해 'R2 + REGION_META'에 쓴다)
@@ -54,6 +57,13 @@ def config_env(name):
         raise KeyError(f"{name}: {UNAVAILABLE[name]}")
     env = dict(BASE_ENV)
     env.update(CONFIGS[name])
+    return env
+
+
+def dialog_env(name):
+    """다중 턴 대화에 쓰는 환경: 실행 설정 + DIALOG_ENV."""
+    env = config_env(name)
+    env.update(DIALOG_ENV)
     return env
 
 
@@ -216,9 +226,39 @@ MANUAL = "수동 확인"          # 자동 채점으로 단정할 수 없음 (�
 NOT_IMPL = "채점 미구현"       # 설계에 있지만 채점 코드가 없는 시나리오
 
 
+class DBDown(Exception):
+    """실행 중 DB 연결이 끊김 (서비스가 HTTP 500 으로 감싼 경우 포함). 챗봇 결함이 아니라 실행 환경 문제."""
+
+
+def is_db_error(exc):
+    if isinstance(exc, DBDown):
+        return True
+    try:
+        import psycopg
+        return isinstance(exc, psycopg.OperationalError)
+    except ImportError:
+        return False
+
+
+def db_down():
+    """DB에 연결할 수 없으면 True. 서비스가 HTTP 500 을 낸 뒤 원인이 DB 연결인지 가릴 때 쓴다."""
+    try:
+        from starter import db
+        with db.auth_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        return False
+    except Exception:
+        return True
+
+
+def is_db_error_row(r):
+    """DB 연결이 끊겨 HTTP 500 으로 저장된 옛 기록 (v6.5 이전). 챗봇 결함이 아니므로 이어서 실행할 때 다시 실행한다."""
+    return (r.get("http") or 0) >= 500 and "OperationalError" in str(r.get("error") or "")
+
+
 def is_exec_error(exc):
     """챗봇의 오답이 아니라 실행 환경 문제인 예외 (LLM 호출 제한·타임아웃·네트워크·DB 연결)."""
-    if isinstance(exc, LLMCallError):
+    if isinstance(exc, (LLMCallError, DBDown)):
         return True
     try:
         import requests
@@ -238,6 +278,8 @@ def is_exec_error(exc):
 def exec_error_info(exc):
     if isinstance(exc, LLMCallError):
         return exc.info()
+    if is_db_error(exc):
+        return {"kind": "db", "status": None, "code": type(exc).__name__, "message": str(exc)[:300]}
     return {"kind": "environment", "status": None, "code": type(exc).__name__, "message": str(exc)[:300]}
 
 

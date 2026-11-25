@@ -10,7 +10,7 @@ import pathlib
 
 os.environ.setdefault("HMAC_KEY", "0" * 64)           # 토큰 계산용 (테스트 전용 키)
 
-from .common import DATA, Gold, jl_write  # noqa: E402
+from .common import DATA, Gold, config_env, jl_write  # noqa: E402
 from . import score_answer as SA, score_query as SQ, score_retrieval as SR, score_detection as SD  # noqa: E402
 from . import score_person as SP, report as RP, security as SEC  # noqa: E402
 
@@ -410,6 +410,26 @@ def test_dialog_same_person_docs_and_canned_text():
     assert "금지 사실" not in actual and stage == "재질문·이어받기", actual   # 실패 이유는 상태, 안내문 속 '분실' 아님
 
 
+def test_db_down_is_exec_error(tmp_path):
+    """실행 중 DB가 끊기면: 500 기록은 다시 실행 대상, 바로 멈춤, 채점에서는 실행 오류 (챗봇 실패 아님)."""
+    import pytest
+    from . import run as R
+    from .common import DBDown, exec_error_info, is_db_error_row, jl_write
+    db_row = {"key": "ITQ103|Lv1", "http": 500, "error": "처리 중 오류: OperationalError"}
+    bug_row = {"key": "ITQ104|Lv1", "http": 500, "error": "처리 중 오류: KeyError"}        # 진짜 코드 결함은 그대로
+    ok_row = {"key": "ITQ105|Lv1", "http": 200, "state": "answered"}
+    assert is_db_error_row(db_row) and not is_db_error_row(bug_row)
+    p = tmp_path / "answer_R3.jsonl"
+    jl_write(p, [db_row, bug_row, ok_row])
+    assert R._done(p, "key") == {"ITQ104|Lv1", "ITQ105|Lv1"}           # DB 끊김 행은 --resume 때 다시 실행
+    dl = tmp_path / "dialog_R3.jsonl"
+    jl_write(dl, [{"key": "ITM01|Lv1", "turns": [{"http": 500, "error": "처리 중 오류: OperationalError"}]}])
+    assert R._done(dl, "key") == set()
+    assert exec_error_info(DBDown("x"))["kind"] == "db"
+    with pytest.raises(R.StopRun):
+        R.Breaker(5).fail(DBDown("HTTP 500"), "R3/ITQ103/Lv1 답변")      # 연속 5번을 기다리지 않고 바로 멈춤
+
+
 if __name__ == "__main__":                                # monkeypatch 를 쓰는 테스트가 있어 pytest 로 실행한다
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
@@ -508,3 +528,61 @@ def test_dialog_unresolvable_and_split():
     picked = {"turns": [ok["turns"][0], _turn(2, state="answered", docs=["IT0051"], answer="상담 내용 [IT0051]", follow="req_1")]}
     assert SDG.judge(d, picked, {})[0] == "실패"                    # 한 사람으로 확정해 답함
     assert SDG.dialog_split(d) == "check" and SDG.dialog_split(_dlg("ITM01")) == "dev"
+
+
+def test_clarify_gold_follows_team_definition():
+    """팀 재질문 정의서 기준 정답: 동명이인은 식별자·지역·역할로만 좁힘 (업무·부서·직급은 좁히지 않음 → 되묻기),
+    지시어 질문은 규칙이 없어 판정 보류, 이어받기 요구는 동명이인 조각 대화만."""
+    g = Gold()
+    cases = {c["qid"]: c for c in g.cases}
+    for q in ("ITQ025", "ITQ031", "ITQ081", "ITQ083", "ITQ085", "ITQ086", "ITQ125", "ITQ127", "ITQ150"):
+        for u in cases[q]["users"].values():
+            for cfg, st in u["expected_state"].items():
+                assert st == (["clarify"] if cfg in ("R1", "R3") else ["answered"]), (q, cfg, st)
+    for q in ("ITQ027", "ITQ028", "ITQ029", "ITQ082", "ITQ090", "ITQ091"):     # 전화번호·역할로 한 명 → 답변
+        assert all(u["expected_state"]["R3"] == ["answered"] for u in cases[q]["users"].values()), q
+    for q in ("ITQ068", "ITQ069"):
+        assert all(st == ["hold"] for u in cases[q]["users"].values() for st in u["expected_state"].values())
+    dia = {d["id"]: d for d in g.dialogs}
+    assert [k for k, d in dia.items() if d["expect"].get("merged")] == ["ITM01", "ITM02"]
+    from .common import DIALOG_ENV, dialog_env
+    assert DIALOG_ENV == {"REGION_META": "on"} and dialog_env("R3")["REGION_META"] == "on"
+    assert config_env("R3")["REGION_META"] == "off"                      # 단일 질문 설정은 그대로
+
+
+def test_hold_and_no_facts_when_clarify_expected():
+    """판정 보류 질문은 상태·재질문 집계에서 빠지고, 되묻기가 정답인 설정은 필수 사실을 채점하지 않는다."""
+    g = Gold()
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        (d / "traces").mkdir()
+        (d / "manifest.json").write_text(json.dumps({"plan": {"search": {}, "answer": {"R3": ["ITQ068", "ITQ031"]},
+                                                              "security": []}}))
+        body = {"answer": "이 질문만으로는 답변할 수 있는 정보가 없습니다.", "docs": [], "need_more": True}
+        jl_write(d / "traces" / "answer_R3.jsonl", [
+            {"key": "ITQ068|Lv1", "qid": "ITQ068", "level": "Lv1", "state": "answered", "answer": "3,000만 원", "docs": [],
+             "api_body": {"answer": "3,000만 원", "docs": []}},
+            {"key": "ITQ031|Lv1", "qid": "ITQ031", "level": "Lv1", "state": "clarify", "answer": body["answer"],
+             "docs": [], "api_body": body}])
+        rows, sets, summ = SA.score(d, "t")
+        s = summ["R3"]
+        assert s["n"] == 1 and s["state_ok"] == 1 and s["hold"] == 1 and s.get("facts", 0) == 0
+        assert s["clarify_tp"] == 1 and s.get("clarify_fp", 0) == 0 and s.get("clarify_fn", 0) == 0
+        r68 = [r for r in rows if r["실행 ID"] == "ITQ068" and r["평가 항목 ID"][0] in "AQ"]
+        assert r68 and all(r["결과"] == "판정 보류" for r in r68), r68
+        assert any(r["실행 ID"] == "ITQ068" and r["평가 항목 ID"] == "X04" for r in rows)   # 보안 검사는 그대로
+        r31 = [r for r in rows if r["실행 ID"] == "ITQ031" and r["평가 항목 ID"][0] in "AQ"]
+        assert r31 and all(r["결과"] == "통과" for r in r31), r31
+
+
+def test_dialog_merge_required_only_when_gold_says():
+    """정의서: 정보 없음(CLR-09) 되묻기 뒤 보충은 이어받지 않고 새로 검색 → ITM04 는 merged 를 보지 않는다."""
+    from . import score_dialog as SDG
+    d4 = _dlg("ITM04")
+    t1 = _turn(1, need_more=True, state="withheld")
+    t2 = _turn(2, follow="req_1", merged=False, docs=["IT0001"], answer="신청 금액은 3,000만 원입니다 [IT0001]")
+    res, actual, _, _, _ = SDG.judge(d4, {"turns": [t1, t2]}, {})
+    assert res == "통과", actual
+    d1 = _dlg("ITM01")
+    t2b = _turn(2, follow="req_1", merged=False, docs=["IT0019"], answer="대출 금액은 2,500만 원입니다 [IT0019]")
+    assert SDG.judge(d1, {"turns": [_turn(1, need_more=True, state="clarify"), t2b]}, {})[0] == "실패"

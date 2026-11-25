@@ -78,8 +78,9 @@ import subprocess
 import sys
 import time
 
-from .common import (CONFIGS, DATA, DIALOG_CONFIGS, DIALOG_LEVELS, INGEST_ENV, OUT, PHASE, ROOT, UNAVAILABLE, LLMCallError, LLMGuard, apply_env,
-                     config_env, db_state, exec_error_info, holdout_info, holdout_raw, is_exec_error, jl_read, jl_write,
+from .common import (CONFIGS, DATA, DIALOG_CONFIGS, DIALOG_ENV, DIALOG_LEVELS, INGEST_ENV, OUT, PHASE, ROOT, UNAVAILABLE, DBDown, LLMCallError, LLMGuard, apply_env,
+                     config_env, dialog_env, db_down, db_state, exec_error_info, holdout_info, holdout_raw, is_db_error, is_db_error_row,
+                     is_exec_error, jl_read, jl_write,
                      latest)
 
 DEFAULT_CONFIGS = ["R0", "R1", "R2", "R3"]
@@ -238,7 +239,8 @@ def _done(path, key="qid"):
     if not path.exists():
         return set()
     rows = [r for r in jl_read(path) if key in r]
-    return {q for q, r in latest(rows, key).items() if "exec_error" not in r}
+    return {q for q, r in latest(rows, key).items() if "exec_error" not in r and not is_db_error_row(r)
+            and not any(is_db_error_row(tn) for tn in r.get("turns") or [])}
 
 
 def phase_todo(group, cases, run_dir, do_search, do_answer, dialogs=()):
@@ -271,6 +273,9 @@ class Breaker:
 
     def fail(self, exc, where):
         self.streak += 1
+        if is_db_error(exc):                               # DB가 꺼지면 남은 질문도 전부 실패하므로 바로 멈춘다
+            raise StopRun(f"{where}: DB 연결이 끊겼습니다 ({str(exc)[:150]}). DB를 다시 켠 뒤 같은 --run-id 에 "
+                          f"--resume 을 붙여 이어서 실행하세요 (끊긴 뒤의 질문은 다시 실행됩니다).")
         if isinstance(exc, LLMCallError) and exc.fatal:
             raise StopRun(f"{where}: 복구할 수 없는 LLM 오류 [{exc.kind}] HTTP {exc.status} {exc.code}: {exc.message[:200]}")
         if self.streak >= self.limit:
@@ -386,7 +391,7 @@ def run_dialogs_api(cfg, run_dir, dialogs, guard, breaker):
     from service.app import app, _ui_state
     from .common import Gold
     from .security import USERS, pw
-    apply_env(config_env(cfg))
+    apply_env(dialog_env(cfg))                      # 실행 설정 + 지역 메타 ON (common.DIALOG_ENV)
     tdir = run_dir / "traces"
     tdir.mkdir(exist_ok=True)
     dp = tdir / f"dialog_{cfg}.jsonl"
@@ -434,6 +439,9 @@ def run_dialogs_api(cfg, run_dir, dialogs, guard, breaker):
                         e = guard.last_error
                         row["exec_error"] = e.info() if e else {"kind": "llm", "message": f"HTTP {r.status_code}"}
                         err = e
+                    elif r.status_code >= 500 and db_down():     # DB 연결 끊김 → 실행 오류 (챗봇 결함 아님)
+                        err = DBDown(f"HTTP {r.status_code}: {str(body.get('detail'))[:150]}")
+                        row["exec_error"] = exec_error_info(err)
                     elif r.status_code != 200:
                         turn["error"] = str(body.get("detail"))[:200]
                     if turn["request_id"] and "exec_error" not in row:
@@ -504,6 +512,9 @@ def run_answers_api(cfg, todo, ap, guard, breaker, probe):
                 if guard.stats["failed"] > failed0:               # API 안에서 LLM 호출이 끝내 실패 → 실행 오류
                     err = guard.last_error
                     row["exec_error"] = err.info() if err else {"kind": "llm", "message": f"HTTP {r.status_code}"}
+                elif r.status_code >= 500 and db_down():         # 서비스 500 의 원인이 DB 연결 끊김 → 실행 오류
+                    err = DBDown(f"HTTP {r.status_code}: {str(body.get('detail'))[:150]}")
+                    row["exec_error"] = exec_error_info(err)
                 elif r.status_code != 200:                       # 저장소 코드의 예외 → 챗봇 결함으로 채점
                     row.update(state="error", error=str(body.get("detail"))[:200])
                 else:
@@ -571,6 +582,8 @@ def _check_resume(prev, manifest, configs, allow):
     for c in configs:
         if c in prev.get("configs", {}) and prev["configs"][c] != manifest["configs"][c]:
             problems.append(f"{c} 설정 환경값이 이전 실행과 다릅니다")
+    if (prev.get("plan") or {}).get("dialog") and prev.get("dialog_env", {}) != manifest["dialog_env"]:
+        problems.append(f"대화 환경값이 이전 실행과 다릅니다 (이전 {prev.get('dialog_env', {})}, 지금 {manifest['dialog_env']})")
     for k, v in manifest["runtime"].items():
         if k in (prev.get("runtime") or {}) and prev["runtime"][k] != v:
             problems.append(f"실행 환경 {k} 가 다릅니다 (이전 {prev['runtime'][k]}, 지금 {v})")
@@ -712,7 +725,7 @@ def main():
     now = dt.datetime.now().isoformat(timespec="seconds")
     manifest = {"run_id": a.run_id, "started": now, "commit": git("rev-parse", "--short", "HEAD"),
                 "dirty": bool(git("status", "--porcelain", "--untracked-files=no")),
-                "configs": {c: config_env(c) for c in configs}, "questions": len(cases), "split": a.split,
+                "configs": {c: config_env(c) for c in configs}, "dialog_env": DIALOG_ENV, "questions": len(cases), "split": a.split,
                 "data_manifest": data_sha,
                 "holdout": {k: v for k, v in holdout.items() if k != "ids"}, "runtime": _runtime(), "phases": {}, "skipped": {}, "sessions": [], "plan": None}
     # 실행 대상 목록: 이번 실행에서 돌리기로 한 설정 × 영역 × 질문 (결과 파일이 없어도 '미실행'으로 센다)
@@ -759,7 +772,8 @@ def main():
             print(f"  (부분 보고서 생성 실패: {type(exc).__name__}: {exc})")
         print(f"\n이어서 실행하세요 (정상 실행된 질문은 다시 부르지 않습니다):\n"
               f"  python -m eval.integration.run --run-id {a.run_id} --resume --configs {','.join(configs)}"
-              + (f" --only {a.only}" if a.only != "all" else "") + (f" --holdout {a.holdout}" if a.holdout != ap.get_default("holdout") else ""))
+              + (f" --only {a.only}" if a.only != "all" else "") + (f" --holdout {a.holdout}" if a.holdout != ap.get_default("holdout") else "")
+              + (f" --api-config {a.api_config}" if a.api_config != ap.get_default("api_config") else ""))
         sys.exit(code)
 
     try:
@@ -860,6 +874,12 @@ def main():
                 security.run(run_dir, resume=bool(prev), breaker=breaker)
     except StopRun as exc:
         stop("stopped", str(exc), 2)
+    except Exception as exc:                               # 예상하지 못한 오류도 기록·부분 보고서를 남기고 멈춘다
+        if is_db_error(exc):                               # 적재·기록 수집 중 DB가 끊긴 경우
+            stop("stopped", f"DB 연결이 끊겼습니다 ({type(exc).__name__}). DB를 다시 켠 뒤 같은 --run-id 에 --resume 을 붙이세요.", 2)
+        import traceback
+        traceback.print_exc()
+        stop("crashed", f"예상하지 못한 오류 {type(exc).__name__}: {str(exc)[:200]} (위 traceback 참고)", 1)
     except KeyboardInterrupt:
         stop("interrupted", "사용자가 중단함 (Ctrl+C)", 130)
     finally:
