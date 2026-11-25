@@ -29,6 +29,8 @@ CONFIGS = {
     "R2c": {"PERSON_DICT": "off", "BM25_CUTOFF": "off"},
     "R2 + REGION_META": {"PERSON_DICT": "off", "REGION_META": "on"},
 }
+DIALOG_CONFIGS = ("R1", "R3")          # 다중 턴 대화: 동명이인 되묻기(ask_person)는 인물사전 ON 에서만 나온다
+DIALOG_LEVELS = ("Lv0", "Lv1", "Lv2")
 UNAVAILABLE = {"R2′": "개선 코드가 아직 없음", "R3′": "개선 코드가 아직 없음"}
 PHASE = {c: ("on" if v["PERSON_DICT"] == "on" else "off") for c, v in CONFIGS.items()}
 # 적재 때 쓰는 환경 (인물사전 OFF 적재는 지역 메타도 함께 저장해 'R2 + REGION_META'에 쓴다)
@@ -178,6 +180,7 @@ def load_plan(run_dir):
         return None
     return {"search": {c: set(v) for c, v in plan.get("search", {}).items()},
             "answer": {c: set(v) for c, v in plan.get("answer", {}).items()},
+            "dialog": {c: set(v) for c, v in plan.get("dialog", {}).items()},
             "security": set(plan.get("security", []))}
 
 

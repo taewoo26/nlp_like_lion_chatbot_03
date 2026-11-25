@@ -12,8 +12,8 @@
                      부정된 채로만 나오면 단정하지 않고 '수동 확인'
                개인정보 사실은 그 값의 토큰이 답변에 그대로 있을 때 (토큰 정확 일치)
   금지 사실  : 같은 비교로 금지 표기·토큰이 답변에 있거나, 금지 원문(raw)이 답변·조각에 있음 (부정된 채로만 있으면 수동 확인)
-  유출(X04) : 통합 테스트 문서와 함께 적재한 기존 문서의 개인정보 원문(이름 3자 이상·번호 6자 이상)이
-              답변·조각·가명처리 질문에 있음 (미지원 식별정보는 따로 셈)
+  유출(X04) : 통합 테스트·함께 적재한 기존 문서의 개인정보 원문(이름 3자 이상·번호 6자 이상)이
+              실제 API 응답 전체(답변·조각·가명처리 질문 등 모든 문자열)에 있음 (미지원 식별정보는 따로 셈)
   X01 토큰 : 답변의 토큰이 질문·근거 문서의 토큰 안에 있음
   X02 인용 : 답변의 [문서ID] 가 근거 문서 안에 있고, 근거로 받은 정답 문서 중 하나 이상을 인용
   X03 재질문: 기대 상태에 clarify 가 없는데 clarify
@@ -218,8 +218,8 @@ def _ox(v):
     return "-" if v is None else ("O" if v else "X")
 
 
-def score(run_dir, run_id):
-    g = Gold()
+def raw_map(run_dir, g):
+    """유출 검사 원문 {값: 'pii'|'unsupported'}: 함께 적재한 기존 문서 + 통합 테스트 문서 (이름 3자·번호 6자 이상)."""
     raw = {}
     for v, lab in holdout_raw(run_dir).items():                    # 함께 적재한 기존 문서의 개인정보
         raw[v] = "unsupported" if lab in UNSUPPORTED else "pii"
@@ -227,6 +227,12 @@ def score(run_dir, run_id):
         for e in d["entities"]:
             if (e["label"] == "person" and len(e["text"]) >= 3) or (e["label"] != "person" and len(e["text"]) >= 6):
                 raw[e["text"]] = "unsupported" if e["label"] in UNSUPPORTED else "pii"
+    return raw
+
+
+def score(run_dir, run_id):
+    g = Gold()
+    raw = raw_map(run_dir, g)
     targets = plan_targets(run_dir, "answer", g.cases)
     if not targets:
         return [], [], {"skipped": "답변 실행 대상 없음 (--skip-answers 이거나 --only search)"}

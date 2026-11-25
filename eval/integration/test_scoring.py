@@ -172,7 +172,7 @@ def test_coverage_lists_all_scenarios():
     g = Gold()
     cov = RP._coverage([], g)
     assert len(cov) == len(g.scenarios) + 7
-    assert {c["ID"] for c in cov if c["상태"] == "채점 미구현"} >= {"Q12", "Q13", "G01", "G02", "G16"}
+    assert {c["ID"] for c in cov if c["상태"] == "채점 미구현"} == {"G01", "G02", "G16"}   # Q12·Q13 은 대화 채점(score_dialog)
 
 
 # ---------------------------------------------------------------- 2차 검토 반례
@@ -367,6 +367,49 @@ def test_wipe_guard_db_unreachable(monkeypatch):
         R.check_wipe_safe(h, False, "it")
 
 
+def test_dialog_follow_merge_turns_and_unverified():
+    """검토 반례: 이어받기 누락·불일치, 합치기 실패, 턴 누락, 검사 대상 없음은 통과가 아니어야 한다."""
+    from . import score_dialog as SDG
+    d = _dlg("ITM01")                                              # Q12: 2턴이 조각 → 합쳐야 함
+    t1 = _turn(1, need_more=True, state="clarify")
+    ok2 = dict(docs=["IT0019"], answer="대출 금액은 2,500만 원입니다 [IT0019]")
+    assert SDG.judge(d, {"turns": [t1, _turn(2, follow="req_1", **ok2)]}, {})[0] == "통과"
+    res, actual, stage, _, _ = SDG.judge(d, {"turns": [t1, _turn(2, follow=None, merged=True, **ok2)]}, {})
+    assert res == "실패" and stage == "재질문·이어받기", actual              # follow_up_of 누락
+    assert SDG.judge(d, {"turns": [t1, _turn(2, follow="req_9", **ok2)]}, {})[0] == "실패"   # 1턴 request_id 와 다름
+    res, actual, stage, _, _ = SDG.judge(d, {"turns": [t1, _turn(2, follow="req_1", merged=False, **ok2)]}, {})
+    assert res == "실패" and stage == "재질문·이어받기", actual              # 합치기 실패 (merged=False)
+    d5 = _dlg("ITM05")                                             # Q11: 2턴이 완전한 질문 → 합치기는 보지 않음
+    ok5 = {"turns": [t1, _turn(2, follow="req_1", merged=False, docs=["IT0017"], answer="카드 분실은 11월 11일 접수 [IT0017]")]}
+    assert SDG.judge(d5, ok5, {})[0] == "통과"
+    d3 = _dlg("ITM03")                                             # Q13: 1턴만 실행되면 기대 상태(clarify)여도 통과 아님
+    res, actual, stage, _, _ = SDG.judge(d3, {"turns": [t1]}, {})
+    assert res == "실패" and stage == "대화 중단" and "1/2" in actual
+    _, _, _, x04, x06 = SDG.judge(d, {"turns": []}, {"홍길동": "pii"})
+    assert x04[0] == "미검증" and x06[0] == "미검증"                      # 응답·감사 로그가 아예 없음
+    no_audit = {"turns": [_turn(1, need_more=True, state="clarify", audit=False), _turn(2, follow="req_1", audit=False, **ok2)]}
+    assert SDG.judge(d, no_audit, {})[4][0] == "미검증"
+
+
+def test_dialog_same_person_docs_and_canned_text():
+    """실제 실행 반례: 대상 인물 본인의 다른 문서는 동명이인 문서가 아니고, 고정 안내문에는 금지 사실 검사를 하지 않는다."""
+    from . import score_dialog as SDG
+    t1 = _turn(1, need_more=True, state="clarify")
+    d5 = _dlg("ITM05")                                             # 채윤호(PS17) 문서 IT0015~0018 → IT0018 은 본인 문서
+    same = {"turns": [t1, _turn(2, follow="req_1", merged=False, docs=["IT0017", "IT0018"],
+                                answer="카드 재발급은 11월 11일 예정 [IT0017] [IT0018]")]}
+    res, actual, _, _, _ = SDG.judge(d5, same, {})
+    assert res == "통과" and "다른 사람" not in actual, actual
+    d1 = _dlg("ITM01")                                             # 오태린 PS03(IT0019) / PS04(IT0020)
+    homonym = {"turns": [t1, _turn(2, follow="req_1", docs=["IT0019", "IT0020"], answer="2,500만 원 [IT0019]")]}
+    res, actual, stage, _, _ = SDG.judge(d1, homonym, {})
+    assert res == "실패" and stage == "검색" and "IT0020" in actual   # 동명이인 문서는 여전히 실패
+    canned = {"turns": [t1, _turn(2, need_more=True, state="no_result", follow="req_1",
+                                  answer="문서를 찾지 못했습니다. (예: VOC요약, 피해접수, 카드분실상담)")]}
+    res, actual, stage, _, _ = SDG.judge(d1, canned, {})
+    assert "금지 사실" not in actual and stage == "재질문·이어받기", actual   # 실패 이유는 상태, 안내문 속 '분실' 아님
+
+
 if __name__ == "__main__":                                # monkeypatch 를 쓰는 테스트가 있어 pytest 로 실행한다
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
@@ -411,3 +454,57 @@ def test_x04_scans_whole_api_body():
             "extra": {"note": ["홍길동님"]}}
     assert "홍길동님" in " ".join(SA._strings(body))                  # 응답 어디에 있든 검사 대상
     assert "doc_id" not in " ".join(SA._strings(body))                # 키 이름은 제외
+
+
+def _dlg(did):
+    from . import score_dialog as SDG
+    return next(d for d in SDG._gold().dialogs if d["id"] == did)
+
+
+def _turn(i, need_more=False, state="answered", docs=(), answer="", follow=None, au_ok=True, fu=True, extra=None,
+          merged=None, audit=True):
+    au = {"rows": 1, "user_ok": True, "level_ok": au_ok, "state_ok": True, "docs_ok": True, "raw_in_masked": 0}
+    if follow:
+        au["follow_up_ok"] = fu
+    body = {"request_id": f"req_{i}", "answer": answer, "docs": [{"doc_id": d, "snippet": "s"} for d in docs],
+            "need_more": need_more, "masked_query": "q", **(extra or {})}
+    return {"turn": i, "request_id": f"req_{i}", "need_more": need_more, "state": state, "api_body": body,
+            "follow_up_of": follow, "merged": bool(follow) if merged is None else merged,
+            "clarify_code": "ask_person" if need_more else None, "audit": au if audit else None}
+
+
+def test_dialog_judge():
+    from . import score_dialog as SDG
+    d = _dlg("ITM01")                                              # 오태린 동명이인 → IT0019, 2,500만 원, 금지 '분실'
+    good = {"turns": [_turn(1, need_more=True, state="clarify"),
+                      _turn(2, docs=["IT0019"], answer="대출 금액은 2,500만 원입니다 [IT0019]", follow="req_1")]}
+    res, actual, stage, x04, x06 = SDG.judge(d, good, {"홍길동": "pii"})
+    assert res == "통과" and x04[0] == "통과" and x06[0] == "통과", (res, actual, x04, x06)
+    no_ask = {"turns": [_turn(1, state="answered", docs=["IT0019", "IT0020"], answer="2,500만 원"),
+                        _turn(2, docs=["IT0019"], answer="2,500만 원 [IT0019]")]}
+    res, _, stage, _, _ = SDG.judge(d, no_ask, {})
+    assert res == "실패" and stage == "재질문"                      # 1턴에 되묻지 않음
+    mixed = {"turns": [good["turns"][0], _turn(2, docs=["IT0019", "IT0020"], answer="2,500만 원 [IT0019]", follow="req_1")]}
+    res, actual, stage, _, _ = SDG.judge(d, mixed, {})
+    assert res == "실패" and stage == "검색" and "IT0020" in actual   # 동명이인 문서가 섞임
+    forbid = {"turns": [good["turns"][0], _turn(2, docs=["IT0019"], answer="2,500만 원, 카드 분실 신고 [IT0019]", follow="req_1")]}
+    assert SDG.judge(d, forbid, {})[0] == "실패"                   # 금지 사실
+    leak = {"turns": [good["turns"][0], _turn(2, docs=["IT0019"], answer="2,500만 원", follow="req_1",
+                                              extra={"debug": "홍길동"})]}
+    assert SDG.judge(d, leak, {"홍길동": "pii"})[3][0] == "실패"     # 응답 어느 필드든 원문이면 X04 실패
+    bad_fu = {"turns": [good["turns"][0], _turn(2, docs=["IT0019"], answer="2,500만 원", follow="req_1", fu=False)]}
+    assert SDG.judge(d, bad_fu, {})[4][0] == "실패"                 # follow_up_of 불일치
+    no_col = {"turns": [good["turns"][0], _turn(2, docs=["IT0019"], answer="2,500만 원", follow="req_1", fu=None)]}
+    assert SDG.judge(d, no_col, {})[4][0] == "미검증"
+    lv0 = {"turns": [_turn(1, need_more=True, state="clarify", au_ok=False), good["turns"][1]]}
+    assert SDG.judge(d, lv0, {})[4][0] == "실패"                    # 감사 로그 레벨 불일치
+
+
+def test_dialog_unresolvable_and_split():
+    from . import score_dialog as SDG
+    d = _dlg("ITM03")                                              # 송유찬: 보충 답으로도 특정 불가 → 되묻기·보류
+    ok = {"turns": [_turn(1, need_more=True, state="clarify"), _turn(2, need_more=True, state="no_result", follow="req_1")]}
+    assert SDG.judge(d, ok, {})[0] == "통과"                       # 다시 되물음 (need_more) 도 인정
+    picked = {"turns": [ok["turns"][0], _turn(2, state="answered", docs=["IT0051"], answer="상담 내용 [IT0051]", follow="req_1")]}
+    assert SDG.judge(d, picked, {})[0] == "실패"                    # 한 사람으로 확정해 답함
+    assert SDG.dialog_split(d) == "check" and SDG.dialog_split(_dlg("ITM01")) == "dev"
