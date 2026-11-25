@@ -169,8 +169,15 @@ def run(docs, args, pseudo_path):
         if not args.reset:
             cur.execute('SELECT DISTINCT doc_id FROM rag.chunks WHERE doc_id = ANY(%s)',
                         ([d['id'] for d in docs],))
-            if cur.fetchone() or {r['doc_id'] for r in existing} & {d['id'] for d in docs}:
-                raise ValueError('기존 데이터와 문서 ID가 중복됩니다. 새 문서만 입력하세요.')
+            dup_in_db = {row[0] for row in cur.fetchall()}
+            dup_in_existing = {r['doc_id'] for r in existing} & {d['id'] for d in docs}
+            skip_ids = dup_in_db | dup_in_existing
+            if skip_ids:
+                print(f"중복 문서 {len(skip_ids)}건 제외: {', '.join(sorted(skip_ids))}")
+                docs = [d for d in docs if d['id'] not in skip_ids]
+            if not docs:
+                print("중복을 제외하면 적재할 문서가 없습니다.")
+                return
             check_embedding_model(cur)
         rules = load_rules(cur)
         pool = make_pool(args.workers, args, config.meta_on('REGION_META'), config.meta_on('ROLE_META'), rules)
