@@ -140,13 +140,29 @@ def test_admin_conn_falls_back_to_superuser_without_dsn(monkeypatch):
     assert seen == [config._SUPERUSER_DSN]
 
 
+# app_admin 권한(08_admin_grants.sh) 밖의 기능이라 아직 소유자·Vault 계정을 쓰는 관리자 API.
+#   검토(review)·토큰(tokens)·인물(persons): normalized·originals·evidence 를 읽고 person_registry 를 고친다
+#   업로드(upload): 적재(rag.chunks 쓰기)
+# 검토 화면은 애매한 인물 판정을 위해 실명을 보여 준다(의도된 기능). app_admin 은 원문을 못 읽게 두었으므로 이 API들은 제외한다.
+ADMIN_LEGACY_ROUTES = ("/api/admin/review", "/api/admin/tokens", "/api/admin/persons", "/api/admin/upload")
+
+
 def test_admin_api_uses_only_admin_conn():
-    """관리자 API 코드가 소유자·Vault 계정(rag_conn·vault_conn)이나 로그인 계정(auth_conn)을 직접 쓰지 않는다."""
+    """관리자 API(예외 목록 제외)가 소유자·Vault 계정(rag_conn·vault_conn)이나 로그인 계정(auth_conn)을 직접 쓰지 않는다."""
     import pathlib
+    import re
     src = pathlib.Path(__file__).resolve().parents[1].joinpath("service", "app.py").read_text(encoding="utf-8")
     admin_part = src[src.index('@app.get("/admin")'):]
-    for name in ("rag_conn", "vault_conn", "auth_conn"):
-        assert f"db.{name}(" not in admin_part
+    blocks = re.split(r'(?m)^(?=@app\.)', admin_part)
+    checked = 0
+    for block in blocks:
+        m = re.match(r'@app\.\w+\("([^"]+)"', block)
+        if not m or m.group(1).startswith(ADMIN_LEGACY_ROUTES):
+            continue
+        checked += 1
+        for name in ("rag_conn", "vault_conn", "auth_conn"):
+            assert f"db.{name}(" not in block, f"{m.group(1)} 이 db.{name}() 을 씀"
+    assert checked >= 5
 
 
 @pytest.fixture

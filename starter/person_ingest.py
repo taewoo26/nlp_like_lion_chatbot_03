@@ -57,7 +57,7 @@ def validate_resolution(cur, result, mapping):
     check_look_up(result['rows'], result['look_up'], chunks)
 
 
-def prepare_candidates(docs, max_chars, rules, detected=None):
+def prepare_candidates(docs, max_chars, rules, detected=None, source="pipeline"):
     """탐지 결과 주입은 테스트용. 기본 실행은 정답 라벨을 읽지 않는다."""
     from .ingest import collect_mapping, process_doc
     chunks, mapping, pseudo, candidates, links = [], {}, [], [], []
@@ -66,7 +66,8 @@ def prepare_candidates(docs, max_chars, rules, detected=None):
     for doc in docs:
         result = process_doc(doc, max_chars, config.meta_on('REGION_META'),
                              config.meta_on('ROLE_META'), rules,
-                             detected=detected.get(doc['id']) if detected else None)
+                             detected=detected.get(doc['id']) if detected else None,
+                             source=source)
         masked_parts = [r['masked_text'] for r in result['rows']]
         masked = result['masked_text']
         rows, doc_links = build_doc_candidates(doc['id'], doc['text'], masked,
@@ -170,14 +171,21 @@ def run(docs, args, pseudo_path):
         if not args.reset:
             cur.execute('SELECT DISTINCT doc_id FROM rag.chunks WHERE doc_id = ANY(%s)',
                         ([d['id'] for d in docs],))
-            if cur.fetchone() or {r['doc_id'] for r in existing} & {d['id'] for d in docs}:
-                raise ValueError('기존 데이터와 문서 ID가 중복됩니다. 새 문서만 입력하세요.')
+            dup_in_db = {row[0] for row in cur.fetchall()}
+            dup_in_existing = {r['doc_id'] for r in existing} & {d['id'] for d in docs}
+            skip_ids = dup_in_db | dup_in_existing
+            if skip_ids:
+                print(f"중복 문서 {len(skip_ids)}건 제외: {', '.join(sorted(skip_ids))}")
+                docs = [d for d in docs if d['id'] not in skip_ids]
+            if not docs:
+                print("중복을 제외하면 적재할 문서가 없습니다.")
+                return
             check_embedding_model(cur)
         rules = load_rules(cur)
         pool = make_pool(args.workers, args, config.meta_on('REGION_META'), config.meta_on('ROLE_META'), rules)
         try:
             detected = dict(zip((d['id'] for d in docs), pool.map(_worker_detect, docs))) if pool else None
-            chunks, mapping, pseudo, rows, links = prepare_candidates(docs, args.max_chars, rules, detected)
+            chunks, mapping, pseudo, rows, links = prepare_candidates(docs, args.max_chars, rules, detected, source=args.source)
         finally:
             if pool:
                 pool.terminate()

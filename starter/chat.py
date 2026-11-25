@@ -13,6 +13,12 @@ answer() 결과의 state (audit.query_log.state, 코드값 시트 기준)
   withheld    : LLM이 문서로 확인할 수 없다고 답함 (답변 문구로 판정. 오판 가능)
                 또는 출력 재검사가 차단함 (recheck action=blocked, search_only 에서도)
   answered    : 문서를 근거로 LLM이 답함
+  재질문(CLR, starter/clarify.py): state 값은 늘리지 않고 clarify_code 로 원인을 따로 남긴다.
+    사람·식별자가 걸린 재질문(B 그룹)은 원인과 관계없이 같은 문장, 문서 번호·조각은 화면에 보내지 않는다.
+    clarify   : too_vague(CLR-08) / ask_region(01) / ask_doc_type(10) / ask_person(02)
+    no_result : person(03) / role(04) / region(05) / token(06) / keyword(07),
+                원인 불명이면 None (토큰이 있는 질문이면 unknown — 통일 응답)
+    withheld  : withheld(09) — LLM 답 뒤에 보충 안내를 덧붙인다 (출력 재검사 차단은 제외)
   error 는 예외로 올라가므로 호출하는 쪽이 정한다. 가명처리 뒤에 난 예외에는
   masked_query, query_tokens 속성이 붙어 있다 (search.tag_masked).
 
@@ -25,7 +31,7 @@ import time
 
 import requests
 
-from . import config, recheck
+from . import clarify, config, recheck
 from .bm25 import extract_terms
 from .search import search, tag_masked
 
@@ -112,10 +118,13 @@ def _post_llm(payload, retries=5):
         return r
 
 
-def answer(query, k=3):
-    masked_q, q_tokens, docs, meta = search(query, k, with_meta=True)
+def answer(query, k=3, context=None):
+    """context: 직전 재질문 (service/app.py). 지금 질문이 조각이면 직전 질문과 합쳐서 찾는다."""
+    masked_q, q_tokens, docs, meta = search(query, k, with_meta=True, **({"context": context} if context else {}))
     try:
-        return _answer(masked_q, q_tokens, docs, meta)
+        res = _answer(masked_q, q_tokens, docs, meta)
+        res["merged"] = bool(meta.get("merged"))   # 이전 질문과 합쳐서 찾았는지 (화면 안내용)
+        return res
     except Exception as exc:
         tag_masked(exc, masked_q, q_tokens)
         raise
@@ -126,23 +135,34 @@ def _answer(masked_q, q_tokens, docs, meta):
     context = "\n\n".join(_doc_block(d, q_tokens, q_keywords) for d in docs)
     token_note = f"\n질문에 포함된 토큰: {', '.join(q_tokens)}" if q_tokens else ""
     result = {"masked_query": masked_q, "query_tokens": q_tokens, "docs": docs, "answer": None,
-              "notice": None, "state": None, "recheck": None}
+              "notice": None, "state": None, "recheck": None,
+              "clarify_code": None}                # 재질문 코드 (starter/clarify.py). 화면 표시·감사 로그용
     if meta.get("person_candidates") and not meta.get("ask_person") and docs:
         token_note += "\n(시스템 확인) 인물 연결표의 이름·역할 조건으로 찾은 문서입니다. 이름 토큰 일치만으로 서로 다른 문서의 인물을 동일인이라고 단정하지 마세요."
-    if meta.get("ask_person"):                     # 동일인이 확정되지 않은 후보가 여러 명 → 되묻기
-        result["answer"] = "이름·역할 조건에 맞는 문서는 찾았지만 동일인 여부가 확정되지 않은 후보가 여러 명입니다. 한 사람의 기록으로 합쳐 답하지 않겠습니다. 역할 등 추가 단서를 알려 주세요."
-        return _rechecked(result, "clarify", check_answer=False)
-    if meta["ask_region"]:                         # REG-33 이름이 겹치는 시군구
-        result["answer"] = f"어느 지역의 {meta['ask_region']}인가요? 시·도를 함께 알려 주세요."
-        return _rechecked(result, "clarify", check_answer=False)
-    if meta["excluded"]:                           # ROLE-43 실명 없이 건수만 안내
+    asked = clarify.pre_answer(meta, q_tokens)     # 검색 결과보다 먼저 되물을 것 (CLR-08 → 01 → 10 → 02)
+    if asked:                                      # 되물을 것이 있으면
+        result["clarify_code"], result["answer"] = asked   # 코드와 문구를 담고
+        if result["clarify_code"] in ("too_vague", "ask_person"):   # 막연한 질문·동명이인은 문서를 보여 주지 않는다
+            result["docs"] = []                    # 동명이인: 문서 번호·조각만으로 후보가 드러나므로 숨김 (B 그룹)
+        return _rechecked(result, "clarify", check_answer=False)   # 고정 문구라 답변 재검사는 생략
+    has_person = any(t.startswith("<PERSON_") for t in q_tokens)   # 질문에 이름이 있는지
+    if meta["excluded"] and not has_person:        # ROLE-43 실명 없이 건수만 안내 (이름이 있으면 다른 역할의 존재가 드러나므로 생략)
         result["notice"] = f"요청한 역할과 다른 문서 {meta['excluded']}건은 제외했습니다."
     if meta["regions"]:                            # 문서 주소는 토큰이라 LLM이 지역을 확인할 수 없다
         token_note += ("\n(시스템 확인) 질문의 지역 조건은 검색 단계에서 이미 확인했고, 그 지역 문서만 드렸습니다. "
                        "문서의 주소는 <ADDRESS_…> 토큰으로 가려져 있으니 지역은 다시 따지지 말고 나머지 질문에 답하세요.")
     if not docs:
-        result['answer'] = '일치하는 문서를 찾지 못했습니다.'
-        result["state"] = "no_result"
+        result['answer'] = clarify.no_result_message(meta, q_tokens)   # 사람·식별자가 걸리면 통일 응답, 아니면 원인별 문구
+        result["clarify_code"] = meta.get("empty_reason")     # CLR-03~06 원인은 감사 로그에만 (없으면 None)
+        if result["clarify_code"] is None and clarify.is_person_group(None, q_tokens):   # 토큰 질문의 원인 불명 0건도
+            result["clarify_code"] = "unknown"                # 원인 불명이지만 통일 응답이라 화면 배지를 다른 B 그룹과 맞춘다
+        result["state"] = "no_result"              # state 는 그대로 no_result (원인은 clarify_code 로 구분)
+        return result
+    if meta.get("keyword_miss"):                   # CLR-07 질문 단어가 문서 어디에도 없음 → 엉뚱한 문서로 답하지 않는다
+        result["answer"] = clarify.MESSAGES["keyword"]        # 문서에 쓰는 이름으로 다시 물어 달라고 안내
+        result["clarify_code"] = "keyword"                    # CLR-07
+        result["docs"] = []                                   # 관련 없는 문서는 보여 주지 않는다
+        result["state"] = "no_result"                         # 문서를 근거로 답하지 않았으므로 no_result
         return result
     if not config.LLM_API_KEY:
         return _rechecked(result, "search_only")
@@ -154,7 +174,12 @@ def _answer(masked_q, q_tokens, docs, meta):
     known = set(q_tokens) | {t for d in docs for t in TOKEN.findall(d["masked_text"])}
     result["answer"] = _restore_tokens(r.json()["choices"][0]["message"]["content"], known)
     withheld = any(w in result["answer"] for w in WITHHELD_WORDS)
-    return _rechecked(result, "withheld" if withheld else "answered")
+    result = _rechecked(result, "withheld" if withheld else "answered")
+    blocked = (result["recheck"] or {}).get("action") == "blocked"   # 출력 재검사로 막힌 경우는 재질문 대상이 아님
+    if withheld and not blocked:                   # CLR-09 문서는 찾았지만 요청한 정보가 없음
+        result["answer"] += "\n\n" + clarify.withheld_hint(len(result["docs"]))   # 무엇을 보충할지 덧붙인다
+        result["clarify_code"] = "withheld"        # 화면에서 '조건 확인 필요'로 표시
+    return result
 
 
 def _rechecked(result, state, check_answer=True):

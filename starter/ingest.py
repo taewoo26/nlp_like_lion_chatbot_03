@@ -205,7 +205,7 @@ def detect_doc(d):
     return spans, masked, records
 
 
-def process_doc(d, max_chars, region_on, role_on, rules, detected=None):
+def process_doc(d, max_chars, region_on, role_on, rules, detected=None, source="pipeline"):
     """문서 1건: 탐지 → 가명처리 → 청크 → 메타데이터. 다른 문서와 공유하는 상태가 없어 워커에서 돌려도 된다.
 
     detected가 있으면 탐지 결과를 재사용하며 이름 토큰은 그대로 유지한다.
@@ -224,7 +224,7 @@ def process_doc(d, max_chars, region_on, role_on, rules, detected=None):
                      "doc_type": d.get("doc_type"), "masked_text": c,
                      "tokens": sorted(set(pii_pipeline.TOKEN_PATTERN.findall(c)) | aliases),
                      "persons": json.dumps(persons.get(chunk_id, []), ensure_ascii=False),
-                     "regions": regions})
+                     "regions": regions, "source": source})
     pseudo = {"id": d["id"], "entities": [
         {k: r[k] for k in ("label", "start", "end", "token")} for r in records]}
     return {"id": d["id"], "rows": rows, "records": records, "pseudo": pseudo, "masked_text": masked}
@@ -234,7 +234,7 @@ def process_doc(d, max_chars, region_on, role_on, rules, detected=None):
 _WORKER = {}
 
 
-def _init_worker(max_chars, region_on, role_on, rules):
+def _init_worker(max_chars, region_on, role_on, rules, source="pipeline"):
     for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         os.environ[name] = "1"          # 워커끼리 코어를 두고 다투지 않게 한다
     try:
@@ -242,7 +242,7 @@ def _init_worker(max_chars, region_on, role_on, rules):
         torch.set_num_threads(1)
     except Exception:
         pass
-    _WORKER.update(max_chars=max_chars, region_on=region_on, role_on=role_on, rules=rules)
+    _WORKER.update(max_chars=max_chars, region_on=region_on, role_on=role_on, rules=rules, source=source)
     pii_pipeline._detector()            # 모델을 미리 읽어 둔다
 
 
@@ -260,7 +260,7 @@ def make_pool(workers, a, region_on, role_on, rules):
         return None
     import multiprocessing
     return multiprocessing.get_context("spawn").Pool(
-        workers, initializer=_init_worker, initargs=(a.max_chars, region_on, role_on, rules))
+        workers, initializer=_init_worker, initargs=(a.max_chars, region_on, role_on, rules, a.source))
 
 
 def prepare(docs, a, region_on, role_on, rules, pool=None):
@@ -268,7 +268,7 @@ def prepare(docs, a, region_on, role_on, rules, pool=None):
     결과는 항상 문서 순서대로 받아 토큰 충돌 검사·조립은 이 프로세스에서 순서대로 한다.
     """
     if pool is None:
-        results = [process_doc(d, a.max_chars, region_on, role_on, rules) for d in docs]
+        results = [process_doc(d, a.max_chars, region_on, role_on, rules, source=a.source) for d in docs]
     else:
         results = pool.map(_worker_process, docs, chunksize=1)
     rows, mapping, pseudo, counts = [], {}, [], {}
@@ -282,12 +282,12 @@ def prepare(docs, a, region_on, role_on, rules, pool=None):
 
 
 INSERT_SQL = """INSERT INTO rag.chunks (chunk_id, doc_id, chunk_idx, doc_type, masked_text, tokens, embedding,
-                                       persons, regions)
+                                       persons, regions, source)
                VALUES (%(chunk_id)s, %(doc_id)s, %(chunk_idx)s, %(doc_type)s, %(masked_text)s, %(tokens)s,
-                       %(embedding)s, %(persons)s::jsonb, %(regions)s)
+                       %(embedding)s, %(persons)s::jsonb, %(regions)s, %(source)s)
                ON CONFLICT (chunk_id) DO UPDATE SET masked_text = EXCLUDED.masked_text,
                    tokens = EXCLUDED.tokens, embedding = EXCLUDED.embedding, doc_type = EXCLUDED.doc_type,
-                   persons = EXCLUDED.persons, regions = EXCLUDED.regions"""
+                   persons = EXCLUDED.persons, regions = EXCLUDED.regions, source = EXCLUDED.source"""
 
 
 def reset_and_ingest(docs, args, rules, pseudo_path):
@@ -327,6 +327,8 @@ def main():
     ap.add_argument("--resume", action="store_true", help="중단된 실행을 이어서 (완료 확인된 문서만 건너뜀)")
     ap.add_argument("--workers", type=int, default=int(config.env("INGEST_WORKERS", "1")),
                     help="탐지·가명처리에 쓸 프로세스 수 (기본 .env INGEST_WORKERS 또는 1). 결과는 1일 때와 같다")
+    ap.add_argument("--source", default="pipeline",
+                    help="적재 출처 (pipeline | upload)")
     a = ap.parse_args()
     if a.reset and a.resume:
         raise SystemExit("--reset 과 --resume 은 함께 쓸 수 없습니다.")

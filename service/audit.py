@@ -17,6 +17,8 @@
     2) 실패 사실(시각·request_id·단계·예외 종류)은 outputs/server_error.log 와 터미널에 남긴다
     3) 대체 파일도 실패하면 server_error.log 에만 남는다 (행 내용 없음)
   예외 메시지 전체와 질문 원문은 어디에도 남기지 않는다.
+- clarify_code·follow_up_of: 재질문 원인과 '재질문 → 보충 질문' 연결 (infra/init/05_audit.sql).
+  지난 행의 state 는 고치지 않는다. 두 행을 follow_up_of 로 묶어 '재질문 후 해결'을 센다.
 - 기록 계정: app_search(db.search_conn, query_log INSERT 만). SEARCH_DSN 이 없으면 rag_user 로 대체.
 """
 import json
@@ -41,12 +43,12 @@ INSERT INTO audit.query_log (
     request_id, user_id, level, team_cd, position,
     masked_query, query_tokens, returned_doc_ids,
     recheck_action, recheck_labels, recheck_detector,
-    state, latency_ms, policy_version)
+    state, latency_ms, clarify_code, follow_up_of, policy_version)
 VALUES (
     %(request_id)s, %(user_id)s, %(level)s, %(team_cd)s, %(position)s,
     %(masked_query)s, %(query_tokens)s::text[], %(returned_doc_ids)s::text[],
     %(recheck_action)s, %(recheck_labels)s, %(recheck_detector)s,
-    %(state)s, %(latency_ms)s,
+    %(state)s, %(latency_ms)s, %(clarify_code)s, %(follow_up_of)s,
     (SELECT version FROM policy.policy_state WHERE policy_state_id = 1))
 """
 
@@ -85,13 +87,16 @@ def new_request_id(now=None):
     return f"req_{now:%Y%m%d}_{uuid.uuid4().hex[:12]}"
 
 
-def build_row(request_id, user, *, result=None, error=None, latency_ms=None):
-    """query_log 한 행(dict). result(chat.answer 결과)나 error(예외) 중 하나를 넘긴다."""
+def build_row(request_id, user, *, result=None, error=None, latency_ms=None, follow_up_of=None):
+    """query_log 한 행(dict). result(chat.answer 결과)나 error(예외) 중 하나를 넘긴다.
+    follow_up_of: 재질문 바로 다음 질문이면 그 재질문의 request_id (app.py 가 본인 질문인지 확인한 값)."""
+    clarify_code = None                     # 재질문 원인 (예외면 없음)
     if result is not None:
         masked, tokens = result["masked_query"], result["query_tokens"]
         doc_ids = [d["doc_id"] for d in result["docs"]]
         state = result["state"]
         rc = result.get("recheck") or {}
+        clarify_code = result.get("clarify_code")   # starter/clarify.py 코드 (재질문이 아니면 None)
     else:
         masked = getattr(error, "masked_query", None)
         tokens = getattr(error, "query_tokens", None) or []
@@ -113,6 +118,8 @@ def build_row(request_id, user, *, result=None, error=None, latency_ms=None):
         "recheck_detector": rc.get("detector"),
         "state": state,
         "latency_ms": latency_ms,
+        "clarify_code": clarify_code,       # 재질문 원인
+        "follow_up_of": follow_up_of,       # 이어받은 재질문의 request_id
     }
 
 

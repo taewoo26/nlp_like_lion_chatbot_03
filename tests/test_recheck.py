@@ -255,9 +255,9 @@ def test_clarify_rechecks_snippets_only(fake, monkeypatch):
     fake({"김철수": "person", "후보": "person"})
     docs = [{"doc_id": "H0001", "masked_text": "담당 김철수"}]
     monkeypatch.setattr(chat, "search", lambda *a, **kw: (f"{TOK} 한도", [TOK], docs, dict(NO_META, ask_person=True)))
-    res = chat.answer("질문")                                   # 인물 되묻기는 문서 목록을 함께 돌려준다
-    assert res["state"] == "clarify" and res["recheck"]["labels"] == {"person": 1}   # 되묻기 문구('후보')는 안 봄
-    assert "김철수" not in res["docs"][0]["snippet"] and "후보가 여러 명" in res["answer"]
+    res = chat.answer("질문")                                   # 인물 되묻기는 문서를 숨긴다 (재질문 B 그룹)
+    assert res["state"] == "clarify" and res["docs"] == [] and res["recheck"] is None   # 보낼 문서가 없어 재검사할 것도 없음
+    assert "김철수" not in res["answer"] and res["answer"].startswith("이 질문만으로는")
 
 
 def test_clarify_without_docs_is_not_rechecked(fake, monkeypatch):

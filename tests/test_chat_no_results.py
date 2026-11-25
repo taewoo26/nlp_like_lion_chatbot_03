@@ -12,7 +12,7 @@ def test_no_matching_documents_does_not_call_llm(monkeypatch):
     monkeypatch.setattr(chat.requests, 'post', post)
     result = chat.answer('입력')
     assert result['docs'] == []
-    assert result['answer'] == '일치하는 문서를 찾지 못했습니다.'
+    assert result['answer'].startswith('이 질문만으로는 답변할 수 있는 정보가 없습니다')   # 이름이 걸린 0건은 통일 응답 (starter/clarify.py)
     post.assert_not_called()
 
 
@@ -84,11 +84,11 @@ def test_ambiguous_person_does_not_call_llm(monkeypatch):
     post = Mock()
     monkeypatch.setattr(chat.requests, 'post', post)
     result = chat.answer('입력')
-    assert '여러 명' in result['answer']
+    assert result['answer'].startswith('이 질문만으로는') and '2' not in result['answer']   # 후보 수를 알리지 않는다
     post.assert_not_called()
 
 
-def test_ambiguous_person_keeps_documents_but_does_not_call_llm(monkeypatch):
+def test_ambiguous_person_hides_documents_and_does_not_call_llm(monkeypatch):
     docs = [{'doc_id': 'A', 'masked_text': '<PERSON_a> 문의'},
             {'doc_id': 'B', 'masked_text': '<PERSON_a> 재문의'}]
     meta = dict(NO_META, ask_person=True, person_candidates={'<PERSON_a>': 2})
@@ -96,6 +96,6 @@ def test_ambiguous_person_keeps_documents_but_does_not_call_llm(monkeypatch):
     post = Mock()
     monkeypatch.setattr(chat.requests, 'post', post)
     result = chat.answer('입력')
-    assert result['docs'] == docs
-    assert '동일인 여부가 확정되지 않은' in result['answer']
+    assert result['docs'] == []                    # 재질문 B 그룹: 문서 번호·조각으로 후보가 드러나지 않게 숨김 (starter/clarify.py)
+    assert result['answer'].startswith('이 질문만으로는 답변할 수 있는 정보가 없습니다')
     post.assert_not_called()

@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS rag.person_roles;   -- 실전 2 시험용 테이블. person
 
 ALTER TABLE rag.chunks ADD COLUMN IF NOT EXISTS persons JSONB  NOT NULL DEFAULT '[]';
 ALTER TABLE rag.chunks ADD COLUMN IF NOT EXISTS regions TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE rag.chunks ADD COLUMN IF NOT EXISTS source  TEXT   NOT NULL DEFAULT 'pipeline';
 CREATE INDEX IF NOT EXISTS chunks_persons_gin ON rag.chunks USING GIN (persons jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS chunks_regions_gin ON rag.chunks USING GIN (regions);
 
