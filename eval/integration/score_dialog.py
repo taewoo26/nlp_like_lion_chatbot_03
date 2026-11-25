@@ -6,8 +6,9 @@
   턴 수    : 정답지의 턴이 모두 실행돼야 한다 (덜 실행되면 통과로 보지 않고 실패)
   1턴      : 기대가 clarify 면 1턴 API 응답이 되묻기(need_more)여야 한다
   이어받기  : 1턴이 되물었으면 2턴 요청의 follow_up_of 가 1턴 request_id 와 같아야 한다 (없거나 다르면 실패)
-  합치기    : 2턴이 빠진 조건만 채우는 조각인 시나리오(MERGE_SCENARIOS: Q10 필수 조건 보충, Q12 추가 정보 제공)는
-             2턴 응답이 직전 질문과 합쳐서 찾았다(merged=True)여야 한다. Q11(2턴이 완전한 질문)·Q13(특정 불가)은 보지 않는다
+  합치기    : 정답지 expect.merged 가 true 인 대화(동명이인 되묻기 뒤 번호·지역 조각: ITM01·ITM02)는 2턴 응답이
+             직전 질문과 합쳐서 찾았다(merged=True)여야 한다. 재질문 정의서 기준: 이어받기는 직전 재질문이 사람·식별자(B 그룹)나
+             지역 되묻기일 때만 하고, 찾은 문서에 정보 없음(CLR-09)·표현 불일치(CLR-07) 뒤에는 보충 질문으로 새로 검색한다
   최종 상태 : 마지막 턴의 상태(chat 내부 state)가 기대 목록 안. 기대에 clarify 가 있으면 되묻기 응답(need_more)도 인정
   근거 문서 : 기대 문서가 있으면 마지막 턴 API 응답 문서에 전부 있고, 같은 이름의 다른 사람(동명이인) 문서는 없어야 한다.
              대상 인물 = 기대 문서에 나오는 같은 이름 인물. 대상 인물 본인의 다른 문서는 '다른 사람 문서'로 보지 않는다.
@@ -22,11 +23,10 @@
 import collections
 import pathlib
 
-from .common import DIALOG_LEVELS, EXEC_ERROR, MANUAL, NOT_RUN, Gold, jl_read, latest, load_plan, result_row
+from .common import DIALOG_LEVELS, EXEC_ERROR, MANUAL, is_db_error_row, NOT_RUN, Gold, jl_read, latest, load_plan, result_row
 from .score_answer import CITE, _ox, _strings, fact_status, forbid_status, raw_map
 
 _GOLD = None
-MERGE_SCENARIOS = ("Q10", "Q12")       # 2턴이 조각(빠진 조건만)이라 직전 질문과 합쳐야 답할 수 있는 시나리오
 
 
 def _gold():
@@ -81,7 +81,7 @@ def judge(d, t, raw):
         else:
             ok_fu = None
         parts.append(f"2턴 이어받기 {_ox(ok_fu) if ok_fu is not None else '-'}, 합침 {_ox(second.get('merged'))}")
-        if d["scenario"] in MERGE_SCENARIOS:                        # 조각 답은 직전 질문과 합쳐서 찾아야 한다
+        if exp.get("merged"):                                       # 조각 답은 직전 질문과 합쳐서 찾아야 한다 (정답지 expect.merged)
             checks.append(("재질문·이어받기", bool(second.get("merged"))))
     want = _as_list(exp.get("final_state"))
     st = last.get("state")
@@ -184,6 +184,8 @@ def score(run_dir, run_id):
                         f"문서 {','.join(_as_list(exp.get('final_docs'))) or '특정 안 함'}, 사실 {len(exp.get('facts') or [])}개")
             for lv in DIALOG_LEVELS:
                 t = tr.get(f"{d['id']}|{lv}")
+                if t and "exec_error" not in t and any(is_db_error_row(tn) for tn in t.get("turns") or []):
+                    t = {**t, "exec_error": {"kind": "db", "status": None, "code": "OperationalError", "message": "DB 연결 끊김 (HTTP 500 으로 저장된 기록)"}}
                 base = dict(unit="대화", run_id=d["id"], split=dialog_split(d, g), diff="", cfg=cfg, level=lv)
                 content = f"{lv}: {len(d['turns'])}턴 대화 ({title})"
                 cnt["대상"] += 1

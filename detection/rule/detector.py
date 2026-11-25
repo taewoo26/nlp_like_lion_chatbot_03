@@ -10,11 +10,13 @@ AREA_PHONE = (r"(?<!\d)(?:02|0(?:3[1-3]|4[1-4]|5[1-5]|6[1-4]))"
               r"[-. ]?\d{3,4}[-. ]?\d{4}(?!\d)")
 # 국제 표기: +82 10-1234-5678, +82 2-123-4567
 INTL_PHONE = r"(?<![\d+])\+82[-. ]?(?:1[016789]|2|[3-6]\d)[-. ]?\d{3,4}[-. ]?\d{4}(?!\d)"
-PUBLIC_PHONE_CUE = re.compile(r"(?:대표\s*(?:번호|전화|연락처)?|고객센터|콜센터)\s*[:：]?\s*$")
+# 기본 탐지와 최종 후처리(filters.drop_non_targets)가 같이 쓰는 공용 번호 표시.
+# '대표' 단독은 넣지 않는다: '홍길동 대표 010-…'은 대표자 개인 번호일 수 있다.
+PUBLIC_PHONE_CUE = re.compile(r"(?:대표\s*(?:번호|전화|연락처)|고객\s?센터|콜\s?센터|내선)\s*[:：]?\s*\(?$")
 
 
-def _is_public_phone(text: str, start: int) -> bool:
-    """번호 바로 앞에 공용 대표번호 표시가 있으면 제외한다."""
+def is_public_phone(text: str, start: int) -> bool:
+    """번호 바로 앞(같은 줄)에 대표번호·고객센터·내선 표시가 있으면 공용 번호로 본다."""
     prefix = text[max(0, start - 20):start].split("\n")[-1]
     return PUBLIC_PHONE_CUE.search(prefix) is not None
 
@@ -22,7 +24,8 @@ def _is_public_phone(text: str, start: int) -> bool:
 # 앞에 '계좌'나 '은행'이 있는 숫자만 계좌로 본다 (민원번호 같은 일반 숫자와 구분)
 ACCOUNT_CUE = re.compile(r"(?:계좌|은행)[^\n\d]{0,12}$")
 
-RRN = r"(?<!\d)\d{6}[- ]?[1-8]\d{6}(?!\d)"
+# 구분자: 없음 / 공백 1~2칸 / 하이픈 (앞뒤 공백 허용: 920315 - 1234567)
+RRN = r"(?<!\d)\d{6}(?:[ \t]{0,2}-[ \t]{0,2}|[ \t]{1,2})?[1-8]\d{6}(?!\d)"
 CARD = r"(?<!\d)\d{4}[- ]\d{4}[- ]\d{4}[- ]\d{4}(?!\d)|(?<!\d)\d{16}(?!\d)"
 ACCOUNT_OLD = r"(?<!\d)\d{3}-\d{6}-\d{2}(?!\d)"
 ACCOUNT_HYPHEN = r"(?<![\d-])\d{2,6}(?:-\d{1,7}){2,3}(?![\d-])"
@@ -87,7 +90,7 @@ class RuleDetector(BaseDetector):
         spans: list[Span] = []
         for label, pat, check in PATTERNS:
             for m in re.finditer(pat, text):
-                if label == "phone_number" and _is_public_phone(text, m.start()):
+                if label == "phone_number" and is_public_phone(text, m.start()):
                     continue
                 if check is not None and not check(text, m):
                     continue

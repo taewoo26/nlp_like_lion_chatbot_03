@@ -26,7 +26,7 @@
 import collections
 import re
 
-from .common import (EXEC_ERROR, JUDGE_RESULT, MANUAL, NOT_RUN, Gold, holdout_raw, jl_read, plan_targets,
+from .common import (EXEC_ERROR, JUDGE_RESULT, MANUAL, NOT_RUN, Gold, holdout_raw, is_db_error_row, jl_read, plan_targets,
                      result_row, set_row, token_of)
 
 CITE = re.compile(r"\[([A-Za-z]+\d[A-Za-z0-9_-]*)\]")
@@ -247,6 +247,8 @@ def score(run_dir, run_id):
             judge_of = {k["check_id"]: k["judgement"].get(cfg) for k in c["checks"]}
             for lv, u in c["users"].items():                    # 사용자 레벨마다 따로 실행·채점 (API 경로)
                 t = tr.get(f"{c['qid']}|{lv}") or tr.get(c["qid"])     # 옛 기록(질문당 한 번)도 읽는다
+                if t and "exec_error" not in t and is_db_error_row(t):   # DB가 끊겨 500 으로 남은 기록 → 실행 오류
+                    t = {**t, "exec_error": {"kind": "db", "status": None, "code": "OperationalError", "message": "DB 연결 끊김 (HTTP 500 으로 저장된 기록)"}}
                 base = dict(unit="질문", run_id=c["qid"], split=c["split"], diff=c["difficulty"], cfg=cfg, level=lv)
                 rs["대상"] += 1
                 if t is None or "exec_error" in t:
@@ -332,8 +334,17 @@ def score(run_dir, run_id):
                 a["audit_bad"] += au is not None and not (au.get("rows") == 1 and au.get("user_ok") and au.get("state_ok"))
                 a["recheck_action"] += (t.get("recheck") or {}).get("action") in ("masked", "blocked")
                 exp = u["expected_state"].get(cfg) or []
+                if exp == ["hold"]:                     # 기대 동작이 정의되지 않은 질문 (재질문 정의서에 규칙 없음) → 판정 보류
+                    a["hold"] += 1                      # 상태 정확도·재질문·필수 사실 집계에서 뺀다 (보안 검사 X01·X04·X06 은 위에서 채점)
+                    for chk in c["checks"]:
+                        if ANSWER_SCEN(chk["check_id"]) and chk["judgement"].get(cfg) is not None:
+                            rows.append(result_row(**base, item_id=chk["check_id"],
+                                                   content=f"{lv}: {c['variant_type']} ({c['intent']})",
+                                                   expected="판정 보류 (기대 동작 미정의)", actual=f"상태 {st}",
+                                                   result=JUDGE_RESULT["hold"], note=c.get("note") or ""))
+                    continue
                 state_ok = st in exp
-                facts = [f for f in u["required_facts"]]
+                facts = list(u["required_facts"]) if "answered" in exp else []   # 답변을 기대하지 않는 설정은 필수 사실 채점 안 함
                 fst = [fact_status(f, ans) for f in facts]
                 hits = [x == "hit" for x in fst]
                 manual_f = [f["fact_id"] for f, x in zip(facts, fst) if x == "manual"]

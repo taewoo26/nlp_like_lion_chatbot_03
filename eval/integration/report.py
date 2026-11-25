@@ -60,8 +60,8 @@ COVERAGE = {
     "Q05": ("score_query", "가명처리 질문에 날짜·금액·유형 조건이 그대로 남음"),
     "Q06": ("score_query", "부정 어미(않·안 되·못·없·미-)와 부정되는 어간이 실행 당시 키워드에 남음"),
     "Q07": _ST, "Q08": _ST, "Q09": _ST, "Q14": _ST, "Q15": _ST,
-    "Q10": ("score_answer·score_dialog", "질문: 기대 상태 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기·합치기(merged) → 최종 상태·근거 문서·사실"),
-    "Q11": ("score_answer·score_dialog", "질문: 기대 상태 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실"),
+    "Q10": ("score_answer·score_dialog", "질문: 지시어 질문은 정의서에 규칙이 없어 판정 보류 / 대화 ITM04: 1턴 되묻기 → 2턴 이어받기(follow_up_of, 정보 없음 되묻기 뒤라 합치기는 보지 않음) → 최종 상태·근거 문서·사실"),
+    "Q11": ("score_answer·score_dialog", "질문: 지시어 질문은 판정 보류 / 대화 ITM05: 1턴 되묻기 → 보충 답 후 최종 상태·근거 문서·사실"),
     "Q12": ("score_dialog", "대화 ITM01·02 (R1·R3 × Lv0~2): 1턴 되묻기 → 2턴 follow_up_of = 1턴 request_id → 직전 질문과 합쳐 찾음(merged) → 기대 문서만 근거로 answered, "
                             "필수 사실·금지 사실"),
     "Q13": ("score_dialog", "대화 ITM03: 1턴 되묻기 → 보충 답으로도 특정 불가 → 다시 되묻기·보류, 특정 인물 문서 인용 없음"),
