@@ -170,6 +170,17 @@ button.send:disabled{opacity:.55;cursor:wait}
 .msg.bot .ans h5.md-h{font-size:14px}
 .msg.bot .ans h6.md-h{font-size:13.5px}
 .msg.bot .ans .md-hr{border:none;border-top:1px dashed var(--line);margin:10px 0}
+/* 피드백 버튼 */
+.feedback{display:flex;gap:6px;margin-top:8px}
+.feedback button{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.feedback button:hover{background:#fff1dd;color:var(--ink)}
+.feedback button:disabled{opacity:.5;cursor:default;background:#fff}
+/* 무응답 사유 */
+.sorry-box{background:#fff4ee;border:1px solid #f0cdb8;border-radius:12px;padding:10px 12px;font-size:13px;color:var(--warn)}
+.sorry-box .label{font-family:"Noto Sans KR";font-weight:600;font-size:12px;display:block;margin-bottom:2px}
+/* 토스트 */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;padding:10px 20px;border-radius:999px;z-index:200;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -312,7 +323,7 @@ button.send:disabled{opacity:.55;cursor:wait}
   <section class="panel" aria-label="상담">
     <div class="panel-head">
       <h2>무엇을 찾아드릴까요?</h2>
-      <small id="hint">사내 문서 187건 · 가명 검색</small>
+      <small id="hint">사내 문서 <span id="docCountNum">-</span>건 · 가명 검색</small>
     </div>
     <div class="log" id="log" aria-live="polite">
       <div class="msg bot">
@@ -419,7 +430,10 @@ async function typeInto(el, text){
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+function showToast(msg){ const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(() => t.classList.add("show")); setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 2000); }
+
 async function ask(q){
+  $("#chips").hidden = true;
   addMsg("user", esc(q));
   setState("thinking"); stamp();
   const bot = addMsg("bot", `<div class="who">🐻 도장곰 주임</div><span class="typing"><i></i><i></i><i></i></span>`);
@@ -440,7 +454,14 @@ async function ask(q){
   const meta = document.createElement("div"); meta.className = "meta";
   if (res.masked_query) meta.innerHTML += `<div class="mask-box"><span class="label">🔒 가명처리된 질문 (서버가 본 질문)</span>${chipify(res.masked_query)}<span class="seal">가명</span></div>`;
   if (res.docs && res.docs.length) meta.innerHTML += `<div class="docs">${res.docs.map(d => `<span class="doc" title="${esc(d.snippet || "")}">📄 ${esc(d.doc_id)}</span>`).join("")}</div>`;
+  if (res.state === "sorry") meta.innerHTML += `<div class="sorry-box"><span class="label">📋 무응답 사유</span>조건에 맞는 문서를 찾지 못했어요. 질문을 더 구체적으로 바꿔 보시면 도움이 될 수 있어요.</div>`;
   if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
+  if (!res.need_more) {
+    const fb = document.createElement("div"); fb.className = "feedback";
+    fb.innerHTML = `<button type="button" data-fb="good">👍 도움이 됐어요</button><button type="button" data-fb="bad">🚨 틀린 답 신고</button>`;
+    fb.addEventListener("click", async e => { const b = e.target.closest("[data-fb]"); if(!b||b.disabled) return; fb.querySelectorAll("button").forEach(x => x.disabled = true); const rid = bot.dataset.requestId; if(rid){ try { await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_id:rid,kind:b.dataset.fb})}); } catch{} } showToast(b.dataset.fb === "good" ? "감사합니다! 피드백이 반영됐어요." : "신고가 접수됐어요. 확인 후 개선할게요."); });
+    bot.appendChild(fb);
+  }
   if (restoreMode) applyRestore();
   if (partialMode) applyPartial();
   log.scrollTop = log.scrollHeight;
@@ -482,6 +503,11 @@ async function health(){
     const h = await (await fetch("/api/health")).json();
     if (!h.llm) { $("#srvPill").hidden = false; $("#srvDot").className = "dot demo"; $("#srvText").textContent = "LLM 키 없음"; }
   } catch { DEMO = true; }
+}
+
+async function loadDocCount(){
+  if(DEMO) return;
+  try { const r = await fetch("/api/doc-count"); if(r.ok){ const d = await r.json(); document.getElementById("docCountNum").textContent = d.count.toLocaleString(); } } catch{}
 }
 
 /* ---------- 원복 모드 ---------- */
@@ -658,6 +684,7 @@ form.addEventListener("submit", async e => {
 $("#chips").addEventListener("click", e => { if (e.target.tagName === "BUTTON"){ input.value = e.target.textContent; form.requestSubmit(); } });
 health();
 loadMe();
+loadDocCount();
 </script>
 </body>
 </html>

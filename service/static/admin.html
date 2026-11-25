@@ -219,6 +219,16 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
 .process-link:hover{text-decoration:underline}
 .process-note{font-size:12.5px;color:var(--ink2);margin-top:12px;padding:12px 16px;background:var(--bg);border-radius:8px}
 
+/* ── 탐지 검수 판정 ── */
+.verdict-btn{font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;transition:background .15s}
+.verdict-btn:hover{background:var(--bg2)}
+.verdict-btn.confirmed{background:#e6f4ed;color:#2d7a50;border-color:#b8dfc9}
+.verdict-btn.rejected{background:#fde8e5;color:#c0392b;border-color:#f0c4be}
+.verdict-btn.active{font-weight:600;box-shadow:0 0 0 2px var(--cap)}
+.dr-chunk{background:var(--bg);border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.9;margin-bottom:10px;position:relative;overflow:hidden}
+.dr-progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:80px;display:inline-block;vertical-align:middle;margin-left:6px}
+.dr-progress-fill{height:100%;border-radius:3px;background:var(--ok);transition:width .3s}
+
 /* ── 페이지네이션 ── */
 .pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px}
 .pagination button{font:inherit;font-size:13px;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--wall);color:var(--ink);cursor:pointer}
@@ -307,6 +317,8 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         <a href="#dashboard" class="active"><span class="icon">📊</span>대시보드</a>
         <a href="#docs"><span class="icon">📄</span>문서 관리</a>
                 <a href="#tokens"><span class="icon">🏷️</span>토큰·인물 관리</a>
+        <a href="#detection-review"><span class="icon">🔍</span>탐지 검수</a>
+        <a href="#feedback"><span class="icon">💬</span>피드백</a>
         <a href="#logs"><span class="icon">📋</span>질의·감사 로그</a>
         <a href="#users"><span class="icon">👥</span>사용자 권한</a>
       </nav>
@@ -342,10 +354,30 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         </div>
       </div>
 
-      <div class="review-banner" style="cursor:pointer" onclick="showTokenReview()">
-        <div class="label">인물 검수 대기</div>
-        <div class="value" id="reviewCount">-<small>건</small></div>
-        <div class="sub" id="reviewSub">조회 중…</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="review-banner" style="cursor:pointer" onclick="showTokenReview()">
+          <div class="label">인물 검수 대기</div>
+          <div class="value" id="reviewCount">-<small>건</small></div>
+          <div class="sub" id="reviewSub">조회 중…</div>
+        </div>
+        <div class="review-banner" style="cursor:pointer;background:var(--wood)" onclick="showPage('detection-review')">
+          <div class="label">탐지 검수 대기</div>
+          <div class="value" id="detectionReviewCount">-<small>건</small></div>
+          <div class="sub" id="detectionReviewSub">조회 중…</div>
+        </div>
+      </div>
+
+      <div class="stat-row" style="margin-bottom:16px">
+        <div class="stat-card" style="cursor:pointer" onclick="showPage('feedback')">
+          <div class="label">👍 피드백</div>
+          <div class="value" id="feedbackGoodCount">-<small>건</small></div>
+          <div class="sub" id="feedbackGoodSub">도움 됨</div>
+        </div>
+        <div class="stat-card" style="cursor:pointer" onclick="showPage('feedback')">
+          <div class="label">🚨 오답 신고</div>
+          <div class="value" id="feedbackBadCount">-<small>건</small></div>
+          <div class="sub" id="feedbackBadSub">틀린 답</div>
+        </div>
       </div>
 
       <div class="info-row">
@@ -419,6 +451,19 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
       </table>
 
       <div class="pagination" id="docsPagination"></div>
+
+      <div style="margin-top:28px">
+        <h3 style="font-family:'Noto Sans KR';font-weight:700;font-size:16px;margin-bottom:14px">최근 업로드 이력</h3>
+        <table class="data-table" id="uploadHistoryTable">
+          <thead>
+            <tr><th>시각</th><th>업로더</th><th>문서 수</th><th>문서 ID</th><th>상태</th><th>파일</th></tr>
+          </thead>
+          <tbody id="uploadHistoryBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:20px">조회 중…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="uploadHistoryPagination"></div>
+      </div>
     </section>
 
     <!-- ═══ 문서 업로드 ═══ -->
@@ -524,13 +569,17 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
           <button class="btn-reset" onclick="resetPersonFilter()">초기화</button>
         </div>
 
-        <div class="result-count" id="personResultCount"></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span class="result-count" id="personResultCount" style="margin:0"></span>
+          <button class="btn-primary" id="btnMergePersons" style="display:none" onclick="openMergePreview()">병합</button>
+          <span id="mergeSelectHint" style="display:none;font-size:13px;color:var(--ink2)">2건 이상 선택 시 병합 가능</span>
+        </div>
         <table class="data-table" id="personTable">
           <thead>
-            <tr><th>person_id</th><th>토큰</th><th>정규화 이름</th><th>상태</th><th>관련 문서</th><th>역할</th></tr>
+            <tr><th style="width:32px"><input type="checkbox" id="personCheckAll" onchange="togglePersonCheckAll(this)"></th><th>person_id</th><th>토큰</th><th>정규화 이름</th><th>상태</th><th>관련 문서</th><th>역할</th><th>작업</th></tr>
           </thead>
           <tbody id="personBody">
-            <tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
+            <tr><td colspan="8" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
           </tbody>
         </table>
         <div class="pagination" id="personPagination"></div>
@@ -565,6 +614,136 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         </table>
         <div class="pagination" id="reviewPagination"></div>
       </div>
+
+      <!-- 인물 병합 모달 -->
+      <div id="mergeModal" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+        <div style="background:var(--bg);border-radius:12px;padding:28px 32px;max-width:720px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+          <h3 style="margin:0 0 16px;font-size:17px;font-family:'Noto Sans KR'">인물 병합 미리보기</h3>
+          <p style="font-size:13px;color:var(--ink2);margin-bottom:16px">대상(target)으로 사용할 인물을 선택하세요. 나머지는 대상의 확정 인물(reg_id)로 병합됩니다.</p>
+          <table class="data-table" id="mergePreviewTable">
+            <thead>
+              <tr><th style="width:40px">대상</th><th>person_id</th><th>정규화 이름</th><th>역할</th><th>문서</th><th>상태</th></tr>
+            </thead>
+            <tbody id="mergePreviewBody"></tbody>
+          </table>
+          <div style="margin-top:14px">
+            <label style="font-size:13px;font-weight:600">메모 (선택)</label>
+            <input type="text" id="mergeNote" placeholder="병합 사유" style="width:100%;margin-top:4px">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+            <button class="btn-reset" onclick="closeMergeModal()">취소</button>
+            <button class="btn-primary" id="btnDoMerge" onclick="doMerge()">병합 실행</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 인물 분리 모달 -->
+      <div id="splitModal" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+        <div style="background:var(--bg);border-radius:12px;padding:28px 32px;max-width:720px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+          <h3 style="margin:0 0 16px;font-size:17px;font-family:'Noto Sans KR'">인물 분리</h3>
+          <p style="font-size:13px;color:var(--ink2);margin-bottom:8px">같은 확정 인물(<span id="splitRegId" style="font-weight:600"></span>)에 속한 목록입니다.</p>
+          <p style="font-size:13px;color:var(--ink2);margin-bottom:16px">분리할 인물을 체크하세요. 체크된 인물은 연결 해제되어 '미해결' 상태로 돌아갑니다.</p>
+          <table class="data-table" id="splitPreviewTable">
+            <thead>
+              <tr><th style="width:36px">분리</th><th>person_id</th><th>정규화 이름</th><th>역할</th><th>문서</th></tr>
+            </thead>
+            <tbody id="splitPreviewBody"></tbody>
+          </table>
+          <div style="margin-top:14px">
+            <label style="font-size:13px;font-weight:600">메모 (선택)</label>
+            <input type="text" id="splitNote" placeholder="분리 사유" style="width:100%;margin-top:4px">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+            <button class="btn-reset" onclick="closeSplitModal()">취소</button>
+            <button class="btn-primary" id="btnDoSplit" onclick="doSplit()">분리 실행</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 탐지 검수 ═══ -->
+    <section id="page-detection-review" class="page-section">
+      <div class="main-header">
+        <h2>탐지 검수</h2>
+        <span class="scope">문서별 NER 탐지 결과 확인 · 정탐/오탐 판정</span>
+      </div>
+
+      <div id="dr-list">
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>문서 ID</label>
+            <input type="text" id="drSearchInput" placeholder="예: H0001" style="min-width:200px">
+          </div>
+          <div class="filter-group">
+            <label>검수 상태</label>
+            <select id="drStatusFilter">
+              <option value="">전체</option>
+              <option value="unreviewed">미검수 있음</option>
+              <option value="reviewed">검수 완료</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="loadDetectionReview(1)">조회</button>
+          <button class="btn-reset" onclick="resetDrFilter()">초기화</button>
+        </div>
+
+        <div class="result-count" id="drResultCount"></div>
+        <table class="data-table" id="drTable">
+          <thead>
+            <tr><th>문서 ID</th><th>유형</th><th>등록일</th><th>토큰 수</th><th>검수 완료</th><th>진행률</th><th></th></tr>
+          </thead>
+          <tbody id="drBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="drPagination"></div>
+      </div>
+
+      <div id="dr-detail" style="display:none">
+        <a href="#" class="back-link" onclick="closeDrDetail();return false">← 목록으로</a>
+        <div class="doc-detail">
+          <div class="doc-detail-header">
+            <h3 id="drDetailTitle">-</h3>
+            <span class="scope" id="drDetailScope">-</span>
+          </div>
+          <div id="drChunks"></div>
+          <h4 style="margin:20px 0 12px;font-family:'Noto Sans KR';font-weight:700;font-size:15px">토큰 판정</h4>
+          <table class="data-table">
+            <thead>
+              <tr><th>토큰</th><th>라벨</th><th>정규화 값</th><th>판정</th><th>검수자</th></tr>
+            </thead>
+            <tbody id="drTokenBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 피드백 ═══ -->
+    <section id="page-feedback" class="page-section">
+      <div class="main-header">
+        <h2>피드백</h2>
+        <span class="scope">챗봇 답변 피드백 · <b id="feedbackTotal">-</b>건</span>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>종류</label>
+          <select id="filterFeedbackKind">
+            <option value="">전체</option>
+            <option value="good">👍 도움 됨</option>
+            <option value="bad">🚨 틀린 답</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="loadFeedback(1)">조회</button>
+        <button class="btn-reset" onclick="document.getElementById('filterFeedbackKind').value='';loadFeedback(1)">초기화</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>시각</th><th>사용자</th><th>종류</th><th>질문 (가명)</th><th>의견</th></tr>
+        </thead>
+        <tbody id="feedbackBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">조회 버튼을 눌러 검색하세요.</td></tr>
+        </tbody>
+      </table>
+      <div class="pagination" id="feedbackPagination"></div>
     </section>
 
     <!-- ═══ 질의·감사 로그 ═══ -->
@@ -578,7 +757,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
       <div class="log-tabs" style="display:flex;gap:4px;margin-bottom:20px">
         <button class="log-tab active" onclick="switchLogTab('query',this)">질의 로그</button>
         <button class="log-tab" onclick="switchLogTab('restore',this)">복원 로그</button>
-        <button class="log-tab" onclick="switchLogTab('policy',this)">정책 변경</button>
+        <button class="log-tab" onclick="switchLogTab('policy',this)" style="display:none">정책 변경</button>
       </div>
 
       <!-- 질의 로그 -->
@@ -787,6 +966,8 @@ function showPage(id){
   if(id === "tokens") searchTokens(1);
   if(id === "logs") loadQueryLogs(1);
   if(id === "users") loadUsers(1);
+  if(id === "feedback") loadFeedback(1);
+  if(id === "detection-review") loadDetectionReview(1);
   const sidebarId = (id === "upload") ? "docs" : id;
   document.querySelectorAll(".sidebar nav a").forEach(a => {
     a.classList.toggle("active", a.getAttribute("href") === "#" + sidebarId);
@@ -890,6 +1071,7 @@ async function loadDocs(page){
     console.warn("문서 목록 조회 실패:", e);
     document.getElementById("docsBody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-red);padding:32px">문서 목록을 불러오지 못했어요.</td></tr>';
   }
+  loadUploadHistory(1);
 }
 
 function renderPagination(total, page, size){
@@ -900,6 +1082,37 @@ function renderPagination(total, page, size){
   html += `<span class="page-info">${page} / ${pages}</span>`;
   html += `<button ${page>=pages?"disabled":""} onclick="loadDocs(${page+1})">다음 ▶</button>`;
   el.innerHTML = html;
+}
+
+async function loadUploadHistory(page){
+  page = page || 1;
+  const tbody = document.getElementById("uploadHistoryBody");
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:20px">조회 중…</td></tr>';
+  try {
+    const res = await fetch(`/api/admin/upload/history?page=${page}&size=10`);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    tbody.innerHTML = "";
+    if(!data.items.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:20px">업로드 이력이 없습니다.</td></tr>';
+    } else {
+      data.items.forEach(r => {
+        const st = r.status === "done" ? '<span class="badge badge-ok">완료</span>'
+                 : r.status === "failed" ? '<span class="badge badge-fail">실패</span>'
+                 : '<span class="badge badge-wait">처리중</span>';
+        const ids = r.doc_ids.length <= 3
+          ? r.doc_ids.map(d => esc(d)).join(", ")
+          : r.doc_ids.slice(0,2).map(d => esc(d)).join(", ") + ` 외 ${r.doc_ids.length - 2}건`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${esc(r.created_at)}</td><td>${esc(r.user_id)}</td><td>${r.doc_count}</td><td title="${r.doc_ids.map(d=>esc(d)).join('\n')}">${ids}</td><td>${st}</td><td>${esc(r.data_file)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    renderLogPagination("uploadHistoryPagination", data.total, data.page, data.size, "loadUploadHistory");
+  } catch(e){
+    console.warn("업로드 이력 조회 실패:", e);
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-red);padding:20px">업로드 이력을 불러오지 못했어요.</td></tr>';
+  }
 }
 
 function closeDocDetail(){
@@ -1209,7 +1422,30 @@ function resetUploadFull(){
   const checkAll = document.getElementById("uploadCheckAll");
   if(checkAll) checkAll.checked = true;
 }
-const DOC_TYPES = ["상담기록","메일","민원","회의록"];
+let DOC_TYPES = ["상담기록","메일","민원","회의록"];
+(async function loadDocTypes(){
+  try {
+    const res = await fetch("/api/admin/doc-types");
+    if(res.ok){ const data = await res.json(); if(data.doc_types.length) DOC_TYPES = data.doc_types; }
+  } catch{}
+})();
+function buildTypeOpts(selected){
+  let html = '<option value="">-- 선택 --</option>';
+  DOC_TYPES.forEach(t => { html += `<option${t===selected?" selected":""}>${esc(t)}</option>`; });
+  html += '<option value="__custom__">직접 입력…</option>';
+  return html;
+}
+function handleTypeChange(sel){
+  if(sel.value !== "__custom__") return;
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.className = "upload-type-input";
+  inp.placeholder = "문서 유형 입력";
+  inp.style.cssText = "font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;width:120px";
+  inp.addEventListener("input", () => validateUpload());
+  sel.replaceWith(inp);
+  inp.focus();
+  validateUpload();
+}
 let _pendingFiles = [];
 (function(){
   const dz = document.getElementById("dropZone");
@@ -1227,7 +1463,7 @@ function addFiles(files){
   document.getElementById("uploadStep2").className = "step active";
   document.getElementById("selectedFiles").style.display = "block";
   const tbody = document.getElementById("fileListBody");
-  const opts = '<option value="">-- 선택 --</option>' + DOC_TYPES.map(t => "<option>" + t + "</option>").join("");
+  const opts = buildTypeOpts("");
   Array.from(files).forEach(f => {
     const ext = f.name.split(".").pop().toLowerCase();
     if(!["txt","json","jsonl"].includes(ext)){
@@ -1244,7 +1480,7 @@ function addFiles(files){
       tr.innerHTML = "<td><input type='checkbox' class='upload-check' checked onchange='validateUpload()'></td>"
         + "<td>" + esc(f.name) + "</td>"
         + '<td><input type="text" class="upload-id-input" placeholder="문서 ID 입력" style="font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;width:120px" oninput="validateUpload()"></td>'
-        + "<td><select class='upload-type-sel' style='font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px' onchange='validateUpload()'>" + (guess ? opts.replace("<option>" + guess, "<option selected>" + guess) : opts) + "</select></td>"
+        + "<td><select class='upload-type-sel' style='font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px' onchange='handleTypeChange(this);validateUpload()'>" + buildTypeOpts(guess) + "</select></td>"
         + "<td><span class='upload-status'></span></td>"
         + "<td><button class='action-link' onclick='removeFile(this)'>빼기</button></td>";
       tbody.appendChild(tr);
@@ -1330,11 +1566,11 @@ function validateUpload(){
     checkedCount++;
     if(tr.dataset.fileType === "txt"){
       const idInput = tr.querySelector(".upload-id-input");
-      const typeSel = tr.querySelector(".upload-type-sel");
+      const typeSel = tr.querySelector(".upload-type-sel") || tr.querySelector(".upload-type-input");
       const status = tr.querySelector(".upload-status");
       const msgs = [];
       if(!idInput || !idInput.value.trim()) msgs.push("id");
-      if(!typeSel || !typeSel.value) msgs.push("doc_type");
+      if(!typeSel || !typeSel.value || typeSel.value === "__custom__") msgs.push("doc_type");
       if(msgs.length){
         status.innerHTML = '<span style="color:var(--ink-red)">' + msgs.join(", ") + ' 필요</span>';
         checkedValid = false;
@@ -1388,7 +1624,7 @@ async function startUpload(){
     if(!file) return;
     if(tr.dataset.fileType === "txt"){
       const idInput = tr.querySelector(".upload-id-input");
-      const typeSel = tr.querySelector(".upload-type-sel");
+      const typeSel = tr.querySelector(".upload-type-sel") || tr.querySelector(".upload-type-input");
       docIds.push(idInput ? idInput.value.trim() : "");
       docTypes.push(typeSel ? typeSel.value : "");
     } else {
@@ -1515,6 +1751,13 @@ async function loadStats(){
     document.getElementById("reviewCount").innerHTML = `${reviewTotal.toLocaleString()}<small>건</small>`;
     document.getElementById("reviewSub").textContent =
       `미결 ${s.review_pending} · 미해결 ${s.review_unresolved} · 해결 ${s.review_resolved}`;
+    const drCount = s.detection_unreviewed || 0;
+    document.getElementById("detectionReviewCount").innerHTML = `${drCount.toLocaleString()}<small>건</small>`;
+    document.getElementById("detectionReviewSub").textContent = drCount > 0 ? "미검수 토큰이 있어요" : "모든 토큰 검수 완료";
+    document.getElementById("feedbackGoodCount").innerHTML = `${(s.feedback_good || 0).toLocaleString()}<small>건</small>`;
+    document.getElementById("feedbackBadCount").innerHTML = `${(s.feedback_bad || 0).toLocaleString()}<small>건</small>`;
+    document.getElementById("feedbackGoodSub").textContent = "도움 됨";
+    document.getElementById("feedbackBadSub").textContent = (s.feedback_bad || 0) > 0 ? "확인이 필요해요" : "신고 없음";
   } catch(e) {
     console.warn("통계 조회 실패:", e);
     document.getElementById("totalDocs").innerHTML = `?<small>건</small>`;
@@ -1522,6 +1765,8 @@ async function loadStats(){
     document.getElementById("failDocs").innerHTML = `?<small>건</small>`;
     document.getElementById("reviewCount").innerHTML = `?<small>건</small>`;
     document.getElementById("reviewSub").textContent = "서버 연결 실패";
+    document.getElementById("detectionReviewCount").innerHTML = `?<small>건</small>`;
+    document.getElementById("detectionReviewSub").textContent = "서버 연결 실패";
   }
 }
 /* ── 질의·감사 로그 ── */
@@ -1741,7 +1986,9 @@ document.getElementById("tokenLabelFilter").addEventListener("change", () => sea
 /* ── 인물 사전 ── */
 async function searchPersons(page){
   const tbody = document.getElementById("personBody");
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  document.getElementById("personCheckAll").checked = false;
+  updateMergeBtn();
   const q = document.getElementById("personSearchInput").value;
   const status = document.getElementById("personStatusFilter").value;
   const params = new URLSearchParams({page, size: 20});
@@ -1754,7 +2001,7 @@ async function searchPersons(page){
     document.getElementById("personResultCount").innerHTML = `검색 결과 <b>${data.total.toLocaleString()}</b>건`;
     tbody.innerHTML = "";
     if(!data.items.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 인물이 없어요.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 인물이 없어요.</td></tr>';
     }
     const roleKr = _ROLE_KR || {};
     data.items.forEach(item => {
@@ -1766,18 +2013,21 @@ async function searchPersons(page){
       const shortPid = item.person_id.length > 12 ? item.person_id.slice(0,12) + "…" : item.person_id;
       const shortToken = item.token.length > 20 ? item.token.slice(0,20) + "…" : item.token;
       const rKr = (_ROLE_KR[item.role]) || item.role || "-";
-      tr.innerHTML = `<td><b class="pid-short" title="${esc(item.person_id)}">${esc(shortPid)}</b></td>`
+      const splitBtn = isResolved ? `<button class="action-link" onclick="event.stopPropagation();openSplitPreview('${esc(item.person_id)}')">분리</button>` : "";
+      tr.innerHTML = `<td><input type="checkbox" class="person-chk" value="${esc(item.person_id)}" onchange="updateMergeBtn()"></td>`
+        + `<td><b class="pid-short" title="${esc(item.person_id)}">${esc(shortPid)}</b></td>`
         + `<td><span class="token-mono" title="${esc(item.token)}">${esc(shortToken)}</span></td>`
         + `<td>${esc(item.normalized || "-")}</td>`
         + `<td><span class="badge ${badgeCls}">${statusText}</span></td>`
         + `<td>${esc(docList)}</td>`
-        + `<td>${esc(rKr)}</td>`;
+        + `<td>${esc(rKr)}</td>`
+        + `<td>${splitBtn}</td>`;
       tbody.appendChild(tr);
     });
     renderLogPagination("personPagination", data.total, data.page, data.size, "searchPersons");
   } catch(e){
     console.warn("인물 사전 조회 실패:", e);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-red);padding:32px">인물 목록을 불러오지 못했어요.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink-red);padding:32px">인물 목록을 불러오지 못했어요.</td></tr>';
   }
 }
 
@@ -1787,6 +2037,136 @@ function resetPersonFilter(){
   searchPersons(1);
 }
 
+function togglePersonCheckAll(el){
+  document.querySelectorAll(".person-chk").forEach(c => { c.checked = el.checked; });
+  updateMergeBtn();
+}
+function getCheckedPersonIds(){
+  return [...document.querySelectorAll(".person-chk:checked")].map(c => c.value);
+}
+function updateMergeBtn(){
+  const n = getCheckedPersonIds().length;
+  document.getElementById("btnMergePersons").style.display = n >= 2 ? "" : "none";
+  document.getElementById("mergeSelectHint").style.display = n >= 1 && n < 2 ? "" : "none";
+  document.getElementById("btnMergePersons").textContent = n >= 2 ? `병합 (${n}건)` : "병합";
+}
+
+let _mergePreviewData = [];
+async function openMergePreview(){
+  const ids = getCheckedPersonIds();
+  if(ids.length < 2){ alert("2건 이상 선택하세요."); return; }
+  try {
+    const res = await fetch("/api/admin/persons/merge-preview?ids=" + encodeURIComponent(ids.join(",")));
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    _mergePreviewData = data.items;
+    const tbody = document.getElementById("mergePreviewBody");
+    tbody.innerHTML = "";
+    data.items.forEach((item, i) => {
+      const tr = document.createElement("tr");
+      const isResolved = item.status === "resolved";
+      const statusText = isResolved ? "확정" : "임시";
+      const badgeCls = isResolved ? "badge-ok" : "badge-wait";
+      const docList = item.doc_ids.length <= 3
+        ? item.doc_ids.join(", ")
+        : item.doc_ids.slice(0,2).join(", ") + ` 외 ${item.doc_ids.length - 2}건`;
+      const rKr = (_ROLE_KR[item.role]) || item.role || "-";
+      tr.innerHTML = `<td><input type="radio" name="mergeTarget" value="${esc(item.person_id)}" ${i===0?"checked":""}></td>`
+        + `<td title="${esc(item.person_id)}">${esc(item.person_id.length > 14 ? item.person_id.slice(0,14)+"…" : item.person_id)}</td>`
+        + `<td>${esc(item.normalized || "-")}</td>`
+        + `<td>${esc(rKr)}</td>`
+        + `<td title="${item.doc_ids.join('\n')}">${esc(docList || "-")}</td>`
+        + `<td><span class="badge ${badgeCls}">${statusText}</span></td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById("mergeNote").value = "";
+    const modal = document.getElementById("mergeModal");
+    modal.style.display = "flex";
+  } catch(e){
+    alert("미리보기 조회 실패: " + e.message);
+  }
+}
+function closeMergeModal(){
+  document.getElementById("mergeModal").style.display = "none";
+}
+async function doMerge(){
+  const targetEl = document.querySelector('input[name="mergeTarget"]:checked');
+  if(!targetEl){ alert("대상 인물을 선택하세요."); return; }
+  const targetId = targetEl.value;
+  const sourceIds = _mergePreviewData.map(p => p.person_id).filter(id => id !== targetId);
+  const note = document.getElementById("mergeNote").value.trim() || null;
+  if(!confirm(`${sourceIds.length}건을 "${targetId}"로 병합합니다. 계속할까요?`)) return;
+  document.getElementById("btnDoMerge").disabled = true;
+  try {
+    const res = await fetch("/api/admin/persons/merge", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({target_person_id: targetId, source_person_ids: sourceIds, note}),
+    });
+    if(!res.ok){ const e = await res.json(); throw new Error(e.detail || res.status); }
+    closeMergeModal();
+    searchPersons(1);
+  } catch(e){
+    alert("병합 실패: " + e.message);
+  } finally {
+    document.getElementById("btnDoMerge").disabled = false;
+  }
+}
+
+let _splitRegId = "";
+async function openSplitPreview(personId){
+  try {
+    const res = await fetch("/api/admin/persons/split-preview?person_id=" + encodeURIComponent(personId));
+    if(!res.ok){ const e = await res.json(); throw new Error(e.detail || res.status); }
+    const data = await res.json();
+    _splitRegId = data.reg_id;
+    document.getElementById("splitRegId").textContent = data.reg_id;
+    const tbody = document.getElementById("splitPreviewBody");
+    tbody.innerHTML = "";
+    data.items.forEach(item => {
+      const tr = document.createElement("tr");
+      const docList = item.doc_ids.length <= 3
+        ? item.doc_ids.join(", ")
+        : item.doc_ids.slice(0,2).join(", ") + ` 외 ${item.doc_ids.length - 2}건`;
+      const rKr = (_ROLE_KR[item.role]) || item.role || "-";
+      tr.innerHTML = `<td><input type="checkbox" class="split-chk" value="${esc(item.person_id)}"></td>`
+        + `<td title="${esc(item.person_id)}">${esc(item.person_id.length > 14 ? item.person_id.slice(0,14)+"…" : item.person_id)}</td>`
+        + `<td>${esc(item.normalized || "-")}</td>`
+        + `<td>${esc(rKr)}</td>`
+        + `<td title="${item.doc_ids.join('\n')}">${esc(docList || "-")}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById("splitNote").value = "";
+    document.getElementById("splitModal").style.display = "flex";
+  } catch(e){
+    alert("분리 미리보기 실패: " + e.message);
+  }
+}
+function closeSplitModal(){
+  document.getElementById("splitModal").style.display = "none";
+}
+async function doSplit(){
+  const checked = [...document.querySelectorAll(".split-chk:checked")].map(c => c.value);
+  const total = document.querySelectorAll(".split-chk").length;
+  if(!checked.length){ alert("분리할 인물을 선택하세요."); return; }
+  if(checked.length >= total){ alert("전부 분리할 수 없습니다. 최소 1건은 남겨야 합니다."); return; }
+  const note = document.getElementById("splitNote").value.trim() || null;
+  if(!confirm(`${checked.length}건을 "${_splitRegId}"에서 분리합니다. 계속할까요?`)) return;
+  document.getElementById("btnDoSplit").disabled = true;
+  try {
+    const res = await fetch("/api/admin/persons/split", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reg_id: _splitRegId, detach_person_ids: checked, note}),
+    });
+    if(!res.ok){ const e = await res.json(); throw new Error(e.detail || res.status); }
+    closeSplitModal();
+    searchPersons(1);
+  } catch(e){
+    alert("분리 실패: " + e.message);
+  } finally {
+    document.getElementById("btnDoSplit").disabled = false;
+  }
+}
+
 let _personSearchTimer = null;
 document.getElementById("personSearchInput").addEventListener("input", () => {
   clearTimeout(_personSearchTimer);
@@ -1794,6 +2174,39 @@ document.getElementById("personSearchInput").addEventListener("input", () => {
 });
 document.getElementById("personSearchInput").addEventListener("keydown", e => { if(e.key === "Enter") searchPersons(1); });
 document.getElementById("personStatusFilter").addEventListener("change", () => searchPersons(1));
+
+/* ── 피드백 ── */
+async function loadFeedback(page){
+  page = page || 1;
+  const tbody = document.getElementById("feedbackBody");
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const kind = document.getElementById("filterFeedbackKind").value;
+  const params = new URLSearchParams({page, size: 20});
+  if(kind) params.set("kind", kind);
+  try {
+    const res = await fetch("/api/admin/feedback?" + params);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById("feedbackTotal").textContent = data.total.toLocaleString();
+    tbody.innerHTML = "";
+    if(!data.items.length){
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink2);padding:32px">피드백이 없습니다.</td></tr>';
+    }
+    data.items.forEach(item => {
+      const tr = document.createElement("tr");
+      const badge = item.kind === "good"
+        ? '<span class="badge badge-ok">👍 도움 됨</span>'
+        : '<span class="badge badge-fail">🚨 틀린 답</span>';
+      const query = item.masked_query ? (item.masked_query.length > 60 ? item.masked_query.slice(0,60) + "…" : item.masked_query) : "-";
+      tr.innerHTML = `<td>${esc(item.created_at)}</td><td>${esc(item.user_id)}</td><td>${badge}</td><td title="${esc(item.masked_query)}">${esc(query)}</td><td>${esc(item.comment || "-")}</td>`;
+      tbody.appendChild(tr);
+    });
+    renderLogPagination("feedbackPagination", data.total, data.page, data.size, "loadFeedback");
+  } catch(e){
+    console.warn("피드백 조회 실패:", e);
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-red);padding:32px">피드백을 불러오지 못했어요.</td></tr>';
+  }
+}
 
 /* ── 사용자 권한 ── */
 const _LV_CLASS = ["lv0","lv1","lv2"];
@@ -2044,6 +2457,117 @@ function toggleUserActive(userId, active, btn){
     applyWatermark();
   } catch(e){ console.warn("사용자 정보 조회 실패:", e); }
 })();
+
+/* ── 탐지 검수 ── */
+async function loadDetectionReview(page){
+  const tbody = document.getElementById("drBody");
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  const q = document.getElementById("drSearchInput").value;
+  const status = document.getElementById("drStatusFilter").value;
+  const params = new URLSearchParams({page, size: 20});
+  if(q) params.set("q", q);
+  if(status) params.set("status", status);
+  try {
+    const res = await fetch("/api/admin/detection-review?" + params);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById("drResultCount").innerHTML = `검색 결과 <b>${data.total.toLocaleString()}</b>건`;
+    tbody.innerHTML = "";
+    if(!data.docs.length){
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">조건에 맞는 문서가 없습니다.</td></tr>';
+      document.getElementById("drPagination").innerHTML = "";
+      return;
+    }
+    for(const d of data.docs){
+      const pct = d.total_tokens ? Math.round(d.reviewed_count / d.total_tokens * 100) : 0;
+      const badge = pct === 100 ? '<span class="badge badge-ok">완료</span>' :
+                    pct > 0 ? '<span class="badge badge-wait">진행중</span>' :
+                    '<span class="badge badge-fail">미검수</span>';
+      const bar = `<div class="dr-progress"><div class="dr-progress-fill" style="width:${pct}%"></div></div>`;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><b>${esc(d.doc_id)}</b></td><td>${esc(d.doc_type)}</td><td>${esc(d.created_at)}</td><td>${d.total_tokens}</td><td>${d.reviewed_count}</td><td>${badge} ${pct}% ${bar}</td><td><button class="action-link" onclick="openDrDetail('${esc(d.doc_id)}')">검수</button></td>`;
+      tbody.appendChild(tr);
+    }
+    renderLogPagination("drPagination", data.total, data.page, data.size, "loadDetectionReview");
+  } catch(e){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-red);padding:32px">조회 실패</td></tr>';
+  }
+}
+function resetDrFilter(){
+  document.getElementById("drSearchInput").value = "";
+  document.getElementById("drStatusFilter").value = "";
+  loadDetectionReview(1);
+}
+let _drDocId = null;
+let _drTokens = [];
+async function openDrDetail(docId){
+  _drDocId = docId;
+  document.getElementById("dr-list").style.display = "none";
+  document.getElementById("dr-detail").style.display = "";
+  document.getElementById("drDetailTitle").textContent = docId;
+  document.getElementById("drDetailScope").textContent = "불러오는 중…";
+  document.getElementById("drChunks").innerHTML = "";
+  document.getElementById("drTokenBody").innerHTML = "";
+  try {
+    const res = await fetch(`/api/admin/detection-review/${encodeURIComponent(docId)}`);
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    _drTokens = data.tokens;
+    document.getElementById("drDetailScope").textContent = `${data.doc_type} · 토큰 ${data.total_tokens}개 · 검수 ${data.reviewed_count}/${data.total_tokens}`;
+    const chunksEl = document.getElementById("drChunks");
+    for(const c of data.chunks){
+      const div = document.createElement("div");
+      div.className = "dr-chunk";
+      div.innerHTML = drChipify(c.masked_text);
+      chunksEl.appendChild(div);
+    }
+    const tbody = document.getElementById("drTokenBody");
+    for(const t of data.tokens){
+      const tr = document.createElement("tr");
+      const cls = _TOKEN_BADGE[(t.label || "").toUpperCase()] || "";
+      tr.innerHTML = `<td><span class="tok ${cls}">${esc(t.token)}</span></td><td>${esc(t.label)}</td><td>${esc(t.normalized)}</td><td>${drVerdictBtns(t.token, t.verdict)}</td><td>${t.reviewer ? esc(t.reviewer) : '<span style="color:var(--ink2)">—</span>'}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch(e){
+    document.getElementById("drDetailScope").textContent = "조회 실패";
+  }
+}
+function closeDrDetail(){
+  document.getElementById("dr-detail").style.display = "none";
+  document.getElementById("dr-list").style.display = "";
+  if(_drDocId) loadDetectionReview(1);
+  _drDocId = null;
+}
+function drChipify(text){
+  const map = {};
+  for(const t of _drTokens) map[t.token] = t;
+  return esc(text).replace(/&lt;([A-Z_]+_[0-9A-Za-z]+)&gt;/g, (m, inner) => {
+    const tok = "<" + inner + ">";
+    const info = map[tok] || {};
+    const cls = _TOKEN_BADGE[(info.label || "").toUpperCase()] || "";
+    const v = info.verdict;
+    const outline = v === "confirmed" ? "outline:2px solid #2d7a50;outline-offset:1px;" : v === "rejected" ? "outline:2px solid #c0392b;outline-offset:1px;text-decoration:line-through;" : "";
+    return `<span class="tok ${cls}" style="${outline}" title="${esc(info.label||"")} · ${esc(info.normalized||"")} · ${v||"미검수"}">${esc(tok)}</span>`;
+  });
+}
+function drVerdictBtns(token, current){
+  const mk = (v, label, cls) => {
+    const act = current === v ? " active" : "";
+    return `<button class="verdict-btn ${cls}${act}" onclick="submitDrVerdict('${esc(token)}','${v}')">${label}</button>`;
+  };
+  return `<div style="display:flex;gap:4px">${mk("confirmed","✅ 정탐","confirmed")}${mk("rejected","❌ 오탐","rejected")}</div>`;
+}
+async function submitDrVerdict(token, verdict){
+  if(!_drDocId) return;
+  try {
+    const res = await fetch("/api/admin/detection-review/verdict", {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({doc_id: _drDocId, token, verdict})
+    });
+    if(!res.ok){ const b = await res.json().catch(()=>({})); throw new Error(b.detail || res.status); }
+    openDrDetail(_drDocId);
+  } catch(e){ alert("판정 저장 실패: " + e.message); }
+}
 
 loadStats();
 loadDocs(1);
