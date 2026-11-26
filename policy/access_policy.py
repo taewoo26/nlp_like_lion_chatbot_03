@@ -60,6 +60,7 @@ class AccessPolicy:
     team_levels: tuple = ()            # TeamLevelRule 목록 (팀·직책 → 계정 기본 레벨)
     categories: dict = None            # doc_type -> 분류 (직원개인/고객업무/내부업무/공개)
     teams: dict = None                 # team_cd -> team_name (DB policy.teams)
+    customer_teams: tuple = ()         # 고객 업무 팀 그룹 (고객업무 문서를 팀 구분 없이 Lv1부터 열람)
 
     # --- 검색 전 권한 필터 -------------------------------------------------
     def min_level(self, doc_type: str | None) -> int:
@@ -134,6 +135,7 @@ def load_policy(path: Path | str = POLICY_PATH) -> AccessPolicy:
         team_levels=_parse_team_levels(raw.get("team_levels") or [], teams),
         categories=categories,
         teams=teams,
+        customer_teams=_parse_customer_teams(raw.get("customer_teams") or [], teams),
     )
 
 
@@ -157,6 +159,19 @@ def _parse_teams(items: dict) -> dict:
         names.add(name)
         teams[cd] = name
     return teams
+
+
+def _parse_customer_teams(items: list, teams: dict) -> tuple:
+    """customer_teams 검증: teams 에 있는 코드만, 중복 금지."""
+    out = []
+    for cd in items:
+        cd = _clean(cd)
+        if cd not in teams:
+            raise ValueError(f"customer_teams: teams에 없는 팀 코드입니다: {cd!r}")
+        if cd in out:
+            raise ValueError(f"customer_teams: 중복된 팀 코드입니다: {cd}")
+        out.append(cd)
+    return tuple(out)
 
 
 def _parse_team_levels(items: list, teams: dict | None = None) -> tuple:
