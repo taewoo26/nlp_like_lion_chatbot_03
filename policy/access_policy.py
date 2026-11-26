@@ -87,6 +87,39 @@ class AccessPolicy:
     def is_registered(self, doc_type: str | None) -> bool:
         return doc_type in self.min_levels
 
+    def can_view_doc(self, user: dict, doc_type: str | None, teams=()) -> bool:
+        """문서 1건의 열람 여부 (11-26 권한 표). 검색 권한 필터의 기준이며 DB 없이 판정한다.
+
+        user: access_level, team_cd, is_admin (service/auth.py 의 세션 사용자)
+        teams: 문서의 담당 팀 코드 목록 (rag.doc_meta.teams). 비어 있으면 담당 팀 미결정(restricted)
+          - 개인정보 담당자(is_admin): 전부
+          - 정책에 없는 doc_type: 개인정보 담당자만 (모르는 유형은 막는다)
+          - 공개: min_level 이상
+          - 직원개인: 개인정보 담당자만
+          - 그 밖에 min_level 2 (사내메신저): Lv2
+          - 고객업무·내부업무: Lv2(팀장)는 전부. Lv1 은 고객업무면 고객 업무 팀 그룹, 내부업무면 담당 팀 소속
+        """
+        if user.get("is_admin"):
+            return True
+        level = user.get("access_level")
+        self._check_level(level)
+        if doc_type not in self.min_levels:
+            return False
+        category = self.categories.get(doc_type)
+        if category == "공개":
+            return level >= self.min_levels[doc_type]
+        if category == "직원개인":
+            return False
+        if self.min_levels[doc_type] >= 2:
+            return level >= 2
+        if level >= 2:
+            return True
+        if level < 1:
+            return False
+        if category == "고객업무":
+            return user.get("team_cd") in self.customer_teams
+        return user.get("team_cd") in (teams or ())
+
     # --- 복원 규칙 ---------------------------------------------------------
     def restore_mode(self, level: int, label: str) -> str:
         """level × label의 복원 모드(none/full). 규칙에 없으면 기본 none."""

@@ -49,6 +49,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from policy.access_policy import load_policy
 from service import audit, auth
 from starter import clarify, chat, config, db, pii_pipeline
 
@@ -310,6 +311,20 @@ def _log_restore_error(request_id, exc):
     audit._log_error("실명 복원 실패 request_id=%s error=%s", request_id, type(exc).__name__)
 
 
+POLICY = load_policy()          # 문서 열람 판정 (policy/access_policy.yaml). 바꾸면 서버 재시작
+
+
+def _doc_scope(user):
+    """검색 권한 범위: 이 사용자가 열람할 수 있는 doc_id 목록. 개인정보 담당자는 None(제한 없음).
+    rag.doc_meta 에 없는 문서(메타데이터 미생성)는 볼 수 없다 (fail-closed)."""
+    if user.get("is_admin"):
+        return None
+    with db.search_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT doc_id, doc_type, teams FROM rag.doc_meta")
+        rows = cur.fetchall()
+    return [doc_id for doc_id, doc_type, teams in rows if POLICY.can_view_doc(user, doc_type, teams)]
+
+
 @app.post("/api/chat")
 def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     request_id = audit.new_request_id()
@@ -317,7 +332,8 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     prev = _previous_request(body.follow_up_of, user["user_id"])       # 직전 재질문 (본인 질문일 때만)
     context = _merge_context(prev)                                     # 이어받을 수 있으면 직전 가명 질문·토큰
     try:
-        res = chat.answer(body.query.strip(), body.k, **({"context": context} if context else {}))
+        scope = _doc_scope(user)                                       # 권한 범위 (검색 전에 정한다)
+        res = chat.answer(body.query.strip(), body.k, scope=scope, **({"context": context} if context else {}))
     except Exception as exc:
         audit.record(audit.build_row(request_id, user, error=exc, latency_ms=_elapsed_ms(started)))
         raise HTTPException(status_code=500, detail=f"처리 중 오류: {type(exc).__name__}") from None
