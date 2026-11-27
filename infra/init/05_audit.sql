@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS audit.restore_log (
 ALTER TABLE audit.restore_log OWNER TO rag_user;
 CREATE INDEX IF NOT EXISTS restore_log_request_id   ON audit.restore_log (request_id);
 CREATE INDEX IF NOT EXISTS restore_log_user_created ON audit.restore_log (user_id, created_at);
+-- 2026-11-27 (UI/UX 4-1): 관리실 문서 복원의 사유·문서 번호. 챗봇 복원은 비어 있을 수 있다 (request_id 로 query_log 와 이어짐)
+ALTER TABLE audit.restore_log ADD COLUMN IF NOT EXISTS reason TEXT;   -- 복원 사유 (선택지 + 메모)
+ALTER TABLE audit.restore_log ADD COLUMN IF NOT EXISTS doc_id TEXT;   -- 복원한 문서 (관리실 문서 상세)
 
 -- 정책 변경 이력. 아래 트리거가 기록한다
 CREATE TABLE IF NOT EXISTS audit.policy_change_log (
@@ -171,6 +174,54 @@ END;
 $$;
 ALTER FUNCTION vault.restore_token(text, text, text) OWNER TO vault_user;
 REVOKE ALL ON FUNCTION vault.restore_token(text, text, text) FROM PUBLIC;
+
+-- 관리실 문서 상세 복원 (2026-11-27, UI/UX 4-1). 질문 없이 문서를 보는 경로라 restore_token(본인 질문 확인)을 쓸 수 없다.
+--   요청 단위 확인 (틀리면 예외, 기록 없음)
+--     1) 활성 Lv2 계정인가                       → 42501
+--     2) 복원 사유가 있는가                      → 22023
+--   토큰 단위 확인 (틀리면 그 토큰만 NULL, 기록 없음)
+--     3) vault.token_map 에 있는 토큰인가
+--     4) 그 문서(rag.chunks)에 나오는 토큰인가
+--   모두 맞으면 audit.restore_log 에 사유·문서 번호와 함께 기록하고 원문 표기 배열을 돌려준다.
+CREATE OR REPLACE FUNCTION vault.restore_doc_token(p_request_id text, p_user_id text, p_doc_id text,
+                                                   p_token text, p_reason text)
+RETURNS text[] LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_level smallint;
+    v_label text;
+    v_orig  text[];
+BEGIN
+    SELECT access_level INTO v_level
+      FROM policy.users
+     WHERE user_id = p_user_id AND is_active;
+    IF v_level IS DISTINCT FROM 2 THEN
+        RAISE EXCEPTION '복원 권한이 없습니다 (user_id=%)', p_user_id USING ERRCODE = '42501';
+    END IF;
+
+    IF coalesce(btrim(p_reason), '') = '' THEN
+        RAISE EXCEPTION '복원 사유가 필요합니다' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT label, originals INTO v_label, v_orig
+      FROM vault.token_map
+     WHERE token = p_token;
+    IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM rag.chunks WHERE doc_id = p_doc_id AND p_token = ANY(tokens)) THEN
+        RETURN NULL;
+    END IF;
+
+    INSERT INTO audit.restore_log (request_id, user_id, level, token, label, mode, reason, doc_id)
+    VALUES (p_request_id, p_user_id, v_level, p_token, v_label, 'full', p_reason, p_doc_id);
+    RETURN v_orig;
+END;
+$$;
+ALTER FUNCTION vault.restore_doc_token(text, text, text, text, text) OWNER TO vault_user;
+REVOKE ALL ON FUNCTION vault.restore_doc_token(text, text, text, text, text) FROM PUBLIC;
 
 -- 부분 공개(Lv1): restore_log.mode 에 'partial' 을 더한다. 이미 있는 DB 에도 다시 실행하면 적용된다
 ALTER TABLE audit.restore_log DROP CONSTRAINT IF EXISTS restore_log_mode_chk;

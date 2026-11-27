@@ -47,6 +47,7 @@ input:focus{border-color:var(--cap);box-shadow:0 0 0 3px rgba(47,93,98,.15)}
 input[aria-invalid="true"]{border-color:var(--err)}
 .remember{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin:0 0 14px;cursor:pointer;user-select:none}
 .remember input[type="checkbox"]{width:16px;height:16px;accent-color:var(--cap);cursor:pointer;margin:0}
+.caps{font-size:12px;color:var(--warn);margin:-8px 0 12px}
 .status{font-size:13px;color:var(--wood3);min-height:20px;margin:-4px 0 14px}
 .status.error{color:var(--err)}
 button{font-family:"Noto Sans KR";font-weight:600;font-size:18px;width:100%;padding:15px;border:none;border-radius:16px;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
@@ -132,7 +133,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
       <span class="nameplate">도장곰 주임</span>
     </div>
     <ul>
-      <li>실명은 창구 밖으로 나가지 않아요.</li>
+      <li>이름·번호는 가명 토큰으로 바꾼 뒤에만 검색해요.</li>
       <li>사내 금융 문서를 가명 상태로만 검색해요.</li>
     </ul>
   </section>
@@ -145,11 +146,12 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
       <input id="userId" name="user_id" autocomplete="username" autocapitalize="characters" spellcheck="false" maxlength="20" required>
       <label for="password">비밀번호</label>
       <input id="password" name="password" type="password" autocomplete="current-password" maxlength="200" required>
-      <label class="remember"><input type="checkbox" id="rememberMe"> 아이디 저장하기</label>
+      <p class="caps" id="capsWarn" hidden>Caps Lock이 켜져 있어요</p>
+      <label class="remember"><input type="checkbox" id="rememberMe"> 사번 저장하기</label>
       <p class="status" id="status" role="status" aria-live="polite"></p>
       <button id="submit" type="submit">로그인</button>
     </form>
-    <p class="notice">Lv2 권한이 있으면 창구 상단에 '관리실' 버튼이 보여요. 관리실에 들어갈 때 2차 인증을 한 번 더 거쳐요.</p>
+    <p class="notice">Lv2 권한이 있으면 창구 상단에 '관리실' 버튼이 보여요. 가명 토큰을 원문으로 복원할 때는 비밀번호를 한 번 더 확인해요.</p>
     <p class="notice legal">이 시스템의 접속 기록(로그인·조회·내보내기)은 보관되고 정기적으로 점검돼요. 권한 없는 접근은 금지돼요.</p>
   </section>
 </main>
@@ -172,6 +174,11 @@ fetch("/api/me").then(r => { if (r.ok) location.replace("/"); }).catch(() => {})
 
 if (new URLSearchParams(location.search).has("expired")) setStatus("로그인이 끝났어요. 다시 로그인해 주세요.");
 (userId.value ? password : userId).focus();
+
+// Caps Lock 경고 (비밀번호 입력칸에서 키를 누를 때 확인)
+["keydown", "keyup"].forEach(t => password.addEventListener(t, e => {
+  if (e.getModifierState) $("#capsWarn").hidden = !e.getModifierState("CapsLock");   // 켜져 있으면 안내 표시
+}));
 
 form.addEventListener("submit", async e => {
   e.preventDefault();

@@ -243,6 +243,13 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
 .log-tab.active{background:var(--cap);color:#fff;border-color:var(--cap)}
 
 /* ── 보안 확인 모달 ── */
+.timer-pill.warn{color:var(--ink-red);border-color:var(--ink-red)}
+.ext-btn{font:inherit;font-size:11.5px;padding:1px 8px;margin-left:4px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
+.ext-btn:hover{background:#fff1dd}
+/* 복원 사유·유지 시간 (4-1, 3-10) */
+.sec-restore{display:grid;gap:8px;margin-bottom:12px;text-align:left}
+.sec-restore label{font-size:12.5px;color:var(--ink2)}
+.sec-restore select,.sec-restore input[type="text"]{width:100%;font:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999}
 .modal-box{background:var(--wall);border-radius:var(--radius);padding:28px 32px;width:380px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.2)}
 .modal-box h3{font-family:"Noto Sans KR";font-weight:700;font-size:17px;margin-bottom:16px}
@@ -304,7 +311,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
     </a>
     <div class="header-right">
       <span class="pill"><span class="dot"></span> Lv2 · 관리자</span>
-      <span class="pill">⏱ 세션 <b id="timer">30:00</b> 남음</span>
+      <span class="pill timer-pill" id="timerPill">⏱ 세션 <b id="timer">30:00</b> 남음 <button type="button" class="ext-btn" id="extendBtn" title="로그인 시간을 30분으로 다시 채워요">연장</button></span>
       <button class="btn-logout" id="logoutBtn">로그아웃</button>
     </div>
   </header>
@@ -350,7 +357,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         <div class="stat-card fail" data-wm="">
           <div class="label">적재 실패</div>
           <div class="value" id="failDocs">-<small>건</small></div>
-          <a class="link" href="#logs">실패 사유 확인 →</a>
+          <a class="link" href="#docs" title="문서 관리 아래 최근 업로드 이력에서 실패 사유를 볼 수 있어요">실패 사유 확인 →</a>
         </div>
       </div>
 
@@ -391,9 +398,9 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         </div>
         <div class="info-card">
           <h3>누가 관리실에 들어오나요</h3>
-          <div class="level"><b class="lv0">Lv0</b> 챗봇 · 지정한 문서만 · 토큰 답변</div>
-          <div class="level"><b class="lv1">Lv1</b> 챗봇 · 전체 문서 · 토큰 답변</div>
-          <div class="level"><b class="lv2">Lv2</b> 전체 문서 · 원문 복원 답변 + 관리실 (2차 인증 후)</div>
+          <div class="level"><b class="lv0">Lv0</b> 챗봇 · 지정된 문서만 · 토큰 답변</div>
+          <div class="level"><b class="lv1">Lv1</b> 챗봇 · 담당 업무 문서 · 토큰 답변 · 이름 부분 공개 (비밀번호 확인 후)</div>
+          <div class="level"><b class="lv2">Lv2</b> 업무 문서 전체 · 원문 복원 (비밀번호 확인 후) + 관리실</div>
         </div>
       </div>
     </section>
@@ -817,7 +824,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
         </div>
         <table class="data-table">
           <thead>
-            <tr><th>시각</th><th>사용자</th><th>Lv</th><th>토큰</th><th>라벨</th><th>모드</th><th>request_id</th></tr>
+            <tr><th>시각</th><th>사용자</th><th>Lv</th><th>토큰</th><th>라벨</th><th>모드</th><th>사유</th><th>문서</th><th>request_id</th></tr>
           </thead>
           <tbody id="restoreLogBody"></tbody>
         </table>
@@ -915,6 +922,25 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
   <div class="modal-box">
     <h3>🔒 보안 확인</h3>
     <div class="modal-desc" id="securityModalDesc"></div>
+    <div class="sec-restore" id="secRestoreFields" hidden>
+      <label for="secReason">복원 사유 (필수)</label>
+      <select id="secReason">
+        <option value="">사유를 골라 주세요</option>
+        <option>고객 민원·문의 확인</option>
+        <option>고객 본인 확인 (상담 중 신원 대조)</option>
+        <option>탐지 오류 검수 (가명처리가 맞는지 확인)</option>
+        <option>감사·점검 대응</option>
+        <option value="기타">기타 (직접 입력)</option>
+      </select>
+      <input type="text" id="secReasonMemo" maxlength="150" placeholder="메모 (기타는 필수)">
+      <label for="secMinutes">유지 시간</label>
+      <select id="secMinutes">
+        <option value="5">5분</option>
+        <option value="15">15분</option>
+        <option value="30" selected>30분</option>
+        <option value="0">로그아웃까지</option>
+      </select>
+    </div>
     <input type="password" id="securityModalPw" placeholder="본인 비밀번호 입력" autocomplete="off">
     <div class="modal-error" id="securityModalError"></div>
     <div class="modal-actions">
@@ -924,6 +950,7 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
   </div>
 </div>
 
+<script src="/static/session.js"></script>
 <script>
 let EMPLOYEE_ID = "";
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
@@ -938,23 +965,7 @@ function applyWatermark(){
 applyWatermark();
 setInterval(applyWatermark, 60000);
 
-/* ── 세션 타이머 (API 활동 시 리셋) ── */
-const SESSION_SECONDS = 30 * 60;
-let remaining = SESSION_SECONDS;
-const timerEl = document.getElementById("timer");
-function resetTimer(){ remaining = SESSION_SECONDS; }
-function tick(){
-  if(remaining <= 0){ window.location.href = "/login"; return; }
-  remaining--;
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  timerEl.textContent = `${m}:${String(s).padStart(2,"0")}`;
-}
-setInterval(tick, 1000);
-const _origFetch = window.fetch;
-window.fetch = function(...args){
-  return _origFetch.apply(this, args).then(res => { if(res.ok) resetTimer(); return res; });
-};
+/* ── 세션 타이머: 남은 시간은 서버가 정한다 (static/session.js, 아래 사용자 로드에서 시작) ── */
 
 /* ── 페이지 전환 ── */
 function showPage(id){
@@ -1194,42 +1205,44 @@ function sortDocs(th){
 /* ── 원문 복원 모드 ── */
 let _restoreMode = false;
 
+function setRestoreModeUI(on){                                            // 버튼·상태만 바꾼다
+  _restoreMode = on;
+  const btn = document.getElementById("restoreModeBtn");
+  btn.classList.toggle("active", on);
+  btn.textContent = on ? "🔒 복원 모드 ON" : "🔓 원문 복원";
+}
+
 function toggleRestoreMode(){
   if(_restoreMode){
-    _restoreMode = false;
-    const btn = document.getElementById("restoreModeBtn");
-    btn.classList.remove("active");
-    btn.textContent = "🔓 원문 복원";
+    fetch("/api/reveal-off", {method: "POST"}).catch(() => {});              // 서버 상태도 끈다
+    setRestoreModeUI(false);
     closeDocDetail();
     return;
   }
   openSecurityModal(
-    "원문 복원 모드를 켭니다. 이후 문서 상세 보기에서 토큰이 원문으로 표시되며, 모든 복원이 감사 로그에 기록됩니다.",
+    "원문 복원 모드를 켭니다. 이후 문서 상세 보기에서 토큰이 원문으로 표시되며, 모든 복원이 사유와 함께 감사 로그에 기록됩니다.",
     () => {
-      _restoreMode = true;
-      const btn = document.getElementById("restoreModeBtn");
-      btn.classList.add("active");
-      btn.textContent = "🔒 복원 모드 ON";
+      setRestoreModeUI(true);
       closeDocDetail();
-    }
+    },
+    null,
+    {restore: true}
   );
-}
-
-function _makeReqId(){
-  const d = new Date().toISOString().slice(0,10).replace(/-/g,"");
-  const hex = Array.from({length:12},()=>Math.floor(Math.random()*16).toString(16)).join("");
-  return "req_" + d + "_" + hex;
 }
 
 async function restoreDetailTokens(docId, tokenSet){
   const body = document.getElementById("docDetailBody");
   if(!body) return;
   try {
-    const reqId = _makeReqId();
-    const res = await fetch("/api/restore-tokens", {
+    const res = await fetch("/api/admin/restore-doc-tokens", {              // 문서 번호와 함께 보낸다 (사유는 서버 세션에 있음)
       method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({request_id: reqId, tokens: Array.from(tokenSet)}),
+      body: JSON.stringify({doc_id: docId, tokens: Array.from(tokenSet)}),
     });
+    if(res.status === 403 || res.status === 400){                           // 유지 시간이 끝났거나 사유가 없으면
+      setRestoreModeUI(false);
+      showAdminToast("복원 모드가 끝났어요. 다시 켜 주세요.");
+      return;
+    }
     if(!res.ok) return;
     const data = await res.json();
     const map = data.map || {};
@@ -1831,7 +1844,7 @@ async function loadQueryLogs(page){
 }
 
 async function loadRestoreLogs(page){
-  document.getElementById("restoreLogBody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
+  document.getElementById("restoreLogBody").innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink2);padding:32px">불러오는 중…</td></tr>';
   const params = new URLSearchParams({page, size: 20});
   const uid = document.getElementById("logRestoreUser").value.trim();
   const df = document.getElementById("logRestoreDateFrom").value;
@@ -1847,17 +1860,17 @@ async function loadRestoreLogs(page){
     const tbody = document.getElementById("restoreLogBody");
     tbody.innerHTML = "";
     if(!data.items.length){
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink2);padding:32px">복원 로그가 없어요.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink2);padding:32px">복원 로그가 없어요.</td></tr>';
     }
     data.items.forEach(r => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td style="white-space:nowrap;font-size:12.5px">${fmtTime(r.created_at)}</td><td>${esc(r.user_id)}</td><td>Lv${r.level}</td><td style="font-family:monospace;font-size:12.5px">${esc(r.token)}</td><td>${esc(r.label)}</td><td>${esc(r.mode)}</td><td style="font-size:12px;color:var(--ink2)">${esc(r.request_id)}</td>`;
+      tr.innerHTML = `<td style="white-space:nowrap;font-size:12.5px">${fmtTime(r.created_at)}</td><td>${esc(r.user_id)}</td><td>Lv${r.level}</td><td style="font-family:monospace;font-size:12.5px">${esc(r.token)}</td><td>${esc(r.label)}</td><td>${esc(r.mode)}</td><td style="font-size:12.5px">${esc(r.reason || "-")}</td><td>${esc(r.doc_id || "-")}</td><td style="font-size:12px;color:var(--ink2)">${esc(r.request_id)}</td>`;
       tbody.appendChild(tr);
     });
     renderLogPagination("restoreLogPagination", data.total, data.page, data.size, "loadRestoreLogs");
   } catch(e){
     console.warn("복원 로그 조회 실패:", e);
-    document.getElementById("restoreLogBody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-red);padding:32px">복원 로그를 불러오지 못했어요.</td></tr>';
+    document.getElementById("restoreLogBody").innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-red);padding:32px">복원 로그를 불러오지 못했어요.</td></tr>';
   }
 }
 
@@ -2339,9 +2352,19 @@ function batchToggleActive(active){
 let _securityCallback = null;
 let _securityCancelCallback = null;
 
-function openSecurityModal(desc, onConfirm, onCancel){
+let _securityRestore = false;      // true 면 복원 모드 켜기 (사유·유지 시간을 함께 보낸다)
+
+function openSecurityModal(desc, onConfirm, onCancel, opts){
   _securityCallback = onConfirm;
   _securityCancelCallback = onCancel || null;
+  _securityRestore = !!(opts && opts.restore);
+  document.getElementById("secRestoreFields").hidden = !_securityRestore;   // 복원일 때만 사유·유지 시간
+  if(_securityRestore){
+    let last = ""; try { last = localStorage.getItem("restore_reason") || ""; } catch(e){}
+    document.getElementById("secReason").value = last;                       // 마지막에 고른 사유를 기본으로
+    document.getElementById("secReasonMemo").value = "";
+    document.getElementById("secMinutes").value = "30";                       // 기본 30분
+  }
   document.getElementById("securityModalDesc").textContent = desc;
   document.getElementById("securityModalPw").value = "";
   document.getElementById("securityModalError").textContent = "";
@@ -2362,11 +2385,22 @@ document.getElementById("securityModalConfirm").addEventListener("click", async 
   if(!pw){ document.getElementById("securityModalError").textContent = "비밀번호를 입력해 주세요."; return; }
   const errEl = document.getElementById("securityModalError");
   const btn = document.getElementById("securityModalConfirm");
+  const payload = {password: pw, purpose: "confirm"};                     // 기본: 비밀번호 확인만 (레벨 변경 등)
+  if(_securityRestore){                                                    // 복원 모드: 사유 필수
+    const pick = document.getElementById("secReason").value;
+    const memo = document.getElementById("secReasonMemo").value.trim();
+    if(!pick){ errEl.textContent = "복원 사유를 골라 주세요."; return; }
+    if(pick === "기타" && !memo){ errEl.textContent = "기타 사유는 메모를 입력해 주세요."; return; }
+    payload.purpose = "reveal";
+    payload.reason = memo ? `${pick} - ${memo}` : pick;                    // 기록에 남을 사유
+    payload.minutes = +document.getElementById("secMinutes").value;        // 0 = 로그아웃까지
+    try { localStorage.setItem("restore_reason", pick); } catch(e){}
+  }
   btn.disabled = true; btn.textContent = "확인 중…";
   try {
     const res = await fetch("/api/verify-password", {
       method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({password: pw}),
+      body: JSON.stringify(payload),
     });
     if(!res.ok){ errEl.textContent = "비밀번호가 올바르지 않습니다."; return; }
     const cb = _securityCallback;
@@ -2383,8 +2417,21 @@ document.getElementById("securityModalPw").addEventListener("keydown", e => {
   if(e.key === "Enter") document.getElementById("securityModalConfirm").click();
 });
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape" && document.getElementById("securityModal").style.display === "flex") closeSecurityModal();
+  if(e.key !== "Escape") return;
+  if(document.getElementById("securityModal").style.display === "flex") closeSecurityModal();
+  else if(document.getElementById("mergeModal").style.display === "flex") closeMergeModal();
+  else if(document.getElementById("splitModal").style.display === "flex") closeSplitModal();
 });
+
+/* 관리실 짧은 안내 (토스트) */
+function showAdminToast(msg){
+  const t = document.createElement("div");
+  t.setAttribute("role", "status");
+  t.textContent = msg;
+  t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;padding:10px 20px;border-radius:999px;z-index:1000";
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
 document.getElementById("securityModal").addEventListener("click", e => {
   if(e.target === document.getElementById("securityModal")) closeSecurityModal();
 });
@@ -2452,9 +2499,12 @@ function toggleUserActive(userId, active, btn){
     const res = await fetch("/api/me");
     if(res.status === 401){ window.location.href = "/login"; return; }
     if(!res.ok) return;
-    const {user} = await res.json();
+    const me = await res.json();
+    const user = me.user;
     EMPLOYEE_ID = user.user_id;
     applyWatermark();
+    DojangSession.start(me.session_remaining, {timerEl: document.getElementById("timer"), pillEl: document.getElementById("timerPill"), extendBtn: document.getElementById("extendBtn")});   // 서버 기준 남은 시간
+    if(me.reveal && me.reveal.mode === "full" && me.reveal.reason) setRestoreModeUI(true);   // 새로고침 전에 켠 복원 모드가 남아 있으면 그대로
   } catch(e){ console.warn("사용자 정보 조회 실패:", e); }
 })();
 

@@ -101,6 +101,7 @@ GRANT UPDATE (last_login_at) ON policy.users TO pii_search;
 GRANT INSERT ON audit.query_log TO pii_search;
 GRANT EXECUTE ON FUNCTION vault.restore_token(text, text, text) TO pii_search;
 GRANT EXECUTE ON FUNCTION vault.partial_token(text, text, text) TO pii_search;   -- Lv1 이름 부분 공개
+GRANT EXECUTE ON FUNCTION vault.restore_doc_token(text, text, text, text, text) TO pii_search;   -- 관리실 문서 복원 (사유·문서 번호 기록)
 
 -- 5. 관리자(admin)는 슈퍼유저이므로 별도 GRANT 불필요
 

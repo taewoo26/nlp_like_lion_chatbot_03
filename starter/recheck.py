@@ -3,10 +3,11 @@
 기준: docs/permission_schema.md ⑥ 단계, 4.1절(recheck_*). chat.answer() 가 LLM 응답 직후(실명 복원 전)에 부른다.
 
 - 대상: 화면으로 나가는 글 = LLM 답변(전체) + 문서 조각. state 와 상관없이 문서가 나가면 검사한다.
-  문서는 화면에 앞 SNIPPET_CHARS(180)자만 나가므로 앞 WINDOW_CHARS(200)자만 검사해 docs[*].snippet 을 만든다.
-  (경계에 걸친 이름이 잘린 채 남지 않도록 20자 여유, 경계에 걸친 토큰은 끝까지 포함)
-  masked_text(문서 전체)는 재검사하지 않으므로 화면·응답으로 내보내지 않는다. 내보낼 때는 snippet 만 쓴다.
-  나중에 '문서 전체 보기' 같은 경로가 생기면 그 경로에서도 재검사해야 한다.
+  2026-11-27 (UI/UX 3-5): 문서 팝업에서 찾은 조각 전체를 보여 주기 위해 조각(청크, 최대 600자) 전체를 검사한다.
+  검사한 조각 전체는 docs[*].chunk_text, 그 앞 SNIPPET_CHARS(180)자는 docs[*].snippet 으로 내보낸다.
+  (이전에는 앞 200자만 검사하고 snippet 만 내보냈다. 검사 범위가 넓어져 masked·blocked 가 전보다 자주 나올 수 있다)
+  masked_text(검사 전 원본 조각)는 화면·응답으로 내보내지 않는다. 내보낼 때는 snippet·chunk_text 만 쓴다.
+  문서 전체(여러 조각) 보기 경로가 생기면 그 경로에서도 재검사해야 한다.
     answered·withheld : 답변 + 문서 조각
     search_only       : 문서 조각 (LLM 답변 없음)
     clarify           : 문서 조각만 (되묻기 문구는 시스템 고정 문장). 인물 되묻기(ask_person)는 문서를 함께 돌려준다.
@@ -46,7 +47,7 @@ from . import config, pii_pipeline
 from .address import region_bounds
 
 SNIPPET_CHARS = 180      # 화면·API 로 나가는 문서 조각 길이 (service/app.py 가 그대로 내보냄)
-WINDOW_CHARS = 200       # 문서 재검사 범위
+WINDOW_CHARS = None      # 문서 재검사 범위 (None = 조각 전체. 숫자를 넣으면 앞 N자만 검사하고 chunk_text 도 그 길이까지만)
 BLOCKED_MESSAGE = "보호가 필요한 개인정보가 포함되어 답변을 표시하지 않았습니다. 관리자에게 문의해 주세요."
 DEFAULT_BLOCK_LABELS = "resident_registration_number,card_number,account_number"
 POLICIES = ("split_v3", "union")
@@ -129,14 +130,17 @@ def cut(text, n):
 
 
 def window(text):
-    """문서 재검사 범위: 앞 WINDOW_CHARS 자."""
-    return cut(text, WINDOW_CHARS)
+    """문서 재검사 범위: 조각 전체 (WINDOW_CHARS 를 정하면 앞 N자)."""
+    if WINDOW_CHARS is None:                    # 기본: 조각 전체
+        return text or ""
+    return cut(text, WINDOW_CHARS)              # 숫자를 정했으면 앞부분만
 
 
 def default_snippets(result):
-    """재검사를 하지 않은 경우(RECHECK=off 등)의 문서 조각: 앞 SNIPPET_CHARS 자."""
+    """재검사를 하지 않은 경우(RECHECK=off 등)의 문서 조각: 앞 SNIPPET_CHARS 자와 조각 전체."""
     for d in result["docs"]:
-        d.setdefault("snippet", cut(d.get("masked_text"), SNIPPET_CHARS))
+        d.setdefault("snippet", cut(d.get("masked_text"), SNIPPET_CHARS))   # 칩 미리보기용
+        d.setdefault("chunk_text", window(d.get("masked_text")))            # 팝업용 (재검사 off 는 실험용 설정)
 
 
 def check(result, check_answer=True):
@@ -155,7 +159,7 @@ def check(result, check_answer=True):
     if labels.keys() & block_labels():
         result["answer"] = BLOCKED_MESSAGE
         for d in result["docs"]:
-            d["snippet"] = d["masked_text"] = ""     # 문서 ID 는 남긴다 (query_log.returned_doc_ids 유지)
+            d["snippet"] = d["masked_text"] = d["chunk_text"] = ""     # 문서 ID 는 남긴다 (query_log.returned_doc_ids 유지)
         return _summary("blocked", labels, started)
 
     if labels:
@@ -166,7 +170,8 @@ def check(result, check_answer=True):
         action = "none"
     for d, w, spans in zip(result["docs"], windows, doc_spans):
         checked = pii_pipeline.pseudonymize(w, spans, strict=False)[0] if spans else w
-        d["snippet"] = cut(checked, SNIPPET_CHARS)
+        d["snippet"] = cut(checked, SNIPPET_CHARS)    # 칩 미리보기 (앞 180자)
+        d["chunk_text"] = checked                     # 팝업에 보여 줄 조각 전체 (재검사를 거친 것)
     return _summary(action, labels, started)
 
 
