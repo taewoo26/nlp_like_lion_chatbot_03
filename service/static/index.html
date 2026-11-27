@@ -141,10 +141,8 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 form{display:flex;gap:8px;align-items:flex-end}
 /* 입력창: 여러 줄 (3-14) */
 .input-wrap{flex:1;min-width:0;position:relative}
-textarea#q{display:block;width:100%;resize:none;font:inherit;font-size:15px;line-height:1.5;padding:11px 14px 20px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none;max-height:calc(1.5em * 5 + 31px);overflow-y:auto}
+textarea#q{display:block;width:100%;resize:none;font:inherit;font-size:15px;line-height:1.5;padding:11px 14px;min-height:48px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none;max-height:calc(1.5em * 5 + 26px);overflow-y:auto}
 textarea#q:focus{border-color:var(--cap)}
-.counter-txt{position:absolute;right:12px;bottom:5px;font-size:11px;color:var(--ink2);pointer-events:none}
-.counter-txt.full{color:var(--ink-red)}
 button.send,.guide-btn{height:48px;font-family:"Noto Sans KR";font-weight:600;border-radius:14px;cursor:pointer;flex:none}
 button.send{font-size:16px;padding:0 18px;border:none;background:var(--cap);color:#fff;box-shadow:0 3px 0 var(--cap2)}
 button.send:disabled{opacity:.55;cursor:wait}
@@ -181,7 +179,7 @@ button.pill:hover{background:#fff8ec}
 /* 원복 유지 시간 선택 (3-10) */
 .dur{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap;justify-content:center;border:none;padding:0}
 .dur legend{font-size:12px;color:var(--ink2);margin:0 auto 6px;padding:0}
-.dur label{flex:1;min-width:64px;font-size:13px;padding:8px 6px;border-radius:10px;border:1.5px solid var(--line);background:#fff;cursor:pointer;text-align:center}
+.dur label{flex:1;min-width:64px;min-height:52px;display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1.3;padding:6px;border-radius:10px;border:1.5px solid var(--line);background:#fff;cursor:pointer;text-align:center;word-break:keep-all}
 .dur input{position:absolute;opacity:0;width:0;height:0}
 .dur label:has(input:checked){border-color:var(--cap);background:#eef5f4;color:var(--cap);font-weight:600}
 .dur label:has(input:focus-visible){outline:3px solid var(--gold);outline-offset:1px}
@@ -231,6 +229,18 @@ button.pill:hover{background:#fff8ec}
 .feedback button{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
 .feedback button:hover{background:#fff1dd;color:var(--ink)}
 .feedback button:disabled{opacity:.5;cursor:default;background:#fff}
+/* 틀린 답 신고 사유 (3-12) */
+.fb-form{margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;gap:8px}
+.fb-form p{margin:0;font-size:12.5px;color:var(--ink2)}
+.fb-reasons{display:flex;flex-wrap:wrap;gap:6px}
+.fb-reasons button{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
+.fb-reasons button[aria-pressed="true"]{border-color:var(--cap);background:#eef5f4;color:var(--cap);font-weight:600}
+.fb-form input{font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);outline:none}
+.fb-form input:focus{border-color:var(--cap)}
+.fb-actions{display:flex;gap:6px;justify-content:flex-end}
+.fb-actions button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.fb-actions .fb-send{background:var(--cap);border-color:var(--cap);color:#fff}
+.fb-err{font-size:12px;color:var(--ink-red);min-height:0}
 /* 무응답 사유 */
 .sorry-box{background:#fff4ee;border:1px solid #f0cdb8;border-radius:12px;padding:10px 12px;font-size:13px;color:var(--warn)}
 .sorry-box .label{font-family:"Noto Sans KR";font-weight:600;font-size:12px;display:block;margin-bottom:2px}
@@ -436,10 +446,9 @@ button.pill:hover{background:#fff8ec}
       <form id="form" autocomplete="off">
         <div class="input-wrap">
           <label class="sr" for="q">질문</label>
-          <textarea id="q" rows="1" placeholder="예) 자동이체 해지 요청 건 찾아줘" maxlength="500" aria-describedby="qCount"></textarea>
-          <span class="counter-txt" id="qCount" aria-live="off">0/500</span>
+          <textarea id="q" rows="1" placeholder="예) 자동이체 해지 요청 건 찾아줘" maxlength="500"></textarea>
         </div>
-        <button type="button" class="guide-btn" id="guideBtn" aria-haspopup="dialog" title="찾을 수 있는 문서와 질문 방법">❔<span class="g-txt"> 찾을 수 있는 문서</span></button>
+        <button type="button" class="guide-btn" id="guideBtn" aria-haspopup="dialog" title="찾을 수 있는 문서와 질문 방법">📖<span class="g-txt"> 찾을 수 있는 문서</span></button>
         <button class="send" id="send" type="submit">물어보기</button>
       </form>
       <div class="note">입력한 질문은 서버에서 가명 토큰으로 바꾼 뒤에만 검색·답변에 써요. 원문은 저장하지 않아요. (Enter 전송 · Shift+Enter 줄바꿈)</div>
@@ -501,6 +510,18 @@ button.pill:hover{background:#fff8ec}
     <div class="modal-btns">
       <button class="cancel" id="restoreCancel">취소</button>
       <button class="confirm" id="restoreConfirm">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 로그아웃 확인 (원복 팝업과 같은 모양) -->
+<div class="modal-overlay" id="logoutModal" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+  <div class="modal">
+    <h3 id="logoutTitle">로그아웃</h3>
+    <p>로그아웃하시겠어요? 이 창의 대화 기록도 함께 지워져요.</p>
+    <div class="modal-btns">
+      <button type="button" class="cancel" data-close>취소</button>
+      <button type="button" class="confirm" id="logoutConfirm">로그아웃</button>
     </div>
   </div>
 </div>
@@ -698,11 +719,52 @@ async function renderAnswer(bot, res, animate){
   if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
   if (!res.need_more) {
     const fb = document.createElement("div"); fb.className = "feedback";
-    fb.innerHTML = `<button type="button" data-fb="good">👍 도움이 됐어요</button><button type="button" data-fb="bad">🚨 틀린 답 신고</button>`;
-    fb.addEventListener("click", async e => { const b = e.target.closest("[data-fb]"); if(!b||b.disabled) return; fb.querySelectorAll("button").forEach(x => x.disabled = true); const rid = bot.dataset.requestId; if(rid && !DEMO){ try { await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_id:rid,kind:b.dataset.fb})}); } catch{} } showToast(b.dataset.fb === "good" ? "감사합니다! 피드백이 반영됐어요." : "신고가 접수됐어요. 확인 후 개선할게요."); });
+    fb.innerHTML = `<button type="button" data-fb="good">👍 도움이 됐어요</button><button type="button" data-fb="bad" aria-expanded="false">🚨 틀린 답 신고</button>`;
+    fb.addEventListener("click", e => {
+      const b = e.target.closest("[data-fb]"); if (!b || b.disabled) return;
+      if (b.dataset.fb === "good") { fb.querySelectorAll("button").forEach(x => x.disabled = true); sendFeedback(bot, "good", null); return; }   // 좋아요는 바로 보냄
+      openFeedbackForm(bot, fb, b);                                             // 신고는 사유부터 고른다
+    });
     bot.appendChild(fb);
   }
   if (reveal) applyCurrentReveal();
+  log.scrollTop = log.scrollHeight;
+}
+
+/* 피드백 보내기 (good / bad + 사유) */
+async function sendFeedback(bot, kind, comment){
+  const rid = bot.dataset.requestId;
+  if (rid && !DEMO){ try { await fetch("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({request_id:rid, kind, comment})}); } catch {} }
+  showToast(kind === "good" ? "감사합니다! 피드백이 반영됐어요." : "신고가 접수됐어요. 확인 후 개선할게요.");
+}
+
+/* 틀린 답 신고 사유 (3-12): 사유를 고르고 메모를 남기면 comment 로 보낸다 → 관리실 피드백 화면의 '내용' 칸 */
+const FB_REASONS = ["틀린 내용이에요", "있는 문서인데 못 찾았어요", "질문을 잘못 이해했어요", "기타"];
+function openFeedbackForm(bot, fb, badBtn){
+  if (bot.querySelector(".fb-form")) { bot.querySelector(".fb-form").remove(); badBtn.setAttribute("aria-expanded", "false"); return; }   // 다시 누르면 닫힘
+  badBtn.setAttribute("aria-expanded", "true");
+  const form = document.createElement("div"); form.className = "fb-form";
+  form.innerHTML = `<p>어떤 점이 문제였나요?</p>
+    <div class="fb-reasons" role="group" aria-label="신고 사유">${FB_REASONS.map(r => `<button type="button" aria-pressed="false">${r}</button>`).join("")}</div>
+    <input type="text" maxlength="200" placeholder="메모 (선택, 기타는 필수)" aria-label="신고 메모">
+    <div class="fb-err" role="alert"></div>
+    <div class="fb-actions"><button type="button" class="fb-cancel">취소</button><button type="button" class="fb-send">신고하기</button></div>`;
+  fb.after(form);
+  let picked = "";
+  form.querySelector(".fb-reasons").addEventListener("click", e => {          // 사유는 하나만 고른다
+    const b = e.target.closest("button"); if (!b) return;
+    form.querySelectorAll(".fb-reasons button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    picked = b.textContent; form.querySelector(".fb-err").textContent = "";
+  });
+  form.querySelector(".fb-cancel").addEventListener("click", () => { form.remove(); badBtn.setAttribute("aria-expanded", "false"); badBtn.focus(); });
+  form.querySelector(".fb-send").addEventListener("click", () => {
+    const memo = form.querySelector("input").value.trim();
+    if (!picked) { form.querySelector(".fb-err").textContent = "사유를 골라 주세요."; return; }
+    if (picked === "기타" && !memo) { form.querySelector(".fb-err").textContent = "기타는 메모를 적어 주세요."; return; }
+    fb.querySelectorAll("button").forEach(x => x.disabled = true);             // 한 번만 보낸다
+    form.remove();
+    sendFeedback(bot, "bad", memo ? `${picked} - ${memo}` : picked);           // 예: "틀린 내용이에요 - 날짜가 달라요"
+  });
   log.scrollTop = log.scrollHeight;
 }
 
@@ -824,7 +886,7 @@ $("#guideBtn").addEventListener("click", async e => {
   if (DEMO) items = ["보이스피싱 피해 접수", "법인카드 사용 보고서", "자동이체 신청서", "VOC 요약", "출장 결과 보고서"].map(t => ({doc_type:t}));
   else { try { const r = await fetch("/api/doc-types"); if (r.ok) items = (await r.json()).items; } catch {} }
   $("#typeChips").innerHTML = items.length
-    ? items.map(it => `<button type="button" data-type="${esc(it.doc_type)}">${esc(it.doc_type)}${it.count ? ` <small>${it.count}</small>` : ""}</button>`).join("")
+    ? items.map(it => `<button type="button" data-type="${esc(it.doc_type)}">${esc(it.doc_type)}</button>`).join("")
     : '<span class="note">문서 종류를 불러오지 못했어요.</span>';
   typesLoaded = items.length > 0;
 });
@@ -878,8 +940,10 @@ function applyWatermark(uid){
   log.dataset.wm = wm;
 }
 setInterval(() => { if (ME) applyWatermark(ME.user_id); }, 60000);
-$("#logoutBtn").addEventListener("click", async () => {
-  clearHistory();
+$("#logoutBtn").addEventListener("click", e => openModal($("#logoutModal"), e.currentTarget));   // 바로 로그아웃하지 않고 확인 팝업
+$("#logoutConfirm").addEventListener("click", async () => {                    // 팝업에서 '로그아웃'을 눌러야 로그아웃
+  $("#logoutConfirm").disabled = true;                                           // 두 번 눌림 방지
+  clearHistory();                                                                // 이 탭의 대화 기록 삭제
   try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
 });
 $("#adminBtn").addEventListener("click", () => { window.location.href = "/admin"; });
@@ -976,10 +1040,8 @@ $("#restoreConfirm").addEventListener("click", async () => {
 /* ---------- 입력창 (3-14): 줄이 넘어가면 높이가 늘고, Enter 전송 · Shift+Enter 줄바꿈 ---------- */
 function autoGrow(){
   input.style.height = "auto";
-  input.style.height = input.scrollHeight + "px";                               // 최대 높이는 CSS(max-height)가 막는다
-  const n = input.value.length;
-  $("#qCount").textContent = `${n}/500`;
-  $("#qCount").classList.toggle("full", n >= 500);
+  const h = input.scrollHeight + 3;                                             // 내용 높이 + 테두리(1.5px × 2)
+  input.style.height = (h <= 50 ? 48 : h) + "px";                               // 한 줄이면 버튼과 같은 48px. 최대 높이는 CSS 가 막는다
 }
 input.addEventListener("input", autoGrow);
 input.addEventListener("keydown", e => {

@@ -918,6 +918,18 @@ main{overflow-y:auto;padding:28px 32px 40px;position:relative}
 </div>
 
 <!-- ═══ 보안 확인 모달 ═══ -->
+<!-- 로그아웃 확인 (보안 확인 팝업과 같은 모양) -->
+<div class="modal-overlay" id="logoutModal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+  <div class="modal-box">
+    <h3 id="logoutTitle">로그아웃</h3>
+    <div class="modal-desc">로그아웃하시겠어요?</div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="logoutCancel">취소</button>
+      <button type="button" class="btn-confirm" id="logoutConfirm">로그아웃</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="securityModal" style="display:none">
   <div class="modal-box">
     <h3>🔒 보안 확인</h3>
@@ -1001,8 +1013,19 @@ document.addEventListener("click", e => {
 });
 
 /* ── 로그아웃 ── */
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  if(!confirm("로그아웃 하시겠어요?")) return;
+const logoutModal = document.getElementById("logoutModal");
+function closeLogoutModal(){                                                   // 닫고 로그아웃 버튼으로 포커스
+  logoutModal.style.display = "none";
+  document.getElementById("logoutBtn").focus();
+}
+document.getElementById("logoutBtn").addEventListener("click", () => {        // 브라우저 기본 confirm 대신 팝업
+  logoutModal.style.display = "flex";
+  document.getElementById("logoutConfirm").focus();
+});
+document.getElementById("logoutCancel").addEventListener("click", closeLogoutModal);
+logoutModal.addEventListener("click", e => { if(e.target === logoutModal) closeLogoutModal(); });   // 바깥 클릭으로 닫기
+document.getElementById("logoutConfirm").addEventListener("click", async () => {
+  document.getElementById("logoutConfirm").disabled = true;                    // 두 번 눌림 방지
   try { await fetch("/api/logout", {method:"POST"}); } catch(e){}
   window.location.href = "/login";
 });
@@ -2418,7 +2441,8 @@ document.getElementById("securityModalPw").addEventListener("keydown", e => {
 });
 document.addEventListener("keydown", e => {
   if(e.key !== "Escape") return;
-  if(document.getElementById("securityModal").style.display === "flex") closeSecurityModal();
+  if(document.getElementById("logoutModal").style.display === "flex") closeLogoutModal();
+  else if(document.getElementById("securityModal").style.display === "flex") closeSecurityModal();
   else if(document.getElementById("mergeModal").style.display === "flex") closeMergeModal();
   else if(document.getElementById("splitModal").style.display === "flex") closeSplitModal();
 });
