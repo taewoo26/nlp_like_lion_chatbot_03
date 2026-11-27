@@ -84,6 +84,7 @@ GRANT SELECT                         ON rag.role_master        TO pii_ingest;
 GRANT SELECT, INSERT                 ON vault.token_map         TO pii_ingest;   -- 토큰은 지우지 않음
 GRANT UPDATE (originals)             ON vault.token_map         TO pii_ingest;   -- 새 표기 추가만
 GRANT SELECT, INSERT, UPDATE, DELETE ON vault.person_info, vault.person_registry TO pii_ingest;
+GRANT SELECT, INSERT, UPDATE, DELETE ON rag.doc_meta          TO pii_ingest;   -- 문서 메타데이터 (starter/doc_meta.py)
 
 -- 전체 초기화 전용. 재적재도 같은 트랜잭션에서 수행하기 위해 적재 권한을 상속한다.
 -- 일반 적재·검색 계정은 이 역할을 상속하지 않는다. 감사·정책 표는 초기화 대상이 아니다.
@@ -93,7 +94,7 @@ GRANT TRUNCATE ON rag.chunks, rag.look_up, vault.token_map,
 
 -- 4. 검색 서비스: vault 표는 직접 못 읽음
 GRANT USAGE ON SCHEMA rag, policy, audit, vault TO pii_search;
-GRANT SELECT ON rag.chunks, rag.look_up, rag.role_master TO pii_search;
+GRANT SELECT ON rag.chunks, rag.look_up, rag.role_master, rag.doc_meta TO pii_search;   -- doc_meta: 검색 전 권한 필터
 GRANT SELECT ON policy.doc_type_level, policy.team_level, policy.teams, policy.policy_state TO pii_search;
 GRANT SELECT                 ON policy.users TO pii_search;                     -- 로그인 확인
 GRANT UPDATE (last_login_at) ON policy.users TO pii_search;

@@ -4,8 +4,8 @@
 # 사람이 읽는 설명: docs/permission_policy_draft.md
 # 수정 시 version을 올리고, policy/test_access_policy.py를 다시 실행하세요.
 
-version: "v0.4"
-updated: "2026-11-10"
+version: "v0.5"
+updated: "2026-11-26"
 status: "팀 검토 전"
 
 levels:
@@ -34,7 +34,7 @@ doc_types:
   # ---- Lv1 ----
   회의록: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 회의. [계획서와 차이: 계획서는 Lv2 예시]" }
   업무메일: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 소통" }
-  사내메신저: { min_level: 1, category: 내부업무, rationale: "직원 간 업무 소통" }
+  사내메신저: { min_level: 2, category: 내부업무, rationale: "개인 간 대화, 공유 의도 없음 (11-26: Lv1→2)" }
   영문혼용메일: { min_level: 1, category: 내부업무, rationale: "대외 협력 업무 메일" }
   출장보고: { min_level: 1, category: 내부업무, rationale: "내부 업무 보고" }
   VOC요약: { min_level: 1, category: 고객업무, rationale: "고객 의견 요약" }
@@ -60,8 +60,8 @@ doc_types:
   # ---- Lv2 ----
   감사지적: { min_level: 2, category: 직원개인, rationale: "직원 대상 내부 감사 지적" }
   법인카드소명: { min_level: 2, category: 직원개인, rationale: "직원 개인의 비용 소명" }
-  인사발령: { min_level: 2, category: 직원개인, rationale: "직원 인사 정보" }
-  채용메일: { min_level: 2, category: 직원개인, rationale: "채용 지원자 개인 정보" }
+  인사발령: { min_level: 0, category: 공개, rationale: "전사 공지 문서 (11-26: Lv2→0)" }
+  채용메일: { min_level: 1, category: 내부업무, rationale: "인사팀 채용 담당 업무. 담당 팀은 항상 인사팀 (11-26: Lv2→1, 직원개인→내부업무)" }
 
 # 복원 규칙: level -> label -> mode (none | full). partial(일부 복원)은 추후 논의.
 restore:
@@ -108,6 +108,16 @@ teams:
   DEPT_CS_CENTER:   고객센터
   DEPT_IT_OPS:      IT운영팀
   DEPT_DIGITAL:     디지털전략팀
+
+# 고객 업무 팀 그룹 (11-26 결정). 고객업무 분류 문서는 담당 팀과 관계없이 이 그룹의 Lv1 이상이 열람합니다.
+# 그 밖의 팀은 Lv2(팀장)부터 열람합니다. 코드는 위 teams 에 있어야 합니다.
+customer_teams:
+  - DEPT_CS_CENTER
+  - DEPT_CUST_PROT
+  - DEPT_CREDIT
+  - DEPT_CARD_OPS
+  - DEPT_COLLECTION
+  - DEPT_RISK
 
 # 사용자 레벨 규칙 (DB policy.team_level의 초기값). 근거: docs/permission_policy_draft.md 7절
 # 팀 코드(team_cd)와 직책(position) 조합으로 계정의 기본 레벨을 정합니다. 직급(grade)은 판정에 쓰지 않습니다.

@@ -315,7 +315,8 @@ def reset_and_ingest(docs, args, rules, pseudo_path):
     print(f'전체 재적재 완료: 문서 {len(docs)}건, 청크 {len(rows)}개 (초기화와 적재를 함께 커밋)')
 
 
-def main():
+def _main():
+    """적재를 실행하고 인자(args)를 돌려준다. 끝까지 성공했을 때만 값을 돌려준다."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(config.DATA_DIR / "holdout_labeled.jsonl"))
     ap.add_argument("--reset", action="store_true",
@@ -329,6 +330,8 @@ def main():
                     help="탐지·가명처리에 쓸 프로세스 수 (기본 .env INGEST_WORKERS 또는 1). 결과는 1일 때와 같다")
     ap.add_argument("--source", default="pipeline",
                     help="적재 출처 (pipeline | upload)")
+    ap.add_argument("--no-doc-meta", action="store_true",
+                    help="적재 후 문서 메타데이터(rag.doc_meta, outputs/doc_meta·employees.jsonl) 생성을 건너뜀")
     a = ap.parse_args()
     if a.reset and a.resume:
         raise SystemExit("--reset 과 --resume 은 함께 쓸 수 없습니다.")
@@ -353,7 +356,7 @@ def main():
     if dict_on:
         from .person_ingest import run
         run(docs, a, pseudo_path)
-        return
+        return a
     rules = None
     if role_on or dict_on:
         with db.rag_conn() as conn, conn.cursor() as cur:
@@ -363,7 +366,7 @@ def main():
         reset_and_ingest(docs, a, rules, pseudo_path)
         part_path.unlink(missing_ok=True)
         ckpt_path.unlink(missing_ok=True)
-        return
+        return a
 
     settings = run_settings(a, region_on, role_on)
     done = {}
@@ -456,6 +459,15 @@ def main():
         print(f"탐지+가명처리 {t_mask * 1000 / len(todo):.1f} ms/문서 (워커 {a.workers}개), "
               f"임베딩 {t_embed * 1000 / len(todo):.1f} ms/문서 ({config.EMBED_PROVIDER})")
     print(f"가명처리 결과: {pseudo_path}")
+    return a
+
+
+def main():
+    """적재 → 문서 메타데이터 생성 (Holdout2 무수작업 실행: 적재 한 번으로 메타데이터까지 만든다)."""
+    a = _main()
+    if a is not None and not a.no_doc_meta:
+        from . import doc_meta
+        doc_meta.run()
 
 
 if __name__ == "__main__":

@@ -69,8 +69,21 @@ def _UNKNOWN_ROLE_SQL():
     return " OR role = 'unknown' OR role IS NULL" if keep_unknown_role() else ""
 
 
-def person_candidates(cur, records, roles=(), meta=None):
+# 검색 권한 범위 (11-26). scope: 열람 가능한 doc_id 목록, None 이면 제한 없음(평가 스크립트·개인정보 담당자).
+# 결과 문서뿐 아니라 인물 후보 수·0건 원인 진단도 같은 범위에서 센다 (못 보는 문서에 그 이름이 있다는 사실이 드러나지 않도록).
+SCOPE_SQL = "chunks.doc_id = ANY(%s::text[])"
+
+
+def _scope_chunk_sql(scope, col="chunk_id"):
+    """rag.look_up 처럼 doc_id 가 없는 표의 범위 조건 (chunk_id 로 거른다). scope 가 None 이면 ('', ())."""
+    if scope is None:
+        return "", ()
+    return f" AND {col} IN (SELECT chunk_id FROM rag.chunks WHERE doc_id = ANY(%s::text[]))", (list(scope),)
+
+
+def person_candidates(cur, records, roles=(), meta=None, scope=None):
     """이름 토큰 → 검색 가능한 chunk_id 목록. 빈 후보는 이름 토큰 검색으로 대체하지 않는다."""
+    scope_sql, scope_params = _scope_chunk_sql(scope)
     out = {}
     for r in records:
         token = r['token']
@@ -78,8 +91,8 @@ def person_candidates(cur, records, roles=(), meta=None):
             continue
         cur.execute("""SELECT DISTINCT COALESCE(reg_id, person_id), chunk_id
             FROM rag.look_up
-            WHERE token = %s AND (%s::text[] = '{}' OR role = ANY(%s::text[])""" + _UNKNOWN_ROLE_SQL() + """)
-            ORDER BY 1, 2""", (token, list(roles), list(roles)))
+            WHERE token = %s AND (%s::text[] = '{}' OR role = ANY(%s::text[])""" + _UNKNOWN_ROLE_SQL() + """)""" + scope_sql + """
+            ORDER BY 1, 2""", (token, list(roles), list(roles), *scope_params))
         rows = cur.fetchall()
         identities = {row[0] for row in rows}
         if meta is not None:
@@ -150,8 +163,9 @@ def _doc_persons(cur, doc_ids):
     return out
 
 
-def search(query, k=10, conn=None, with_meta=False, reg_id=None, context=None):
-    """context: 직전 재질문 {'masked_query', 'query_tokens', 'clarify_code'} (service/app.py 가 감사 로그에서 꺼냄).
+def search(query, k=10, conn=None, with_meta=False, reg_id=None, context=None, scope=None):
+    """scope: 열람 가능한 doc_id 목록 (service/app.py 가 rag.doc_meta 와 정책으로 계산). None 이면 제한 없음.
+    context: 직전 재질문 {'masked_query', 'query_tokens', 'clarify_code'} (service/app.py 가 감사 로그에서 꺼냄).
     지금 질문이 조각(번호만·지역만·역할만)이면 직전 질문과 합쳐서 검색한다 (starter/clarify.py merge_query)."""
     dict_on = config.meta_on("PERSON_DICT")
     if reg_id and not dict_on:
@@ -171,7 +185,7 @@ def search(query, k=10, conn=None, with_meta=False, reg_id=None, context=None):
                      if dict_on else [])                              # 인물 후보 조회에는 토큰·종류만 쓰인다
         query = masked_q                                              # 지역·역할 판단도 합친 질문으로 (원문은 다시 쓰지 않음)
     try:
-        out = _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id)
+        out = _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id, scope)
         if with_meta:                                                 # meta 에 이어받기 여부 표시
             out[3]["merged"] = bool(merged)
         return out
@@ -189,7 +203,7 @@ def tag_masked(exc, masked_q, q_tokens):
             pass
 
 
-def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None):
+def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_records, reg_id=None, scope=None):
     meta = {"regions": [], "ask_region": None, "roles": [], "excluded": 0, "person_candidates": {},
             "ask_person": False, "person_scope": "registry" if reg_id else "name_role",
             "too_vague": False,        # CLR-08 찾을 단서가 없는 질문 (starter/clarify.py)
@@ -213,7 +227,7 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
     try:
         with conn.cursor() as cur:
             if mode == "boost" and q_tokens:
-                docs = rerank_top(masked_q, _search_boost(cur, vec, q_tokens, k))
+                docs = rerank_top(masked_q, _search_boost(cur, vec, q_tokens, k, scope))
                 return (masked_q, q_tokens, docs, meta) if with_meta else (masked_q, q_tokens, docs)
             wanted, groups = set(), {}
             if (dict_on or config.meta_on("ROLE_META")) and (len(person_tokens) == 1 or (not person_tokens and regions)):
@@ -229,7 +243,9 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                 # 7.4: 명시적으로 선택한 확정 인물은 문서별 역할과 무관하게 조회한다.
                 if len(person_tokens) > 1:
                     raise ValueError("reg_id 검색에는 이름을 하나만 지정하세요.")
-                cur.execute("SELECT DISTINCT chunk_id FROM rag.look_up WHERE reg_id = %s", (reg_id,))
+                scope_sql, scope_params = _scope_chunk_sql(scope)
+                cur.execute("SELECT DISTINCT chunk_id FROM rag.look_up WHERE reg_id = %s" + scope_sql,
+                            (reg_id, *scope_params))
                 selected_chunks = sorted({row[0] for row in cur.fetchall()})
                 candidates = {token: selected_chunks for token in person_tokens}
                 meta['person_candidates'] = {token: int(bool(selected_chunks)) for token in person_tokens}
@@ -237,18 +253,23 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
                     meta["empty_reason"] = "person"      # CLR-03 선택한 확정 인물의 문서가 없음
                     return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
             else:
-                candidates = person_candidates(cur, q_records, candidate_roles, meta) if dict_on else {}
+                candidates = person_candidates(cur, q_records, candidate_roles, meta, scope) if dict_on else {}
                 if meta["ask_person"]:                                   # CLR-02 후보가 여러 명이면
-                    _narrow_candidates(cur, candidates, q_tokens, regions, candidate_roles, meta)   # 다른 조건(번호·주소·지역)으로 좁혀 본다
+                    _narrow_candidates(cur, candidates, q_tokens, regions, candidate_roles, meta, scope)   # 다른 조건(번호·주소·지역)으로 좁혀 본다
             # 후보가 없을 때만 종료한다. 여러 후보의 검색 결과는 유지하고 답변 단계에서 보류한다.
             if dict_on and any(not c for c in candidates.values()):
                 empty = [t for t, c in candidates.items() if not c]           # 후보가 0명인 이름 토큰
-                meta["empty_reason"] = _name_reason(cur, empty, candidate_roles)   # CLR-03(이름 없음) / CLR-04(역할 불일치)
+                meta["empty_reason"] = _name_reason(cur, empty, candidate_roles, scope)   # CLR-03(이름 없음) / CLR-04(역할 불일치)
                 return (masked_q, q_tokens, [], meta) if with_meta else (masked_q, q_tokens, [])
             allowed = set(person_tokens)
             pool = max(k * 3, ROLE_POOL) if wanted else k * 3
             where, params = [], [vec]
             token_where, token_params = [], []     # 0건일 때 원인을 가리려고 토큰 조건을 따로 보관
+            scope_where, scope_params = [], []     # 권한 범위 (원인 진단에도 같은 범위를 쓴다)
+            if scope is not None:
+                scope_where, scope_params = [SCOPE_SQL], [list(scope)]
+                where += scope_where
+                params += scope_params
             if selected_chunks is not None:
                 where.append('chunks.chunk_id = ANY(%s::text[])')
                 params.append(selected_chunks)
@@ -281,7 +302,8 @@ def _search_masked(query, k, conn, with_meta, dict_on, masked_q, q_tokens, q_rec
             cur.execute(sql, tuple(params))
             hits = cur.fetchall()
             if not hits and (token_where or regions):   # 조건 때문에 0건이면 어느 조건 때문인지 가린다 (0건일 때만 실행)
-                meta["empty_reason"] = _filter_reason(cur, token_where, token_params, regions)   # CLR-05 / CLR-06
+                meta["empty_reason"] = _filter_reason(cur, token_where, token_params, regions,
+                                                      scope_where, scope_params)   # CLR-05 / CLR-06
                 if meta["empty_reason"] == "token":                                             # 식별자 불일치면
                     meta["empty_label"] = clarify.identifier_kinds(q_tokens)                    # 어떤 종류였는지 남긴다
             persons = _doc_persons(cur, sorted({h[0] for h in hits})) if wanted and not reg_id and (not dict_on or not person_tokens) else {}
@@ -322,7 +344,7 @@ REGION_SQL = """EXISTS (
                     )"""   # 지역 조건 (검색과 진단이 같은 SQL 을 쓴다)
 
 
-def _narrow_candidates(cur, candidates, q_tokens, regions, roles, meta):
+def _narrow_candidates(cur, candidates, q_tokens, regions, roles, meta, scope=None):
     """CLR-02 보충 질문: 이름 말고 다른 조건(전화번호·주소 등 토큰, 지역)이 있으면 그 조건을 만족하는
     문서에 나오는 후보만 남긴다. 한 명으로 좁혀지면 그 사람의 청크만 검색하고 되묻지 않는다.
 
@@ -339,6 +361,9 @@ def _narrow_candidates(cur, candidates, q_tokens, regions, roles, meta):
     if regions:                                     # 지역 조건 (검색과 같은 SQL)
         cond.append(REGION_SQL)
         params.append(regions)
+    if scope is not None:                           # 권한 범위 안의 문서만
+        cond.append(SCOPE_SQL)
+        params.append(list(scope))
     still = False                                   # 좁힌 뒤에도 여러 명인 이름이 남았는지
     for token, chunks in list(candidates.items()):  # 이름 토큰마다
         if meta["person_candidates"].get(token, 0) <= 1:   # 이미 한 명이면
@@ -357,11 +382,13 @@ def _narrow_candidates(cur, candidates, q_tokens, regions, roles, meta):
     meta["ask_person"] = still                      # 모두 한 명으로 좁혀졌으면 되묻지 않는다
 
 
-def _name_reason(cur, tokens, roles):
+def _name_reason(cur, tokens, roles, scope=None):
     """후보 0명인 이름이 '아예 없는 이름'(person)인지 '역할만 안 맞는 이름'(role)인지 가린다."""
     if not roles:                                   # 역할 조건이 없었으면
         return "person"                             # 이름 자체가 없음 (CLR-03)
-    cur.execute("SELECT 1 FROM rag.look_up WHERE token = ANY(%s::text[]) LIMIT 1", (list(tokens),))   # 역할 빼고 이름만 조회
+    scope_sql, scope_params = _scope_chunk_sql(scope)
+    cur.execute("SELECT 1 FROM rag.look_up WHERE token = ANY(%s::text[])" + scope_sql + " LIMIT 1",
+                (list(tokens), *scope_params))   # 역할 빼고 이름만 조회 (권한 범위 안에서)
     return "role" if cur.fetchone() else "person"   # 이름은 있으면 역할 불일치 (CLR-04)
 
 
@@ -372,10 +399,10 @@ def _count_docs(cur, where, params):
     return cur.fetchone() is not None               # 있으면 True
 
 
-def _filter_reason(cur, token_where, token_params, regions):
+def _filter_reason(cur, token_where, token_params, regions, scope_where=(), scope_params=()):
     """토큰·지역 조건을 함께 걸어 0건일 때 원인을 가린다: region(CLR-05) / token(CLR-06)."""
     if token_where and regions:                     # 둘 다 걸려 있으면
-        return "region" if _count_docs(cur, token_where, token_params) else "token"   # 지역을 빼서 생기면 지역 탓
+        return "region" if _count_docs(cur, [*scope_where, *token_where], [*scope_params, *token_params]) else "token"   # 지역을 빼서 생기면 지역 탓
     return "region" if regions else "token"         # 하나만 걸려 있으면 그 조건 탓
 
 
@@ -468,17 +495,19 @@ def rerank_top(masked_q, docs):
     return sorted(head, key=lambda d: -d["score"]) + tail
 
 
-def _search_boost(cur, vec, q_tokens, k):
+def _search_boost(cur, vec, q_tokens, k, scope=None):
     weight = float(config.env("TOKEN_WEIGHT", "1.0"))
+    sw = "" if scope is None else " AND doc_id = ANY(%s::text[])"
+    sp = () if scope is None else (list(scope),)
     cur.execute(
-        """(SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
-              FROM rag.chunks ORDER BY dist LIMIT %s)
+        f"""(SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
+              FROM rag.chunks WHERE TRUE{sw} ORDER BY dist LIMIT %s)
            UNION
            (SELECT doc_id, chunk_id, masked_text, tokens, dist FROM (
               SELECT doc_id, chunk_id, masked_text, tokens, embedding <=> %s AS dist
-              FROM rag.chunks WHERE tokens && %s::text[] OFFSET 0) AS tok
+              FROM rag.chunks WHERE tokens && %s::text[]{sw} OFFSET 0) AS tok
             ORDER BY dist LIMIT %s)""",
-        (vec, k * 3, vec, q_tokens, TOKEN_POOL))
+        (vec, *sp, k * 3, vec, q_tokens, *sp, TOKEN_POOL))
     hits = cur.fetchall()
     doc_ids = sorted({h[0] for h in hits})
     cur.execute(

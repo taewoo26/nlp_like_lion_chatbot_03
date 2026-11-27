@@ -32,3 +32,20 @@ INSERT INTO rag.role_master (role_code, role_name_ko, role_group, query_cues, do
  ('guardian', '대리인·보호자', 'related', '{대리인,보호자}', '{대리인,보호자}', '{대리인,보호자,수임인,법정대리인}'),
  ('unknown', '미상', 'unknown', '{}', '{}', '{}')
 ON CONFLICT (role_code) DO NOTHING;
+
+-- 문서 메타데이터 (종합 과제, 2026-11-26). starter/doc_meta.py 가 적재 후 채운다.
+-- 실명은 두지 않는다: 담당 직원은 PERSON 토큰(owner_token)과 직원 목록 ID(owner_emp_id)로만 적는다.
+-- 열람 판단에는 teams·status 만 쓴다(내부업무 Lv1 문서). 판정 근거는 rule_id (T1~T6 팀, O1~O2 담당 직원).
+CREATE TABLE IF NOT EXISTS rag.doc_meta (
+    doc_id        TEXT PRIMARY KEY,
+    doc_type      TEXT,
+    teams         TEXT[] NOT NULL DEFAULT '{}',   -- 담당 팀 코드(policy.teams.team_cd). 여러 팀이면 모두
+    owner_token   TEXT,                          -- 담당 직원 PERSON 토큰. 모르면 NULL
+    owner_emp_id  TEXT,                          -- outputs/employees.jsonl 의 emp_id
+    status        TEXT NOT NULL,                 -- resolved / team_only / restricted
+    rule_id       TEXT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT doc_meta_status_chk CHECK (status IN ('resolved', 'team_only', 'restricted'))
+);
+ALTER TABLE rag.doc_meta OWNER TO rag_user;
+CREATE INDEX IF NOT EXISTS doc_meta_teams_gin ON rag.doc_meta USING GIN (teams);

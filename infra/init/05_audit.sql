@@ -120,16 +120,21 @@ CREATE OR REPLACE TRIGGER team_level_change_log
     AFTER INSERT OR UPDATE OR DELETE ON policy.team_level
     FOR EACH ROW EXECUTE FUNCTION policy.tg_policy_change();
 
--- 실명 복원: 레벨 2 확인 → restore_log 기록 → 원문 표기 배열 반환.
+-- 실명 복원: 레벨 2 확인 → 본인 질문 확인 → 그 질문 결과의 토큰인지 확인 → restore_log 기록 → 원문 표기 배열 반환.
 -- vault 표에 권한이 없는 검색 계정도 이 함수로만 복원하므로 기록 없는 복원이 생기지 않는다
+-- 2026-11-26: partial_token()과 같은 확인(본인 질문, 결과에 나온 토큰)을 추가했다. 검색 전 권한 필터가 반환 문서를
+--   열람 가능한 문서로 제한하므로, 이 확인으로 "열람 가능한 문서의 토큰만 복원"이 성립한다.
+--   요청 단위 확인이 틀리면 42501 로 거절(기록 없음), 토큰 단위 확인이 틀리면 그 토큰만 NULL(기록 없음).
 CREATE OR REPLACE FUNCTION vault.restore_token(p_request_id text, p_user_id text, p_token text)
 RETURNS text[] LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
-    v_level smallint;
-    v_label text;
-    v_orig  text[];
+    v_level   smallint;
+    v_label   text;
+    v_orig    text[];
+    v_qtokens text[];
+    v_docs    text[];
 BEGIN
     SELECT access_level INTO v_level
       FROM policy.users
@@ -139,10 +144,23 @@ BEGIN
         RAISE EXCEPTION '복원 권한이 없습니다 (user_id=%)', p_user_id USING ERRCODE = '42501';
     END IF;
 
+    SELECT query_tokens, returned_doc_ids INTO v_qtokens, v_docs
+      FROM audit.query_log
+     WHERE request_id = p_request_id AND user_id = p_user_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION '본인 질문이 아니거나 없는 요청입니다 (request_id=%)', p_request_id USING ERRCODE = '42501';
+    END IF;
+
     SELECT label, originals INTO v_label, v_orig
       FROM vault.token_map
      WHERE token = p_token;
     IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
+
+    IF NOT (p_token = ANY(coalesce(v_qtokens, '{}')) OR EXISTS (
+            SELECT 1 FROM rag.chunks
+             WHERE doc_id = ANY(coalesce(v_docs, '{}')) AND p_token = ANY(tokens))) THEN
         RETURN NULL;
     END IF;
 

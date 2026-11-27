@@ -22,7 +22,8 @@ LABELS = ["person", "phone_number", "email", "address",
           "resident_registration_number", "account_number", "card_number"]
 
 # 정책서(docs/permission_policy_draft.md) 5절 표의 기대값 (holdout 187 / 전체 487)
-EXPECTED_VIEWABLE = {"holdout": {0: 23, 1: 158, 2: 187}, "all": {0: 73, 1: 443, 2: 487}}
+# v0.5 (11-26): 인사발령 Lv2→0, 채용메일 Lv2→1, 사내메신저 Lv1→2
+EXPECTED_VIEWABLE = {"holdout": {0: 23, 1: 167, 2: 187}, "all": {0: 88, 1: 452, 2: 487}}
 
 policy = load_policy()
 
@@ -167,6 +168,7 @@ def _load_teams(teams: dict):
     raw = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
     raw["teams"] = teams
     raw["team_levels"] = []
+    raw["customer_teams"] = []          # 팀 목록을 바꾸므로 그룹도 비운다
     with tempfile.TemporaryDirectory() as d:
         f = Path(d) / "p.yaml"
         f.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
@@ -215,11 +217,32 @@ def test_categories():
     cats = policy.categories
     assert set(cats) == set(policy.min_levels), "모든 doc_type에 분류가 있어야 함"
     assert set(cats.values()) <= set(CATEGORY_BASE_LEVEL)
-    # 직원 개인 문서는 정확히 Lv2 전용 4종
-    assert sorted(t for t, c in cats.items() if c == "직원개인") == ["감사지적", "법인카드소명", "인사발령", "채용메일"]
-    # 현재 정책은 모든 doc_type이 자기 분류의 기본 레벨과 같다(관리자가 올린 예외 없음)
-    for t, c in cats.items():
-        assert policy.min_levels[t] == CATEGORY_BASE_LEVEL[c], f"{t}: 분류 {c} 기본 레벨과 다름"
+    # 직원 개인 문서는 정확히 2종 (v0.5: 인사발령→공개, 채용메일→내부업무)
+    assert sorted(t for t, c in cats.items() if c == "직원개인") == ["감사지적", "법인카드소명"]
+    assert (cats["인사발령"], cats["채용메일"]) == ("공개", "내부업무")
+    # 분류 기본 레벨보다 올린 예외는 사내메신저(내부업무 Lv1 → Lv2) 하나뿐
+    raised = {t for t, c in cats.items() if policy.min_levels[t] != CATEGORY_BASE_LEVEL[c]}
+    assert raised == {"사내메신저"} and policy.min_levels["사내메신저"] == 2
+
+
+def test_customer_teams():
+    assert set(policy.customer_teams) == {"DEPT_CS_CENTER", "DEPT_CUST_PROT", "DEPT_CREDIT",
+                                          "DEPT_CARD_OPS", "DEPT_COLLECTION", "DEPT_RISK"}
+    assert set(policy.customer_teams) <= set(policy.teams)
+    import tempfile
+
+    import yaml
+    for bad in (["DEPT_UNKNOWN"], ["DEPT_HR", "DEPT_HR"]):
+        raw = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+        raw["customer_teams"] = bad
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "p.yaml"
+            f.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+            try:
+                load_policy(f)
+            except ValueError:
+                continue
+        raise AssertionError(f"잘못된 customer_teams가 통과함: {bad}")
 
 
 def _load_modified(doc_type: str, min_level: int):
