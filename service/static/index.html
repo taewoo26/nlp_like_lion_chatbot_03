@@ -21,7 +21,8 @@ html,body{margin:0;height:100%}
 body{overflow-x:hidden;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
   background-image:radial-gradient(circle at 20% 10%,#fff8ec 0,transparent 40%),radial-gradient(circle at 90% 90%,#f1e2cd 0,transparent 45%)}
 .app{max-width:1360px;margin:0 auto;padding:12px 10px 16px;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:14px;height:100vh;height:100dvh}
-@media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto auto 80vh;height:auto}.counter{min-height:460px}}
+/* 태블릿 (768~1023px): 좌우 구조 그대로, 곰 영역을 비율로 줄인다 (3-13) */
+@media (max-width:1023px){.app{grid-template-columns:minmax(0,35%) minmax(0,1fr)}}
 header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px}
 .brand-badge{width:42px;height:42px;border-radius:12px;background:var(--cap);display:grid;place-items:center;color:#fff;font-family:"Noto Sans KR";font-weight:700;font-size:22px;box-shadow:0 3px 0 var(--cap2)}
@@ -129,13 +130,66 @@ header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:spac
 .doc{font-size:12.5px;padding:4px 10px;border-radius:999px;background:#eef5f4;color:var(--cap);border:1px solid #cfe3e1;cursor:help}
 .composer{border-top:1px solid var(--line);padding:12px;display:grid;gap:10px;background:#fff}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips[hidden]{display:none}
 .chips button{font:inherit;font-size:12.5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
 .chips button:hover{background:#fff1dd}
-form{display:flex;gap:8px}
-input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none}
-input[type=text]:focus{border-color:var(--cap)}
-button.send{font-family:"Noto Sans KR";font-weight:600;font-size:16px;padding:0 18px;border-radius:14px;border:none;background:var(--cap);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--cap2)}
+/* 예시 질문 접기 (3-4 ③) */
+.chips-head{display:flex;justify-content:space-between;align-items:center}
+.link-btn{font:inherit;font-size:12.5px;color:var(--ink2);background:none;border:none;padding:2px 4px;cursor:pointer}
+.link-btn:hover{color:var(--ink)}
+.link-btn:focus-visible,.chips button:focus-visible,.guide-btn:focus-visible,button.send:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+form{display:flex;gap:8px;align-items:flex-end}
+/* 입력창: 여러 줄 (3-14) */
+.input-wrap{flex:1;min-width:0;position:relative}
+textarea#q{display:block;width:100%;resize:none;font:inherit;font-size:15px;line-height:1.5;padding:11px 14px;min-height:48px;border-radius:14px;border:1.5px solid var(--line);background:#fffdf9;outline:none;max-height:calc(1.5em * 5 + 26px);overflow-y:auto}
+textarea#q:focus{border-color:var(--cap)}
+button.send,.guide-btn{height:48px;font-family:"Noto Sans KR";font-weight:600;border-radius:14px;cursor:pointer;flex:none}
+button.send{font-size:16px;padding:0 18px;border:none;background:var(--cap);color:#fff;box-shadow:0 3px 0 var(--cap2)}
 button.send:disabled{opacity:.55;cursor:wait}
+.guide-btn{font-size:13px;padding:0 12px;border:1.5px solid var(--line);background:#fffaf2;color:var(--ink)}
+.guide-btn:hover{background:#fff1dd}
+/* 상담 창 헤더 오른쪽 (새 상담) */
+.head-right{display:flex;align-items:center;gap:10px}
+.new-chat{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.new-chat:hover{background:#fff1dd}
+/* 오류 말풍선의 다시 시도 (3-7) */
+.retry{margin-top:8px;font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.retry:hover{background:#fff1dd}
+.slow{display:block;margin-top:6px;font-size:12.5px;color:var(--ink2)}
+/* 문서 칩은 버튼 (3-5) */
+button.doc{font:inherit;cursor:pointer}
+button.doc:hover{background:#e2efed}
+button.doc:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+/* 사용자 정보 pill 은 버튼 (권한 팝업, 3-9) */
+button.pill{font:inherit;cursor:pointer}
+button.pill:hover{background:#fff8ec}
+/* 넓은 모달 (문서 안내·문서 팝업·권한) */
+.modal.wide{max-width:560px;text-align:left;max-height:84vh;display:flex;flex-direction:column}
+.modal.wide h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.modal .x{font:inherit;font-size:18px;line-height:1;background:none;border:none;color:var(--ink2);cursor:pointer;padding:4px 6px}
+.modal-body{overflow-y:auto;font-size:14px;line-height:1.7}
+.modal-body h4{font-size:13px;color:var(--cap);margin:14px 0 6px}
+.modal-body ul{margin:0;padding-left:18px}
+.doc-text{white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;background:#fffaf2;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.type-chips{display:flex;flex-wrap:wrap;gap:6px}
+.type-chips button{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:999px;border:1px solid #cfe3e1;background:#eef5f4;color:var(--cap);cursor:pointer}
+.lv-row{padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.lv-row.me{border-color:var(--cap);background:#eef5f4}
+.lv-row b{color:var(--cap)}
+/* 원복 유지 시간 선택 (3-10) */
+.dur{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap;justify-content:center;border:none;padding:0}
+.dur legend{font-size:12px;color:var(--ink2);margin:0 auto 6px;padding:0}
+.dur label{flex:1;min-width:64px;min-height:52px;display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1.3;padding:6px;border-radius:10px;border:1.5px solid var(--line);background:#fff;cursor:pointer;text-align:center;word-break:keep-all}
+.dur input{position:absolute;opacity:0;width:0;height:0}
+.dur label:has(input:checked){border-color:var(--cap);background:#eef5f4;color:var(--cap);font-weight:600}
+.dur label:has(input:focus-visible){outline:3px solid var(--gold);outline-offset:1px}
+.caps{font-size:12px;color:var(--warn);min-height:0;margin:-2px 0 6px}
+/* 세션 연장 버튼 */
+.ext-btn{font:inherit;font-size:11.5px;padding:1px 8px;margin-left:4px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
+.ext-btn:hover{background:#fff1dd}
+/* 모바일 메뉴 버튼 */
+.menu-btn{display:none;font:inherit;font-size:18px;padding:4px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.mini-state{display:none;font-family:"Noto Sans KR";font-weight:600;font-size:14px;color:var(--wood3)}
 .note{font-size:12px;color:var(--ink2)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 /* 원복 버튼 */
@@ -175,12 +229,53 @@ button.send:disabled{opacity:.55;cursor:wait}
 .feedback button{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
 .feedback button:hover{background:#fff1dd;color:var(--ink)}
 .feedback button:disabled{opacity:.5;cursor:default;background:#fff}
+/* 틀린 답 신고 사유 (3-12) */
+.fb-form{margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;gap:8px}
+.fb-form p{margin:0;font-size:12.5px;color:var(--ink2)}
+.fb-reasons{display:flex;flex-wrap:wrap;gap:6px}
+.fb-reasons button{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fffaf2;color:var(--ink);cursor:pointer}
+.fb-reasons button[aria-pressed="true"]{border-color:var(--cap);background:#eef5f4;color:var(--cap);font-weight:600}
+.fb-form input{font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);outline:none}
+.fb-form input:focus{border-color:var(--cap)}
+.fb-actions{display:flex;gap:6px;justify-content:flex-end}
+.fb-actions button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.fb-actions .fb-send{background:var(--cap);border-color:var(--cap);color:#fff}
+.fb-err{font-size:12px;color:var(--ink-red);min-height:0}
 /* 무응답 사유 */
 .sorry-box{background:#fff4ee;border:1px solid #f0cdb8;border-radius:12px;padding:10px 12px;font-size:13px;color:var(--warn)}
 .sorry-box .label{font-family:"Noto Sans KR";font-weight:600;font-size:12px;display:block;margin-bottom:2px}
 /* 토스트 */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;padding:10px 20px;border-radius:999px;z-index:200;opacity:0;transition:opacity .3s}
 .toast.show{opacity:1}
+/* 모바일 (767px 이하, 3-13): 한 줄 구조. 첫 화면은 곰을 크게, 첫 질문 뒤에는 곰이 위쪽 작은 바로 줄어든다 */
+@media (max-width:767px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:8px 8px 10px}
+  header.top{position:relative;flex-wrap:nowrap}
+  .brand h1{font-size:20px}.brand p{display:none}
+  .menu-btn{display:inline-block}
+  .status{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:50;flex-direction:column;align-items:stretch;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .status.open{display:flex}
+  .counter{height:30dvh;border-radius:20px}
+  .wall{padding:8px 10px 0}
+  .sign{display:none}
+  .stage{min-height:0;margin:0}
+  #bear{height:calc(30dvh - 46px);width:auto;max-width:100%}
+  .desk{height:34px}.nameplate,.bell,.ticket{display:none}
+  .bubble{font-size:14px;padding:6px 10px}
+  .chatting .counter{height:64px}
+  .chatting .wall{padding:2px 14px;flex-direction:row;align-items:center;gap:10px;background:var(--wall)}
+  .chatting .glass,.chatting .desk,.chatting .bubble,.chatting .bulb,.chatting .spark{display:none}
+  .chatting .stage{flex:none;height:60px;width:auto;place-items:end center}
+  .chatting #bear{height:60px;width:auto}
+  .chatting .mini-state{display:inline}
+  .panel-head{padding:10px 14px}
+  .panel-head h2{font-size:16px}
+  #hint{display:none}
+  .new-chat{white-space:nowrap}
+  .panel{border-radius:20px;min-height:0}
+  .composer{padding:10px}
+  .guide-btn .g-txt{display:none}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -194,14 +289,15 @@ button.send:disabled{opacity:.55;cursor:wait}
         <p>이름·번호는 도장 쾅! 가명 토큰으로 바꿔서만 찾아드려요</p>
       </div>
     </div>
-    <div class="status">
+    <button type="button" class="menu-btn" id="menuBtn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="statusBar">☰</button>
+    <div class="status" id="statusBar">
       <span class="pill" id="srvPill" hidden><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span></span>
       <span class="pill" id="modePill" hidden title="검색 방식">🔎 <span id="modeText">AND</span></span>
-      <span class="pill" id="whoPill" hidden title="로그인한 사용자"><span id="whoText"></span></span>
-      <button type="button" class="top-btn restore" id="restoreBtn" hidden title="원문 복원 토글 (2차 인증 필요)">🔓 원복</button>
-      <button type="button" class="top-btn restore" id="partialBtn" hidden title="이름 부분 공개 토글 (예: 윤*영)">🔍 부분 공개</button>
+      <button type="button" class="pill" id="whoPill" hidden title="내 권한 보기" aria-haspopup="dialog"><span id="whoText"></span> ⓘ</button>
+      <button type="button" class="top-btn restore" id="restoreBtn" hidden title="원문 복원 (비밀번호 확인 필요)">🔓 원복</button>
+      <button type="button" class="top-btn restore" id="partialBtn" hidden title="이름 부분 공개 (예: 윤*영, 비밀번호 확인 필요)">🔍 부분 공개</button>
       <button type="button" class="top-btn admin" id="adminBtn" hidden title="Lv2 전용">🔐 관리실</button>
-      <span class="timer-pill" id="timerPill" hidden>⏱ <b id="sessionTimer">15:00</b></span>
+      <span class="timer-pill" id="timerPill" hidden>⏱ <b id="sessionTimer">30:00</b><button type="button" class="ext-btn" id="extendBtn" title="로그인 시간을 30분으로 다시 채워요">연장</button></span>
       <button type="button" class="top-btn" id="logoutBtn" hidden>로그아웃</button>
     </div>
   </header>
@@ -311,11 +407,12 @@ button.send:disabled{opacity:.55;cursor:wait}
           </g>
         </svg>
       </div>
+      <span class="mini-state" id="miniState" aria-hidden="true"></span>
     </div>
     <div class="desk">
       <span class="nameplate">도장곰 주임</span>
       <span class="bell" aria-hidden="true"><s></s><b></b><i></i></span>
-      <span class="ticket">실명은 창구 밖으로 나가지 않아요 · HMAC 가명 도장 사용</span>
+      <span class="ticket">실명은 가명 도장을 찍은 뒤에만 검색에 써요 · HMAC 가명 도장 사용</span>
     </div>
   </section>
 
@@ -323,16 +420,22 @@ button.send:disabled{opacity:.55;cursor:wait}
   <section class="panel" aria-label="상담">
     <div class="panel-head">
       <h2>무엇을 찾아드릴까요?</h2>
-      <small id="hint">사내 문서 <span id="docCountNum">-</span>건 · 가명 검색</small>
+      <div class="head-right">
+        <small id="hint">사내 문서 <span id="docCountNum">-</span>건 · 가명 검색</small>
+        <button type="button" class="new-chat" id="newChatBtn" title="대화를 지우고 처음부터 시작해요">＋ 새 상담</button>
+      </div>
     </div>
     <div class="log" id="log" aria-live="polite">
-      <div class="msg bot">
+      <div class="msg bot" id="greeting">
         <div class="who">🐻 도장곰 주임</div>
         안녕하세요! 고객 이름이나 연락처를 말씀하셔도 괜찮아요. 제가 도장으로 가명 토큰으로 바꾼 뒤에만 문서를 찾아요.
         문서에 없는 내용은 지어내지 않고 <b>모른다고</b> 말씀드릴게요.
       </div>
     </div>
     <div class="composer">
+      <div class="chips-head">
+        <button type="button" class="link-btn" id="chipsToggle" aria-expanded="true" aria-controls="chips">▾ 예시 질문 접기</button>
+      </div>
       <div class="chips" id="chips">
         <button type="button">보이스피싱 피해 접수 절차 알려줘</button>
         <button type="button">법인카드 사용 보고서 찾아줘</button>
@@ -341,22 +444,69 @@ button.send:disabled{opacity:.55;cursor:wait}
         <button type="button">출장 결과 보고서 확인</button>
       </div>
       <form id="form" autocomplete="off">
-        <label class="sr" for="q">질문</label>
-        <input type="text" id="q" placeholder="예) 자동이체 해지 요청 건 찾아줘" maxlength="500">
+        <div class="input-wrap">
+          <label class="sr" for="q">질문</label>
+          <textarea id="q" rows="1" placeholder="예) 자동이체 해지 요청 건 찾아줘" maxlength="500"></textarea>
+        </div>
+        <button type="button" class="guide-btn" id="guideBtn" aria-haspopup="dialog" title="찾을 수 있는 문서와 질문 방법">📖<span class="g-txt"> 찾을 수 있는 문서</span></button>
         <button class="send" id="send" type="submit">물어보기</button>
       </form>
-      <div class="note">입력한 질문 원문은 이 화면에만 보이고, 서버는 가명처리된 질문만 돌려줘요.</div>
+      <div class="note">입력한 질문은 서버에서 가명 토큰으로 바꾼 뒤에만 검색·답변에 써요. 원문은 저장하지 않아요. (Enter 전송 · Shift+Enter 줄바꿈)</div>
     </div>
   </section>
 </div>
 
+<!-- 찾을 수 있는 문서 안내 (3-4 ①) -->
+<div class="modal-overlay" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="modal wide">
+    <h3><span id="guideTitle">찾을 수 있는 문서</span><button type="button" class="x" data-close aria-label="닫기">✕</button></h3>
+    <div class="modal-body">
+      <h4>문서 종류 · 누르면 입력창에 예시 질문이 들어가요</h4>
+      <div class="type-chips" id="typeChips"><span class="note">불러오는 중…</span></div>
+      <h4>이렇게 물어보면 잘 찾아요</h4>
+      <ul>
+        <li>문서 종류와 조건을 함께: "서울 고객 VOC 요약 찾아줘"</li>
+        <li>이름과 역할을 함께: "김민준 고객 카드 분실 상담"</li>
+        <li>문서에 쓰는 이름으로: VOC 요약, 피해 접수, 카드 분실 상담처럼</li>
+      </ul>
+      <h4>주소로 찾을 때</h4>
+      <ul><li>주소는 시·도부터 동·호수까지 전체를 입력해야 찾을 수 있어요.</li></ul>
+    </div>
+  </div>
+</div>
+
+<!-- 근거 문서 팝업 (3-5): 찾은 조각 전체 (출력 재검사를 거친 것) -->
+<div class="modal-overlay" id="docModal" role="dialog" aria-modal="true" aria-labelledby="docTitle">
+  <div class="modal wide">
+    <h3><span id="docTitle">문서</span><button type="button" class="x" data-close aria-label="닫기">✕</button></h3>
+    <p style="font-size:12px;color:var(--ink2);margin:0 0 10px">답변의 근거가 된 문서 조각이에요. 개인정보는 가명 토큰으로 보여요.</p>
+    <div class="modal-body"><div class="doc-text" id="docText"></div></div>
+  </div>
+</div>
+
+<!-- 내 권한 (3-9) -->
+<div class="modal-overlay" id="permModal" role="dialog" aria-modal="true" aria-labelledby="permTitle">
+  <div class="modal wide">
+    <h3><span id="permTitle">내 권한</span><button type="button" class="x" data-close aria-label="닫기">✕</button></h3>
+    <div class="modal-body" id="permBody"></div>
+  </div>
+</div>
+
 <!-- 원복 2차 인증 모달 -->
-<div class="modal-overlay" id="restoreModal">
+<div class="modal-overlay" id="restoreModal" role="dialog" aria-modal="true" aria-labelledby="restoreTitle">
   <div class="modal">
-    <h3>2차 인증</h3>
+    <h3 id="restoreTitle">2차 인증</h3>
     <p id="restoreMsg">원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.</p>
-    <input type="password" id="restorePw" placeholder="비밀번호" maxlength="200">
-    <div class="error" id="restoreErr"></div>
+    <fieldset class="dur" id="durGroup">
+      <legend>얼마 동안 켜 둘까요?</legend>
+      <label><input type="radio" name="dur" value="5">5분</label>
+      <label><input type="radio" name="dur" value="15">15분</label>
+      <label><input type="radio" name="dur" value="30" checked>30분</label>
+      <label><input type="radio" name="dur" value="0">로그아웃까지</label>
+    </fieldset>
+    <input type="password" id="restorePw" placeholder="비밀번호" maxlength="200" autocomplete="current-password">
+    <p class="caps" id="restoreCaps" hidden>Caps Lock이 켜져 있어요</p>
+    <div class="error" id="restoreErr" role="alert"></div>
     <div class="modal-btns">
       <button class="cancel" id="restoreCancel">취소</button>
       <button class="confirm" id="restoreConfirm">확인</button>
@@ -364,6 +514,19 @@ button.send:disabled{opacity:.55;cursor:wait}
   </div>
 </div>
 
+<!-- 로그아웃 확인 (원복 팝업과 같은 모양) -->
+<div class="modal-overlay" id="logoutModal" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+  <div class="modal">
+    <h3 id="logoutTitle">로그아웃</h3>
+    <p>로그아웃하시겠어요? 이 창의 대화 기록도 함께 지워져요.</p>
+    <div class="modal-btns">
+      <button type="button" class="cancel" data-close>취소</button>
+      <button type="button" class="confirm" id="logoutConfirm">로그아웃</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/session.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const stage = $("#stage"), log = $("#log"), form = $("#form"), input = $("#q"), sendBtn = $("#send");
@@ -372,16 +535,30 @@ const LABEL = {PERSON:["👤","사람"], PHONE_NUMBER:["📞","전화"], EMAIL:[
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let DEMO = new URLSearchParams(location.search).has("demo") || location.protocol === "file:";
 let idleTimer;
+let ME = null;                                   // 로그인 사용자 (/api/me)
 
+/* ---------- 시간 기준값 ---------- */
+const MIN_THINK_MS = 500;                        // 생각하는 곰을 최소 이만큼은 보여 준다
+const TYPE_MAX_MS = 1200;                        // 답변 출력에 쓰는 최대 시간 (길이와 상관없이, 3-6)
+const SLOW_NOTICE_MS = 10000;                    // 이 시간이 지나면 '아직 찾는 중' 안내 (3-7, 실제 응답 시간을 재 보고 조정)
+const ABORT_MS = 60000;                          // 이 시간이 지나면 요청을 끊고 '시간 초과' 안내 (3-7, 조정 필요)
+
+/* ---------- 곰 상태 ---------- */
+const MINI = {idle:"도장곰 주임", thinking:"서류 찾는 중…", found:"아하! 찾았어요", nollm:"아하! 찾았어요", sorry:"앗, 죄송해요…"};   // 모바일 작은 바 글자
 function setState(s){ stage.className = "stage state-" + s; clearTimeout(idleTimer);
+  $("#miniState").textContent = MINI[s] || "";                                  // 모바일에서 곰 옆에 보이는 글자
   if (s === "found" || s === "nollm" || s === "sorry") idleTimer = setTimeout(() => setState("idle"), 6000); }
-function esc(t){ return t.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+setState("idle");
+function esc(t){ return String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function tokChip(lab, id){                                                      // 가명 토큰 → 칩 HTML
+  const [ico, name] = LABEL[lab.toUpperCase()] || ["🔖", lab];
+  return `<span class="tok" title="가명 토큰 ${lab}_${id}">${ico} ${name} <b>#${id.slice(0,4).toLowerCase()}</b></span>`;
+}
+function chipTokens(t){                                                         // 토큰만 칩으로 (문서 원문처럼 마크다운이 아닌 글)
+  return esc(t || "").replace(/&lt;([A-Z_]+)_([0-9A-Za-z]+)&gt;/g, (m, lab, id) => tokChip(lab, id));
+}
 function chipify(t){
-  let h = esc(t);
-  h = h.replace(/&lt;([A-Z_]+)_([0-9A-Za-z]+)&gt;/g, (m, lab, id) => {
-    const [ico, name] = LABEL[lab.toUpperCase()] || ["🔖", lab];
-    return `<span class="tok" title="가명 토큰 ${lab}_${id}">${ico} ${name} <b>#${id.slice(0,4).toLowerCase()}</b></span>`;
-  });
+  let h = chipTokens(t);
   h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
   const lines = h.split('\n');
@@ -418,68 +595,211 @@ function addMsg(cls, html){ const d = document.createElement("div"); d.className
   log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
 function stamp(){ stage.classList.remove("stamping"); void stage.offsetWidth; stage.classList.add("stamping");
   setTimeout(() => stage.classList.remove("stamping"), 500); }
-
-async function typeInto(el, text){
-  if (REDUCED){ el.innerHTML = chipify(text); return; }
-  const parts = text.split(/(<[A-Za-z_]+_[0-9A-Za-z]+>)/);   // 토큰은 한 번에, 글자는 하나씩
-  let shown = "";
-  for (const p of parts){
-    if (/^<[A-Za-z_]+_[0-9A-Za-z]+>$/.test(p)){ shown += p; el.innerHTML = chipify(shown); await sleep(40); continue; }
-    for (const ch of p){ shown += ch; el.innerHTML = chipify(shown); log.scrollTop = log.scrollHeight; await sleep(ch === " " ? 8 : 18); }
-  }
-}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function showToast(msg){ const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(() => t.classList.add("show")); setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 2000); }
+/* ---------- 답변 출력 (3-6): 몇 글자씩 빠르게, 최대 TYPE_MAX_MS. 말풍선을 누르면 바로 전체 ---------- */
+async function typeInto(el, text){
+  if (REDUCED || !text){ el.innerHTML = chipify(text || ""); return; }         // 움직임 줄이기 설정이면 바로
+  const units = [];                                                             // 출력 단위 (토큰은 통째로, 글자는 하나씩)
+  for (const p of text.split(/(<[A-Za-z_]+_[0-9A-Za-z]+>)/)){
+    if (/^<[A-Za-z_]+_[0-9A-Za-z]+>$/.test(p)) units.push(p); else for (const ch of p) units.push(ch);
+  }
+  const step = Math.max(2, Math.ceil(units.length / (TYPE_MAX_MS / 16)));      // 한 번에 늘릴 단위 수 (16ms 마다)
+  let i = 0, skip = false;
+  const bubble = el.closest(".msg");
+  const onSkip = () => { skip = true; };                                        // 말풍선 클릭 = 건너뛰기
+  bubble.addEventListener("click", onSkip, {once:true});
+  bubble.setAttribute("aria-busy", "true");                                     // 출력 중에는 스크린리더가 읽지 않게
+  while (i < units.length && !skip){
+    i = Math.min(units.length, i + step);
+    el.innerHTML = chipify(units.slice(0, i).join(""));
+    log.scrollTop = log.scrollHeight;
+    await sleep(16);
+  }
+  bubble.removeEventListener("click", onSkip);
+  el.innerHTML = chipify(text);                                                 // 마지막은 항상 전체
+  bubble.removeAttribute("aria-busy");                                          // 끝나면 한 번에 읽힘
+}
 
-async function ask(q){
-  $("#chips").hidden = true;
-  addMsg("user", esc(q));
+function showToast(msg){ const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(() => t.classList.add("show")); setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 2000); }
+
+/* ---------- 모달 공통 (Esc·바깥 클릭·✕ 로 닫기, 닫으면 연 버튼으로 포커스, 1-4) ---------- */
+const modalOpener = new Map();                                                  // 모달 → 연 버튼
+function openModal(el, opener){ modalOpener.set(el, opener || document.activeElement); el.classList.add("open");
+  setTimeout(() => (el.querySelector("input:not([type=radio]),button.x,button") || el).focus(), 50); }
+function closeModal(el){ el.classList.remove("open"); const o = modalOpener.get(el); if (o && o.focus) o.focus(); }
+document.querySelectorAll(".modal-overlay").forEach(m => {
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) closeModal(m); });
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  const open = [...document.querySelectorAll(".modal-overlay.open")].pop();    // 가장 위에 열린 것
+  if (open) { e.preventDefault(); closeModal(open); }
+});
+
+/* ---------- 대화 기록 (3-8 A): 이 탭에서만 유지. 원문 질문은 저장하지 않고 가명 질문만 ---------- */
+const STORE_KEY = "dojang_chat";
+let chatHistory = [];                                                               // [{q: 가명 질문, res: 서버 응답}]
+function saveHistory(){ try { sessionStorage.setItem(STORE_KEY, JSON.stringify({uid: ME?.user_id || "demo", items: chatHistory.slice(-40)})); } catch {} }
+function clearHistory(){ chatHistory = []; try { sessionStorage.removeItem(STORE_KEY); } catch {} }
+function restoreHistory(){
+  let saved; try { saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || "null"); } catch { saved = null; }
+  if (!saved || saved.uid !== (ME?.user_id || "demo") || !Array.isArray(saved.items)) { clearHistory(); return; }   // 다른 사용자 기록은 버린다
+  chatHistory = saved.items;
+  if (!chatHistory.length) return;
+  for (const h of chatHistory){
+    addMsg("user", chipTokens(h.q || "(질문)"));                                // 새로고침 뒤에는 가명 질문으로 보여 줌
+    renderAnswer(addMsg("bot", ""), h.res, false);
+  }
+  const last = chatHistory[chatHistory.length - 1].res;
+  pendingFollowUp = (last.need_more && last.request_id) ? last.request_id : null;   // 마지막이 재질문이면 이어서
+  setChips(false); document.body.classList.add("chatting"); setState("idle");
+}
+
+/* ---------- 질문 보내기 ---------- */
+let pendingFollowUp = null;   // 직전 응답이 재질문이었으면 그 request_id (보충 질문에 한 번만 붙임)
+async function ask(q, retryEl){
+  setChips(false); document.body.classList.add("chatting");                    // 예시 칩은 접고, 모바일은 곰을 작게
+  let bot, followUp;
+  if (retryEl){                                                                 // 다시 시도: 오류 났던 말풍선을 그대로 쓴다
+    bot = retryEl; bot.className = "msg bot"; followUp = bot.dataset.followUp || null;
+  } else {
+    addMsg("user", esc(q));
+    followUp = pendingFollowUp; pendingFollowUp = null;                         // 보충 질문 id 는 한 번만 쓴다
+    bot = addMsg("bot", "");
+  }
+  bot.innerHTML = `<div class="who">🐻 도장곰 주임</div><span class="typing"><i></i><i></i><i></i></span><span class="slow" hidden>아직 찾는 중이에요… 조금만 기다려 주세요.</span>`;
   setState("thinking"); stamp();
-  const bot = addMsg("bot", `<div class="who">🐻 도장곰 주임</div><span class="typing"><i></i><i></i><i></i></span>`);
+  const slowTimer = setTimeout(() => { const s = bot.querySelector(".slow"); if (s) s.hidden = false; }, SLOW_NOTICE_MS);
   const started = performance.now();
   let res;
-  try { res = DEMO ? await demoAnswer(q) : await callApi(q); }
-  catch (e) { res = {state:"sorry", answer:"앗, 창구 시스템에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.", masked_query:"", docs:[]}; }
-  const wait = 1300 - (performance.now() - started); if (wait > 0) await sleep(wait);   // 생각하는 모습을 잠깐은 보여주기
-  setState(res.state === "sorry" ? "sorry" : "found");
-  if (res.state === "sorry") bot.classList.add("sorry");
-  if (res.request_id) bot.dataset.requestId = res.request_id;   // 원복 요청에 함께 보낸다 (복원 기록 ↔ 질의 기록)
-  const answer = res.answer || "참고 문서를 찾았어요. (LLM 키가 없어 문서 목록만 보여드려요)";
+  try { res = DEMO ? await demoAnswer(q) : await callApi(q, followUp); }
+  catch (e) { clearTimeout(slowTimer); showError(bot, q, followUp, e); return; }
+  clearTimeout(slowTimer);
+  const wait = MIN_THINK_MS - (performance.now() - started); if (wait > 0) await sleep(wait);
   pendingFollowUp = (res.need_more && res.request_id) ? res.request_id : null;   // 재질문이면 다음 질문 1번에 이 id 를 붙인다
-  const badge = (res.need_more ? "· 조건 확인 필요" : (res.state === "sorry" ? "· 확인 불가" : "· 아하!"))   // 재질문은 '확인 불가'와 구분
-              + (res.merged ? " · 이전 질문과 이어서 찾았어요" : "");                                      // 보충 질문을 직전 질문과 합쳤으면 안내
-  bot.innerHTML = `<div class="who">🐻 도장곰 주임 ${badge}</div><div class="ans"></div>`;
-  await typeInto(bot.querySelector(".ans"), answer);
-  const meta = document.createElement("div"); meta.className = "meta";
-  if (res.masked_query) meta.innerHTML += `<div class="mask-box"><span class="label">🔒 가명처리된 질문 (서버가 본 질문)</span>${chipify(res.masked_query)}<span class="seal">가명</span></div>`;
-  if (res.docs && res.docs.length) meta.innerHTML += `<div class="docs">${res.docs.map(d => `<span class="doc" title="${esc(d.snippet || "")}">📄 ${esc(d.doc_id)}</span>`).join("")}</div>`;
-  if (res.state === "sorry") meta.innerHTML += `<div class="sorry-box"><span class="label">📋 무응답 사유</span>조건에 맞는 문서를 찾지 못했어요. 질문을 더 구체적으로 바꿔 보시면 도움이 될 수 있어요.</div>`;
-  if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
-  if (!res.need_more) {
-    const fb = document.createElement("div"); fb.className = "feedback";
-    fb.innerHTML = `<button type="button" data-fb="good">👍 도움이 됐어요</button><button type="button" data-fb="bad">🚨 틀린 답 신고</button>`;
-    fb.addEventListener("click", async e => { const b = e.target.closest("[data-fb]"); if(!b||b.disabled) return; fb.querySelectorAll("button").forEach(x => x.disabled = true); const rid = bot.dataset.requestId; if(rid){ try { await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_id:rid,kind:b.dataset.fb})}); } catch{} } showToast(b.dataset.fb === "good" ? "감사합니다! 피드백이 반영됐어요." : "신고가 접수됐어요. 확인 후 개선할게요."); });
-    bot.appendChild(fb);
-  }
-  if (restoreMode) applyRestore();
-  if (partialMode) applyPartial();
+  chatHistory.push({q: res.masked_query || (DEMO ? q : ""), res}); saveHistory();  // 가명 질문과 응답만 저장
+  await renderAnswer(bot, res, true);
+}
+
+/* 오류 말풍선 (3-7): 종류별 안내 + 다시 시도 */
+const ERRORS = {
+  network: ["서버에 연결할 수 없어요. 인터넷이나 서버 상태를 확인해 주세요.", true],
+  timeout: ["답변이 너무 오래 걸려서 멈췄어요. 잠시 후 다시 시도해 주세요.", true],
+  server:  ["답변을 만드는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.", true],
+  invalid: ["질문은 500자까지 입력할 수 있어요. 줄여서 다시 보내 주세요.", false],
+};
+function showError(bot, q, followUp, e){
+  const [msg, canRetry] = ERRORS[e && e.kind] || ERRORS.server;
+  setState("sorry"); bot.className = "msg bot sorry";
+  bot.dataset.followUp = followUp || "";                                        // 다시 시도할 때 보충 질문 연결 유지
+  pendingFollowUp = followUp || null;                                           // 새로 질문해도 연결 유지
+  bot.innerHTML = `<div class="who">🐻 도장곰 주임 · 오류</div>${esc(msg)}` + (canRetry ? `<br><button type="button" class="retry">↻ 다시 시도</button>` : "");
+  const btn = bot.querySelector(".retry");
+  if (btn) btn.addEventListener("click", () => { if (!sendBtn.disabled) { sendBtn.disabled = true; ask(q, bot).finally(() => { sendBtn.disabled = false; }); } });
   log.scrollTop = log.scrollHeight;
 }
 
-let pendingFollowUp = null;   // 직전 응답이 재질문이었으면 그 request_id (보충 질문에 한 번만 붙임)
-async function callApi(q){
-  const body = {query:q, k:3};                                  // 기본 요청
-  if (pendingFollowUp){ body.follow_up_of = pendingFollowUp; pendingFollowUp = null; }   // 보충 질문이면 재질문 id 를 붙이고 비운다
-  const r = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-  if (r.status === 401){ location.replace("/login?expired=1"); return new Promise(() => {}); }   // 로그인이 끝났으면 로그인 화면으로
-  if (!r.ok) throw new Error(r.status);
+/* 답변 말풍선 그리기 (새 답변·새로고침 뒤 기록 모두) */
+async function renderAnswer(bot, res, animate){
+  if (animate) setState(res.state === "sorry" ? "sorry" : "found");
+  bot.className = "msg bot" + (res.state === "sorry" ? " sorry" : "");
+  if (res.request_id) bot.dataset.requestId = res.request_id;                   // 원복 요청에 함께 보낸다 (복원 기록 ↔ 질의 기록)
+  bot._docs = res.docs || [];                                                   // 문서 팝업용
+  const answer = res.answer || "참고 문서를 찾았어요. (LLM 키가 없어 문서 목록만 보여드려요)";
+  const badge = (res.need_more ? "· 조건 확인 필요" : (res.state === "sorry" ? "· 확인 불가" : "· 아하!"))
+              + (res.merged ? " · 이전 질문과 이어서 찾았어요" : "");
+  bot.innerHTML = `<div class="who">🐻 도장곰 주임 ${badge}</div><div class="ans"></div>`;
+  if (animate) await typeInto(bot.querySelector(".ans"), answer); else bot.querySelector(".ans").innerHTML = chipify(answer);
+  const meta = document.createElement("div"); meta.className = "meta";
+  if (res.masked_query) meta.innerHTML += `<div class="mask-box"><span class="label">🔒 가명처리된 질문 (서버가 본 질문)</span>${chipify(res.masked_query)}<span class="seal">가명</span></div>`;
+  if (bot._docs.length) meta.innerHTML += `<div class="docs">${bot._docs.map((d, i) => `<button type="button" class="doc" data-i="${i}" title="눌러서 문서 조각 보기" aria-haspopup="dialog">📄 ${esc(d.doc_id)}</button>`).join("")}</div>`;
+  if (res.state === "sorry" && !res.need_more && !res.blocked)                  // 재질문(3-2)·출력 재검사 차단(3-3)에는 붙이지 않는다
+    meta.innerHTML += `<div class="sorry-box"><span class="label">📋 무응답 사유</span>조건에 맞는 문서를 찾지 못했어요. 질문을 더 구체적으로 바꿔 보시면 도움이 될 수 있어요.</div>`;
+  if (meta.innerHTML){ bot.appendChild(meta); requestAnimationFrame(() => meta.querySelector(".seal")?.classList.add("on")); }
+  if (!res.need_more) {
+    const fb = document.createElement("div"); fb.className = "feedback";
+    fb.innerHTML = `<button type="button" data-fb="good">👍 도움이 됐어요</button><button type="button" data-fb="bad" aria-expanded="false">🚨 틀린 답 신고</button>`;
+    fb.addEventListener("click", e => {
+      const b = e.target.closest("[data-fb]"); if (!b || b.disabled) return;
+      if (b.dataset.fb === "good") { fb.querySelectorAll("button").forEach(x => x.disabled = true); sendFeedback(bot, "good", null); return; }   // 좋아요는 바로 보냄
+      openFeedbackForm(bot, fb, b);                                             // 신고는 사유부터 고른다
+    });
+    bot.appendChild(fb);
+  }
+  if (reveal) applyCurrentReveal();
+  log.scrollTop = log.scrollHeight;
+}
+
+/* 피드백 보내기 (good / bad + 사유) */
+async function sendFeedback(bot, kind, comment){
+  const rid = bot.dataset.requestId;
+  if (rid && !DEMO){ try { await fetch("/api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({request_id:rid, kind, comment})}); } catch {} }
+  showToast(kind === "good" ? "감사합니다! 피드백이 반영됐어요." : "신고가 접수됐어요. 확인 후 개선할게요.");
+}
+
+/* 틀린 답 신고 사유 (3-12): 사유를 고르고 메모를 남기면 comment 로 보낸다 → 관리실 피드백 화면의 '내용' 칸 */
+const FB_REASONS = ["틀린 내용이에요", "있는 문서인데 못 찾았어요", "질문을 잘못 이해했어요", "기타"];
+function openFeedbackForm(bot, fb, badBtn){
+  if (bot.querySelector(".fb-form")) { bot.querySelector(".fb-form").remove(); badBtn.setAttribute("aria-expanded", "false"); return; }   // 다시 누르면 닫힘
+  badBtn.setAttribute("aria-expanded", "true");
+  const form = document.createElement("div"); form.className = "fb-form";
+  form.innerHTML = `<p>어떤 점이 문제였나요?</p>
+    <div class="fb-reasons" role="group" aria-label="신고 사유">${FB_REASONS.map(r => `<button type="button" aria-pressed="false">${r}</button>`).join("")}</div>
+    <input type="text" maxlength="200" placeholder="메모 (선택, 기타는 필수)" aria-label="신고 메모">
+    <div class="fb-err" role="alert"></div>
+    <div class="fb-actions"><button type="button" class="fb-cancel">취소</button><button type="button" class="fb-send">신고하기</button></div>`;
+  fb.after(form);
+  let picked = "";
+  form.querySelector(".fb-reasons").addEventListener("click", e => {          // 사유는 하나만 고른다
+    const b = e.target.closest("button"); if (!b) return;
+    form.querySelectorAll(".fb-reasons button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    picked = b.textContent; form.querySelector(".fb-err").textContent = "";
+  });
+  form.querySelector(".fb-cancel").addEventListener("click", () => { form.remove(); badBtn.setAttribute("aria-expanded", "false"); badBtn.focus(); });
+  form.querySelector(".fb-send").addEventListener("click", () => {
+    const memo = form.querySelector("input").value.trim();
+    if (!picked) { form.querySelector(".fb-err").textContent = "사유를 골라 주세요."; return; }
+    if (picked === "기타" && !memo) { form.querySelector(".fb-err").textContent = "기타는 메모를 적어 주세요."; return; }
+    fb.querySelectorAll("button").forEach(x => x.disabled = true);             // 한 번만 보낸다
+    form.remove();
+    sendFeedback(bot, "bad", memo ? `${picked} - ${memo}` : picked);           // 예: "틀린 내용이에요 - 날짜가 달라요"
+  });
+  log.scrollTop = log.scrollHeight;
+}
+
+async function callApi(q, followUp){
+  const body = {query:q, k:3};                                                  // 기본 요청
+  if (followUp) body.follow_up_of = followUp;                                   // 보충 질문이면 재질문 id 를 붙인다
+  const ctrl = new AbortController();                                           // 시간 초과용
+  const timer = setTimeout(() => ctrl.abort(), ABORT_MS);
+  let r;
+  try { r = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal: ctrl.signal}); }
+  catch (e) { throw {kind: e.name === "AbortError" ? "timeout" : "network"}; }  // 끊김 / 시간 초과
+  finally { clearTimeout(timer); }
+  if (r.status === 401){ clearHistory(); location.replace("/login?expired=1"); return new Promise(() => {}); }   // 로그인이 끝났으면 로그인 화면으로
+  if (r.status === 422) throw {kind:"invalid"};                                 // 입력값 오류
+  if (!r.ok) throw {kind:"server"};                                             // 서버 처리 오류
   return r.json();
 }
 
+/* ---------- 근거 문서 팝업 (3-5) ---------- */
+log.addEventListener("click", e => {
+  const b = e.target.closest("button.doc"); if (!b) return;
+  const bot = b.closest(".msg.bot"); const d = (bot._docs || [])[+b.dataset.i]; if (!d) return;
+  $("#docTitle").textContent = `📄 ${d.doc_id}`;
+  const box = $("#docText");
+  box.innerHTML = chipTokens(d.text || d.snippet || "") || '<span class="note">표시할 내용이 없어요. (보호가 필요한 정보가 있어 가렸을 수 있어요)</span>';
+  if (bot.dataset.requestId) box.dataset.requestId = bot.dataset.requestId; else delete box.dataset.requestId;   // 원복 요청에 쓸 질문 번호
+  openModal($("#docModal"), b);
+  if (reveal) applyCurrentReveal();
+});
+
 /* 서버 없이 화면만 볼 때 쓰는 예시 답변 (가명 토큰만 사용) */
 const DEMO_SET = [
-  {k:/보이스피싱/, state:"found", masked_query:"보이스피싱 피해 접수 절차 알려줘", docs:[{doc_id:"H0154"},{doc_id:"H0065"},{doc_id:"H0162"}],
+  {k:/중구/, state:"sorry", need_more:true, masked_query:"중구 VOC 알려줘", docs:[],
+   answer:"어느 지역의 중구인가요? 시·도를 함께 알려 주세요."},
+  {k:/보이스피싱/, state:"found", masked_query:"보이스피싱 피해 접수 절차 알려줘", docs:[{doc_id:"H0154", snippet:"보이스피싱 피해 접수서", text:"[보이스피싱 피해 접수서]\n접수자: <PERSON_8a1f22c0d913>\n연락처: <PHONE_NUMBER_51c0aa7e9b22>\n피해 내용: 검찰 사칭 전화 후 계좌 이체\n처리: 지급정지 요청 완료"},{doc_id:"H0065", snippet:"접수 처리 내용"},{doc_id:"H0162", snippet:"접수 처리 내용"}],
    answer:"보이스피싱 피해 접수 문서가 여러 건 있어요.\n\n- **[H0154]** 피해 접수서가 가장 관련도가 높아요.\n- **[H0065]**, **[H0162]**에도 접수 처리 내용이 있어요."},
   {k:/법인카드/, state:"found", masked_query:"법인카드 사용 보고서 찾아줘", docs:[{doc_id:"H0024"},{doc_id:"H0095"}],
    answer:"법인카드 사용 보고서 2건을 찾았어요.\n\n- **[H0024]** 2026년 1분기 법인카드 사용 보고서\n- **[H0095]** 협력사 미팅 경비 정산 보고서"},
@@ -492,6 +812,7 @@ const DEMO_SET = [
 ];
 async function demoAnswer(q){
   await sleep(600);
+  if (/오류/.test(q)) throw {kind:"server"};                                    // 데모: 오류 말풍선 확인용
   return DEMO_SET.find(d => d.k.test(q)) ||
     {state:"sorry", masked_query:q.replace(/[가-힣]{2,4}(?=\s*(고객|님|씨|직원))/g, "<PERSON_0000demo0000>"), docs:[],
      answer:"데모 모드에서는 예시 질문만 답할 수 있어요. 서버를 켜면 실제 문서에서 찾아드려요."};
@@ -510,44 +831,106 @@ async function loadDocCount(){
   try { const r = await fetch("/api/doc-count"); if(r.ok){ const d = await r.json(); document.getElementById("docCountNum").textContent = d.count.toLocaleString(); } } catch{}
 }
 
-/* ---------- 원복 모드 ---------- */
-let restoreMode = false;
-let partialMode = false;   // Lv1 이름 부분 공개
-
-/* ---------- 세션 타이머 (F-03) ---------- */
-let sessionRemaining = 30 * 60;
-let sessionTimerHandle;
-function startSessionTimer(){
-  const el = $("#sessionTimer"), pill = $("#timerPill");
-  pill.hidden = false;
-  sessionTimerHandle = setInterval(() => {
-    if (sessionRemaining <= 0){
-      clearInterval(sessionTimerHandle);
-      fetch("/api/logout", {method:"POST"}).finally(() => location.replace("/login?expired=1"));
-      return;
-    }
-    sessionRemaining--;
-    const m = Math.floor(sessionRemaining / 60), s = sessionRemaining % 60;
-    el.textContent = `${m}:${String(s).padStart(2,"0")}`;
-    if (sessionRemaining <= 120) pill.classList.add("warn");
-  }, 1000);
+/* ---------- 원복·부분 공개 (3-10, 3-11): 상태는 서버 세션이 가진다 ---------- */
+let reveal = null;                 // {mode: "full"|"partial", remaining: 초 또는 null(로그아웃까지)}
+let revealDeadline = null;         // 끝나는 시각 (ms, null = 로그아웃까지)
+let revealTimer = null;
+function fmtSec(sec){ return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+function renderRevealBtns(){
+  const left = revealDeadline ? Math.max(0, Math.round((revealDeadline - Date.now()) / 1000)) : null;
+  const until = left === null ? "로그아웃까지" : fmtSec(left);
+  const rb = $("#restoreBtn"), pb = $("#partialBtn");
+  rb.classList.toggle("on", reveal?.mode === "full");
+  pb.classList.toggle("on", reveal?.mode === "partial");
+  rb.textContent = reveal?.mode === "full" ? `🔓 원복 ON · ${until}` : "🔓 원복";
+  pb.textContent = reveal?.mode === "partial" ? `🔍 부분 공개 ON · ${until}` : "🔍 부분 공개";
+  if (left === 0) { setReveal(null); undoRestore(); showToast("원복 유지 시간이 끝나 다시 가렸어요."); }   // 시간 끝 → 자동 OFF
 }
+function setReveal(state){
+  reveal = state || null;
+  clearInterval(revealTimer);
+  revealDeadline = (reveal && reveal.remaining != null) ? Date.now() + reveal.remaining * 1000 : null;
+  renderRevealBtns();
+  if (revealDeadline) revealTimer = setInterval(renderRevealBtns, 1000);        // 남은 시간 표시
+}
+async function revealOff(){
+  try { if (!DEMO) await fetch("/api/reveal-off", {method:"POST"}); } catch {}  // 서버 상태도 끈다
+  setReveal(null); undoRestore();
+}
+function applyCurrentReveal(){
+  if (!reveal) return;
+  return reveal.mode === "full" ? applyReveal("/api/restore-tokens", "restored-tok", false)
+                                : applyReveal("/api/partial-tokens", "partial-tok", true);
+}
+
+/* ---------- 내 권한 팝업 (3-9) ---------- */
+const LEVELS = [
+  [0, "Lv0", ["챗봇 사용", "지정된 문서만 검색", "개인정보는 가명 토큰으로 표시"]],
+  [1, "Lv1", ["담당 업무 문서 검색", "개인정보는 가명 토큰으로 표시", "이름 부분 공개 (예: 윤*영, 비밀번호 확인 후)"]],
+  [2, "Lv2", ["업무 문서 전체 검색", "원문 복원 (비밀번호 확인 후, 기록이 남아요)", "관리실 사용"]],
+];
+$("#whoPill").addEventListener("click", e => {
+  const my = ME?.access_level;
+  $("#permBody").innerHTML = LEVELS.map(([lv, name, items]) =>
+    `<div class="lv-row${lv === my ? " me" : ""}"><b>${name}</b>${lv === my ? " · 내 권한" : ""}<ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>`).join("")
+    + `<p class="note">권한 밖의 문서는 검색 결과에 나오지 않아요. 필요한 문서가 안 보이면 관리자에게 권한을 요청해 주세요.</p>`;
+  openModal($("#permModal"), e.currentTarget);
+});
+
+/* ---------- 찾을 수 있는 문서 안내 (3-4 ①) ---------- */
+let typesLoaded = false;
+$("#guideBtn").addEventListener("click", async e => {
+  openModal($("#guideModal"), e.currentTarget);
+  if (typesLoaded) return;
+  let items = [];
+  if (DEMO) items = ["보이스피싱 피해 접수", "법인카드 사용 보고서", "자동이체 신청서", "VOC 요약", "출장 결과 보고서"].map(t => ({doc_type:t}));
+  else { try { const r = await fetch("/api/doc-types"); if (r.ok) items = (await r.json()).items; } catch {} }
+  $("#typeChips").innerHTML = items.length
+    ? items.map(it => `<button type="button" data-type="${esc(it.doc_type)}">${esc(it.doc_type)}</button>`).join("")
+    : '<span class="note">문서 종류를 불러오지 못했어요.</span>';
+  typesLoaded = items.length > 0;
+});
+$("#typeChips").addEventListener("click", e => {
+  const b = e.target.closest("[data-type]"); if (!b) return;
+  input.value = `${b.dataset.type} 찾아줘`; autoGrow();                          // 예시 질문을 입력창에
+  closeModal($("#guideModal")); input.focus();
+});
+
+/* ---------- 예시 질문 접기 (3-4 ③) ---------- */
+function setChips(open){
+  $("#chips").hidden = !open;
+  $("#chipsToggle").textContent = open ? "▾ 예시 질문 접기" : "▸ 예시 질문 펼치기";
+  $("#chipsToggle").setAttribute("aria-expanded", String(open));
+}
+$("#chipsToggle").addEventListener("click", () => setChips($("#chips").hidden));
+
+/* ---------- 새 상담 (3-8) ---------- */
+$("#newChatBtn").addEventListener("click", () => {
+  log.querySelectorAll(".msg:not(#greeting)").forEach(m => m.remove());        // 인사말만 남긴다
+  pendingFollowUp = null; clearHistory();
+  setChips(true); document.body.classList.remove("chatting"); setState("idle");
+  input.focus();
+});
 
 /* ---------- 로그인 사용자 ---------- */
 async function loadMe(){
-  if (DEMO) return;
+  if (DEMO) { restoreHistory(); return; }
   let r;
   try { r = await fetch("/api/me"); } catch { return; }
-  if (r.status === 401){ location.replace("/login"); return; }
+  if (r.status === 401){ clearHistory(); location.replace("/login"); return; }
   if (!r.ok) return;
-  const {user} = await r.json();
+  const me = await r.json(); ME = me.user;
+  const user = ME;
   $("#whoText").textContent = `${user.user_id} · ${user.user_name} · Lv${user.access_level}`;
   $("#whoPill").hidden = false; $("#logoutBtn").hidden = false;
   $("#adminBtn").hidden = user.access_level !== 2;
   $("#restoreBtn").hidden = user.access_level !== 2;
   $("#partialBtn").hidden = user.access_level !== 1;   // Lv1 전용 (Lv2 도 쓰게 하려면 < 1, 서버·DB 함수도 함께)
-  startSessionTimer();
+  DojangSession.start(me.session_remaining, {timerEl: $("#sessionTimer"), pillEl: $("#timerPill"), extendBtn: $("#extendBtn"), onExpire: clearHistory});
   applyWatermark(user.user_id);
+  restoreHistory();                                    // 이 탭의 대화 기록 (같은 사용자일 때만)
+  setReveal(me.reveal);                                // 새로고침 전에 켜 둔 원복이 있으면 그대로 (남은 시간 포함)
+  if (reveal) applyCurrentReveal();
 }
 function applyWatermark(uid){
   if(!uid) return;
@@ -556,26 +939,36 @@ function applyWatermark(uid){
   const wm = `${uid}  ${ts}    `.repeat(3);
   log.dataset.wm = wm;
 }
-setInterval(() => { const uid = $("#whoText")?.textContent?.split(" · ")[0]; if(uid) applyWatermark(uid); }, 60000);
-$("#logoutBtn").addEventListener("click", async () => {
+setInterval(() => { if (ME) applyWatermark(ME.user_id); }, 60000);
+$("#logoutBtn").addEventListener("click", e => openModal($("#logoutModal"), e.currentTarget));   // 바로 로그아웃하지 않고 확인 팝업
+$("#logoutConfirm").addEventListener("click", async () => {                    // 팝업에서 '로그아웃'을 눌러야 로그아웃
+  $("#logoutConfirm").disabled = true;                                           // 두 번 눌림 방지
+  clearHistory();                                                                // 이 탭의 대화 기록 삭제
   try { await fetch("/api/logout", {method:"POST"}); } finally { location.replace("/login"); }
 });
-$("#adminBtn").addEventListener("click", () => {
-  window.location.href = "/admin";
+$("#adminBtn").addEventListener("click", () => { window.location.href = "/admin"; });
+
+/* 모바일 메뉴 (☰) */
+$("#menuBtn").addEventListener("click", e => {
+  const open = $("#statusBar").classList.toggle("open");
+  e.currentTarget.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("#statusBar") && !e.target.closest("#menuBtn")) { $("#statusBar").classList.remove("open"); $("#menuBtn").setAttribute("aria-expanded", "false"); }
 });
 
-/* ---------- 원복 2차 인증 모달 ---------- */
+/* ---------- 원복: 화면의 토큰 칩을 서버가 돌려준 값으로 바꾼다 ---------- */
 const restoreModal = $("#restoreModal");
 const savedTokHtml = {};
 
-// 화면의 토큰 칩을 서버가 돌려준 값으로 바꾼다. Lv2 원복(실명)과 Lv1 부분 공개(윤*영)가 함께 쓴다.
+// Lv2 원복(실명)과 Lv1 부분 공개(윤*영)가 함께 쓴다. 대화창과 문서 팝업의 칩을 모두 바꾼다.
 //   url: 요청할 API, cls: 바꾼 글자의 class, onlyPerson: 이름 칩만 보낼지 (부분 공개)
 async function applyReveal(url, cls, onlyPerson){
-  // 답변 메시지(request_id)별로 묶어 보낸다. request_id 가 없는 메시지(데모·오류 응답)는 복원하지 않는다.
+  if (DEMO) return;
   const groups = new Map();   // request_id → {chips:[[칩, 토큰]], tokens:Set}
-  log.querySelectorAll(".tok").forEach(el => {
+  document.querySelectorAll("#log .tok, #docText .tok").forEach(el => {
     const t = el.getAttribute("title");
-    const rid = el.closest(".msg.bot")?.dataset.requestId;
+    const rid = el.closest("[data-request-id]")?.dataset.requestId;          // 답변 말풍선 또는 문서 팝업의 질문 번호
     if (!t || !rid) return;
     const token = "<" + t.replace("가명 토큰 ", "") + ">";
     if (onlyPerson && !/^<PERSON_/i.test(token)) return;
@@ -586,7 +979,8 @@ async function applyReveal(url, cls, onlyPerson){
   for (const [rid, g] of groups) { try {
     const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({request_id:rid, tokens:[...g.tokens]})});
-    if (!r.ok) continue;   // 권한 없음·기록 실패: 토큰 그대로 둔다
+    if (r.status === 403) { setReveal(null); undoRestore(); return; }        // 서버에서 유지 시간이 끝났으면 화면도 끈다
+    if (!r.ok) continue;   // 기록 실패 등: 토큰 그대로 둔다
     const {map} = await r.json();
     g.chips.forEach(([el, token]) => {
       const value = map[token];
@@ -600,13 +994,10 @@ async function applyReveal(url, cls, onlyPerson){
     });
   } catch {} }
 }
-function applyRestore(){ return applyReveal("/api/restore-tokens", "restored-tok", false); }
-function applyPartial(){ return applyReveal("/api/partial-tokens", "partial-tok", true); }
 
 function undoRestore(){
-  log.querySelectorAll(".restored-tok, .partial-tok").forEach(el => {
-    const token = el.dataset.token;
-    const html = savedTokHtml[token];
+  document.querySelectorAll(".restored-tok, .partial-tok").forEach(el => {
+    const html = savedTokHtml[el.dataset.token];
     if (!html) return;
     const tmp = document.createElement("span");
     tmp.innerHTML = html;
@@ -614,71 +1005,52 @@ function undoRestore(){
   });
 }
 
-// 2차 인증 모달은 Lv2 원복과 Lv1 부분 공개가 함께 쓴다. pendingMode: 인증이 끝나면 켤 기능
-let pendingMode = "restore";
-function openVerifyModal(mode){
-  pendingMode = mode;
+// 2차 인증 모달은 Lv2 원복과 Lv1 부분 공개가 함께 쓴다. 유지 시간을 고르고 비밀번호를 넣으면 켜진다.
+function openVerifyModal(mode, opener){
   $("#restoreMsg").textContent = mode === "partial"
     ? "이름 부분 공개 기능을 사용하려면 비밀번호를 다시 입력해 주세요."
-    : "원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요.";
-  restoreModal.classList.add("open");
+    : "원문 복원 기능을 사용하려면 비밀번호를 다시 입력해 주세요. 복원한 기록은 남아요.";
+  restoreModal.querySelector('input[name="dur"][value="30"]').checked = true;  // 기본값 30분
   $("#restorePw").value = "";
   $("#restoreErr").textContent = "";
-  setTimeout(() => $("#restorePw").focus(), 100);
+  $("#restoreCaps").hidden = true;
+  openModal(restoreModal, opener);
 }
-$("#restoreBtn").addEventListener("click", () => {
-  if (restoreMode) {
-    restoreMode = false;
-    $("#restoreBtn").classList.remove("on");
-    $("#restoreBtn").textContent = "🔓 원복";
-    undoRestore();
-    return;
-  }
-  openVerifyModal("restore");
-});
-$("#partialBtn").addEventListener("click", () => {   // Lv1: 켤 때 2차 인증 (권한 확인은 서버·DB 함수)
-  if (partialMode) {
-    partialMode = false;
-    $("#partialBtn").classList.remove("on");
-    $("#partialBtn").textContent = "🔍 부분 공개";
-    undoRestore();
-    return;
-  }
-  openVerifyModal("partial");
-});
-$("#restoreCancel").addEventListener("click", () => restoreModal.classList.remove("open"));
-restoreModal.addEventListener("click", e => { if (e.target === restoreModal) restoreModal.classList.remove("open"); });
+$("#restoreBtn").addEventListener("click", e => { if (reveal) revealOff(); else openVerifyModal("restore", e.currentTarget); });
+$("#partialBtn").addEventListener("click", e => { if (reveal) revealOff(); else openVerifyModal("partial", e.currentTarget); });
+$("#restoreCancel").addEventListener("click", () => closeModal(restoreModal));
 $("#restorePw").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); $("#restoreConfirm").click(); } });
+["keydown", "keyup"].forEach(t => $("#restorePw").addEventListener(t, e => { if (e.getModifierState) $("#restoreCaps").hidden = !e.getModifierState("CapsLock"); }));
 $("#restoreConfirm").addEventListener("click", async () => {
   const pw = $("#restorePw").value;
   if (!pw){ $("#restoreErr").textContent = "비밀번호를 입력해 주세요."; return; }
+  const minutes = +restoreModal.querySelector('input[name="dur"]:checked').value;   // 0 = 로그아웃까지
   $("#restoreConfirm").disabled = true;
   try {
-    const r = await fetch("/api/verify-password", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password: pw})});
-    if (!r.ok){
-      const body = await r.json().catch(() => ({}));
-      $("#restoreErr").textContent = body.detail || "인증에 실패했습니다.";
-      return;
-    }
-    restoreModal.classList.remove("open");
-    if (pendingMode === "partial") {
-      partialMode = true;
-      $("#partialBtn").classList.add("on");
-      $("#partialBtn").textContent = "🔍 부분 공개 ON";
-      applyPartial();
-    } else {
-      restoreMode = true;
-      $("#restoreBtn").classList.add("on");
-      $("#restoreBtn").textContent = "🔓 원복 ON";
-      applyRestore();
-    }
+    const r = await fetch("/api/verify-password", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password: pw, minutes})});
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok){ $("#restoreErr").textContent = typeof body.detail === "string" ? body.detail : "인증에 실패했습니다."; return; }
+    closeModal(restoreModal);
+    setReveal(body.reveal);
+    applyCurrentReveal();
   } catch { $("#restoreErr").textContent = "서버에 연결할 수 없습니다."; }
   finally { $("#restoreConfirm").disabled = false; }
 });
 
+/* ---------- 입력창 (3-14): 줄이 넘어가면 높이가 늘고, Enter 전송 · Shift+Enter 줄바꿈 ---------- */
+function autoGrow(){
+  input.style.height = "auto";
+  const h = input.scrollHeight + 3;                                             // 내용 높이 + 테두리(1.5px × 2)
+  input.style.height = (h <= 50 ? 48 : h) + "px";                               // 한 줄이면 버튼과 같은 48px. 최대 높이는 CSS 가 막는다
+}
+input.addEventListener("input", autoGrow);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); form.requestSubmit(); }   // 한글 조합 중 Enter 는 무시
+});
+
 form.addEventListener("submit", async e => {
   e.preventDefault(); const q = input.value.trim(); if (!q || sendBtn.disabled) return;
-  input.value = ""; sendBtn.disabled = true;
+  input.value = ""; autoGrow(); sendBtn.disabled = true;
   try { await ask(q); } finally { sendBtn.disabled = false; input.focus(); }
 });
 $("#chips").addEventListener("click", e => { if (e.target.tagName === "BUTTON"){ input.value = e.target.textContent; form.requestSubmit(); } });

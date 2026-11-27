@@ -1,0 +1,4 @@
+W1123 11:44:21.233000 35899 .venv/lib/python3.13/site-packages/torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 11654.42it/s]
+인물사전 적재 완료: 문서 187, 후보 456, 검색 연결 456
+판정 요약: /Users/hwangtaewoo/Desktop/nlp_like_lion_chatbot_03/outputs/person_resolution_pseudo_holdout_labeled.json

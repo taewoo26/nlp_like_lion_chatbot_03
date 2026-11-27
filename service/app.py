@@ -25,12 +25,20 @@
 - 출력 재검사(starter/recheck.py): 결과는 query_log.recheck_*, 걸린 시간은 서버 터미널 한 줄(recheck_ms·total_ms).
   문서는 재검사를 거친 snippet 만 내보낸다.
   기록에 실패해도 답변은 그대로 돌려준다 (outputs/audit_fallback.jsonl, outputs/server_error.log 에 남김).
-- 실명 복원(Lv2 + 2차 인증): POST /api/verify-password {"password"} → 세션에 restore_verified
+- 로그인 만료: 로그인할 때 세션에 expires_at(SESSION_MINUTES, 기본 30분)을 두고 요청마다 서버가 확인한다.
+        POST /api/session/extend → 남은 시간을 다시 30분으로 (화면의 '연장' 버튼·만료 2분 전 안내 창)
+        GET  /api/me 는 session_remaining(남은 초)과 reveal(원복 상태)도 돌려준다.
+- 원복·부분 공개 유지 시간: POST /api/verify-password {"password", "minutes": 0|5|15|30, "reason"}
+        세션 reveal = {mode, until, reason}. 시간이 지나면 서버가 끈다. POST /api/reveal-off 로 바로 끈다.
+        {"purpose": "confirm"} 이면 비밀번호 확인만 한다 (관리실 레벨 변경 등, 원복 상태는 그대로).
+- 관리실 문서 복원: POST /api/admin/restore-doc-tokens {"doc_id", "tokens"} → vault.restore_doc_token()
+        restore_log 에 reason(복원 사유)·doc_id 를 함께 남긴다.
+- 실명 복원(Lv2 + 2차 인증): POST /api/verify-password {"password"} → 세션 reveal(mode=full)
         POST /api/restore-tokens {"request_id", "tokens": [...]} → {"map": {토큰: 원문}}
   복원은 vault.restore_token()으로만 한다. 토큰마다 audit.restore_log 1행이 남고 request_id 로 query_log 와 이어진다.
   기록에 실패하면 복원도 실패한다(화면에는 토큰 그대로). query_log 와 달리 실명이 나가는 쪽이라 기록 없는 복원은 하지 않는다.
   DB 접속은 db.restore_conn() (app_search 계정. SEARCH_DSN 이 없으면 관리자 계정으로 대체).
-- 이름 부분 공개(Lv1 + 2차 인증): POST /api/verify-password {"password"} → 세션에 partial_verified
+- 이름 부분 공개(Lv1 + 2차 인증): POST /api/verify-password {"password"} → 세션 reveal(mode=partial)
         POST /api/partial-tokens {"request_id", "tokens": [...]} → {"map": {토큰: "윤*영"}}
   vault.partial_token()으로만 한다. DB 함수가 Lv1 확인 → 본인 질문(query_log) 확인 → 이름 토큰이고 그 답변에 나온
   토큰인지 확인 → 마스킹 → audit.restore_log(mode=partial) 기록을 한다. 원문은 DB 밖으로 나오지 않는다.
@@ -57,6 +65,8 @@ STATIC = Path(__file__).with_name("static")
 UI_STATE = {"answered": "found", "search_only": "nollm"}   # 그 밖의 state 는 화면에서 sorry
 MIN_SECRET_LENGTH = 16
 _SESSION_CACHE_TTL = 60   # 세션 유저 정보 DB 재조회 주기(초). 이 시간 안에는 캐시 사용
+SESSION_SECONDS = int(config.env("SESSION_MINUTES", "30") or "30") * 60   # 로그인 유지 시간(초). 연장 버튼을 누를 때만 다시 채운다
+REVEAL_MINUTES = (0, 5, 15, 30)   # 원복·부분 공개 유지 시간 선택지(분). 0 = 로그아웃할 때까지
 
 
 @asynccontextmanager
@@ -94,6 +104,10 @@ def _session_user(request: Request):
     if not isinstance(user_id, str) or not user_id:
         request.session.clear()
         return None
+    expires_at = request.session.get("expires_at")              # 로그인 만료 시각 (로그인·연장 때 정함)
+    if not isinstance(expires_at, (int, float)) or expires_at <= time.time():   # 만료 시각이 없거나 지났으면
+        request.session.clear()                                 # 세션을 비우고 (원복 상태도 함께 사라짐)
+        return None                                             # 로그인 안 한 것으로 본다 → 401
     cached = request.session.get("_user_cache")
     cached_at = request.session.get("_user_cached_at", 0)
     if cached and (time.time() - cached_at) < _SESSION_CACHE_TTL:
@@ -128,6 +142,14 @@ class Ask(BaseModel):
 
 class VerifyPassword(BaseModel):
     password: str = Field(min_length=1, max_length=200)
+    purpose: str = Field(default="reveal", pattern=r"^(reveal|confirm)$")   # reveal: 원복·부분 공개 켜기 / confirm: 비밀번호 확인만 (관리실 레벨 변경 등)
+    minutes: int = 30                                                       # 원복 유지 시간 (REVEAL_MINUTES 중 하나, 0 = 로그아웃까지)
+    reason: str | None = Field(default=None, max_length=200)               # 복원 사유 (관리실 문서 복원에 필수)
+
+
+class DocRestoreTokens(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=64)                        # 복원할 문서
+    tokens: list[str] = Field(min_length=1, max_length=500)                 # 그 문서의 토큰들
 
 
 class FeedbackBody(BaseModel):
@@ -173,6 +195,7 @@ def login(body: Login, request: Request):      # 동기 함수: bcrypt 계산과
         return JSONResponse(status_code=LOGIN_STATUS[result.reason], content={
             "reason": result.reason, "message": LOGIN_MESSAGES[result.reason]})
     request.session.clear()                    # 이전 세션 값을 버리고 새로 시작
+    request.session["expires_at"] = time.time() + SESSION_SECONDS   # 로그인 만료 시각
     request.session["user_id"] = result.user["user_id"]
     request.session["_user_cache"] = result.user
     request.session["_user_cached_at"] = time.time()
@@ -185,21 +208,74 @@ def logout(request: Request):
     return {"ok": True}
 
 
+def _session_remaining(request: Request) -> int:
+    """로그인이 끝나기까지 남은 초."""
+    return max(0, int(request.session.get("expires_at", 0) - time.time()))   # 음수면 0
+
+
+def _reveal_state(request: Request):
+    """지금 켜져 있는 원복·부분 공개 상태. 꺼져 있거나 시간이 지났으면 None (지난 것은 세션에서 지운다).
+    반환: {"mode": "full"|"partial", "remaining": 남은 초 또는 None(로그아웃까지), "reason": 사유}"""
+    reveal = request.session.get("reveal")                      # verify-password 가 저장한 상태
+    if not isinstance(reveal, dict):                            # 켠 적 없으면
+        return None
+    until = reveal.get("until")                                 # 끝나는 시각 (None = 로그아웃까지)
+    if until is not None and until <= time.time():              # 유지 시간이 지났으면
+        request.session.pop("reveal", None)                     # 서버에서도 끈다
+        return None
+    remaining = None if until is None else int(until - time.time())   # 남은 초
+    return {"mode": reveal.get("mode"), "remaining": remaining, "reason": reveal.get("reason")}
+
+
+def _reveal_active(request: Request, mode: str) -> bool:
+    """이 세션에서 원복(full) 또는 부분 공개(partial)가 켜져 있는지."""
+    state = _reveal_state(request)                              # 시간 지난 상태는 여기서 정리됨
+    return bool(state) and state["mode"] == mode                # 모드까지 같아야 허용
+
+
 @app.get("/api/me")
-def me(user: dict = Depends(login_required)):
-    return {"user": user}
+def me(request: Request, user: dict = Depends(login_required)):
+    return {"user": user,
+            "session_remaining": _session_remaining(request),  # 화면 타이머가 이 값으로 시작한다 (새로고침해도 이어짐)
+            "reveal": _reveal_state(request)}                   # 원복·부분 공개 상태 (새로고침 뒤에도 화면에 그대로 표시)
+
+
+@app.post("/api/session/extend")
+def extend_session(request: Request, user: dict = Depends(login_required)):
+    """세션 연장 버튼: 남은 시간을 다시 SESSION_SECONDS 로 채운다. 이미 만료됐으면 login_required 가 401."""
+    request.session["expires_at"] = time.time() + SESSION_SECONDS   # 지금부터 다시 30분
+    return {"session_remaining": _session_remaining(request)}
 
 
 @app.post("/api/verify-password")
 def verify_password(body: VerifyPassword, request: Request, user: dict = Depends(login_required)):
-    """2차 인증. Lv2 → restore_verified(실명 복원), Lv1 → partial_verified(이름 부분 공개). 서로 섞이지 않는다."""
+    """2차 인증.
+    purpose=reveal  : Lv2 → 원복(full), Lv1 → 부분 공개(partial)를 minutes 분 동안 켠다 (0 = 로그아웃까지).
+                      reason 을 주면 세션에 두고 관리실 문서 복원 기록에 남긴다.
+    purpose=confirm : 비밀번호 확인만 한다 (관리실 레벨 변경 등). 원복 상태는 바꾸지 않는다."""
     level = user.get("access_level")
-    if level not in (1, 2):
+    if body.purpose == "reveal" and level not in (1, 2):       # 원복·부분 공개는 Lv1 이상만
         raise HTTPException(status_code=403, detail="Lv1 이상 권한이 필요합니다.")
+    if body.purpose == "reveal" and body.minutes not in REVEAL_MINUTES:   # 정해진 선택지만 허용
+        raise HTTPException(status_code=422, detail=f"유지 시간은 {REVEAL_MINUTES} 중 하나여야 합니다.")
     result = auth.authenticate(user["user_id"], body.password)
     if not result.ok:
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
-    request.session["restore_verified" if level == 2 else "partial_verified"] = True
+    if body.purpose == "confirm":                               # 확인만 하는 경우
+        return {"ok": True}
+    reason = (body.reason or "").strip() or None                # 빈 사유는 None
+    request.session["reveal"] = {                               # 원복 상태를 서버 세션에 둔다 (화면 타이머만으로는 우회 가능하므로)
+        "mode": "full" if level == 2 else "partial",            # Lv2 실명 복원 / Lv1 이름 부분 공개
+        "until": (time.time() + body.minutes * 60) if body.minutes else None,   # 끝나는 시각 (0 이면 로그아웃까지)
+        "reason": reason,                                       # 복원 사유
+    }
+    return {"ok": True, "reveal": _reveal_state(request)}
+
+
+@app.post("/api/reveal-off")
+def reveal_off(request: Request, user: dict = Depends(login_required)):
+    """원복·부분 공개 끄기. 화면 버튼을 끌 때 서버 상태도 같이 지운다 (3-11)."""
+    request.session.pop("reveal", None)                         # 없으면 그냥 지나감
     return {"ok": True}
 
 
@@ -207,7 +283,7 @@ def verify_password(body: VerifyPassword, request: Request, user: dict = Depends
 def restore_tokens(body: RestoreTokens, request: Request, user: dict = Depends(login_required)):
     if user.get("access_level") != 2:
         raise HTTPException(status_code=403, detail="Lv2 권한이 필요합니다.")
-    if not request.session.get("restore_verified"):
+    if not _reveal_active(request, "full"):                     # 원복이 꺼져 있거나 유지 시간이 지났으면
         raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
     try:
         token_map = _fetch_originals(body.tokens, body.request_id, user["user_id"])
@@ -224,7 +300,7 @@ def restore_tokens(body: RestoreTokens, request: Request, user: dict = Depends(l
 def partial_tokens(body: RestoreTokens, request: Request, user: dict = Depends(login_required)):
     if user.get("access_level") != 1:           # Lv1 전용. Lv2 도 쓰게 하려면 < 1 로 (DB 함수·화면 버튼·verify_password 도 함께)
         raise HTTPException(status_code=403, detail="Lv1 전용 기능입니다.")
-    if not request.session.get("partial_verified"):
+    if not _reveal_active(request, "partial"):                  # 부분 공개가 꺼져 있거나 유지 시간이 지났으면
         raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
     try:
         token_map = _fetch_partials(body.tokens, body.request_id, user["user_id"])
@@ -342,7 +418,8 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     audit.record(audit.build_row(request_id, user, result=res, latency_ms=latency_ms, follow_up_of=follow_up_of))
     if res.get("recheck"):
         _log_recheck(request_id, res["recheck"], latency_ms)
-    docs = [{"doc_id": d["doc_id"], "snippet": d["snippet"]} for d in res["docs"]]   # 출력 재검사를 거친 조각만 (starter/recheck.py)
+    docs = [{"doc_id": d["doc_id"], "snippet": d["snippet"],      # 출력 재검사를 거친 조각만 (starter/recheck.py)
+             "text": d.get("chunk_text", "")} for d in res["docs"]]   # 찾은 조각 전체 (재검사를 거친 것, 문서 팝업용)
     answer_text = res["answer"]
     masked_query = res["masked_query"]
     restored = False
@@ -350,10 +427,10 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
     should_restore = (
         body.restore
         and user.get("access_level") == 2
-        and request.session.get("restore_verified")
+        and _reveal_active(request, "full")                    # 원복이 켜져 있고 유지 시간 안일 때만
     )
     if should_restore and (answer_text or docs):
-        all_text = [answer_text or "", masked_query or ""] + [d["snippet"] for d in docs]
+        all_text = [answer_text or "", masked_query or ""] + [d["snippet"] for d in docs] + [d["text"] for d in docs]
         tokens_found = set()
         for t in all_text:
             tokens_found.update(_TOKEN_RE.findall(t))
@@ -368,11 +445,13 @@ def ask(body: Ask, request: Request, user: dict = Depends(login_required)):
             masked_query = results[1] or masked_query
             for i, d in enumerate(docs):
                 d["snippet"] = results[2 + i]
+                d["text"] = results[2 + len(docs) + i]          # 조각 전체도 같은 규칙으로 복원
             restored = True
 
     return {"request_id": request_id, "masked_query": masked_query, "query_tokens": res["query_tokens"],
             "docs": docs, "answer": answer_text, "state": _ui_state(res["state"]),
             "restored": restored,
+            "blocked": (res.get("recheck") or {}).get("action") == "blocked",   # 출력 재검사로 차단됨 → 화면이 '못 찾음' 안내를 붙이지 않는다 (3-3)
             "clarify_code": res.get("clarify_code"),            # 재질문 원인 (starter/clarify.py)
             "need_more": bool(res.get("clarify_code")),         # True 면 화면이 '조건 확인 필요'로 표시하고 다음 질문에 이 request_id 를 붙인다
             "merged": bool(res.get("merged"))}                  # True 면 이전 질문과 합쳐서 찾았다는 안내를 보여 준다
@@ -445,10 +524,27 @@ def admin(request: Request):
 
 @app.get("/api/doc-count")
 def doc_count(user: dict = Depends(login_required)):
-    from starter import db
+    """상담 창 헤더의 '사내 문서 N건'. 이 사용자가 검색할 수 있는 문서 수만 센다 (권한 밖 문서 수가 드러나지 않게)."""
+    scope = _doc_scope(user)                                    # 열람 가능한 doc_id 목록 (None = 제한 없음)
     with db.rag_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
+        if scope is None:                                       # 개인정보 담당자: 전체
+            cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks")
+        else:                                                   # 그 밖에는 권한 범위 안의 문서만
+            cur.execute("SELECT COUNT(DISTINCT doc_id) FROM rag.chunks WHERE doc_id = ANY(%s::text[])", (list(scope),))
         return {"count": cur.fetchone()[0]}
+
+
+@app.get("/api/doc-types")
+def doc_types(user: dict = Depends(login_required)):
+    """'찾을 수 있는 문서' 안내 패널 (3-4 ①): 이 사용자가 검색할 수 있는 문서 종류와 건수."""
+    scope = _doc_scope(user)                                    # 열람 가능한 doc_id 목록
+    with db.search_conn() as conn, conn.cursor() as cur:
+        if scope is None:                                       # 제한 없음
+            cur.execute("SELECT doc_type, COUNT(*) FROM rag.doc_meta GROUP BY doc_type ORDER BY 2 DESC, 1")
+        else:                                                   # 권한 범위 안에서만 센다
+            cur.execute("""SELECT doc_type, COUNT(*) FROM rag.doc_meta WHERE doc_id = ANY(%s::text[])
+                           GROUP BY doc_type ORDER BY 2 DESC, 1""", (list(scope),))
+        return {"items": [{"doc_type": t or "미지정", "count": n} for t, n in cur.fetchall()]}   # 문서 종류별 건수
 
 
 @app.get("/api/admin/stats")
@@ -474,8 +570,9 @@ def admin_stats(user: dict = Depends(admin_required)):
         stats["review_pending"] = review.get("pending", 0)
         stats["review_resolved"] = review.get("resolved", 0)
         stats["review_unresolved"] = review.get("unresolved", 0)
-    stats["fail_docs"] = 0
     with db.rag_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COALESCE(SUM(doc_count), 0) FROM audit.upload_log WHERE status = 'failed'")   # 업로드 실패 작업의 문서 수 (4-2)
+        stats["fail_docs"] = int(cur.fetchone()[0])
         cur.execute("""
             WITH doc_tokens AS (
                 SELECT doc_id, COUNT(DISTINCT tok) AS total
@@ -585,6 +682,38 @@ def admin_doc_detail(doc_id: str, user: dict = Depends(admin_required)):
             labels.add(_TOKEN_LABEL_NAMES.get(m.group(1), m.group(1)))
     return {"doc_id": doc_id, "doc_type": doc_type,
             "token_labels": sorted(labels), "chunks": chunks}
+
+
+_DOC_RESTORE_SQL = "SELECT t, vault.restore_doc_token(%s, %s, %s, t, %s) FROM unnest(%s::text[]) AS t"
+
+
+@app.post("/api/admin/restore-doc-tokens")
+def admin_restore_doc_tokens(body: DocRestoreTokens, request: Request, user: dict = Depends(admin_required)):
+    """관리실 문서 상세의 원문 복원 (4-1).
+    질문이 없는 경로라 vault.restore_token(본인 질문 확인)을 쓸 수 없어 vault.restore_doc_token 을 쓴다.
+    DB 함수가 Lv2 확인 → 그 문서의 토큰인지 확인 → restore_log 에 사유·문서 번호와 함께 기록 → 원문 반환을 한다."""
+    state = _reveal_state(request)                              # 원복 상태 (유지 시간 확인 포함)
+    if not state or state["mode"] != "full":                    # 원복이 꺼져 있으면
+        raise HTTPException(status_code=403, detail="2차 인증이 필요합니다.")
+    if not state.get("reason"):                                 # 관리실 복원은 사유가 있어야 한다
+        raise HTTPException(status_code=400, detail="복원 사유를 입력해 주세요.")
+    valid = sorted({t for t in body.tokens if _RESTORE_TOKEN_RE.fullmatch(t)})   # 형식이 맞는 토큰만
+    if not valid:
+        return {"map": {}}
+    request_id = audit.new_request_id()                         # 이번 복원 묶음의 번호 (서버가 만든다)
+    try:
+        with db.restore_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(_DOC_RESTORE_SQL, (request_id, user["user_id"], body.doc_id, state["reason"], valid))
+                rows = cur.fetchall()
+            conn.commit()                                       # 기록과 복원을 한 번에 확정
+    except psycopg.errors.InsufficientPrivilege as exc:         # Lv2 아님 (42501)
+        _log_restore_error(request_id, exc)
+        raise HTTPException(status_code=403, detail="복원 권한이 없습니다.") from None
+    except Exception as exc:                                    # 기록 실패 포함: 기록 없는 복원은 하지 않는다
+        _log_restore_error(request_id, exc)
+        raise HTTPException(status_code=503, detail=f"복원 처리 중 오류: {type(exc).__name__}") from None
+    return {"map": {t: orig[0] for t, orig in rows if orig and orig[0]}}   # 토큰 → 원문(첫 표기)
 
 
 @app.get("/api/admin/review")
@@ -1185,14 +1314,15 @@ def admin_logs_restore(
         cur.execute(f"SELECT COUNT(*) FROM audit.restore_log {where}", params)
         total = cur.fetchone()[0]
         cur.execute(f"""
-            SELECT request_id, user_id, level, token, label, mode, created_at
+            SELECT request_id, user_id, level, token, label, mode, created_at, reason, doc_id
               FROM audit.restore_log {where}
              ORDER BY created_at DESC
              LIMIT %(size)s OFFSET %(offset)s
         """, {**params, "size": size, "offset": (page - 1) * size})
         rows = [{"request_id": r[0], "user_id": r[1], "level": r[2],
                  "token": r[3], "label": r[4], "mode": r[5],
-                 "created_at": r[6].isoformat() if r[6] else ""}
+                 "created_at": r[6].isoformat() if r[6] else "",
+                 "reason": r[7], "doc_id": r[8]}                 # 복원 사유·문서 번호 (관리실 문서 복원만 채워짐)
                 for r in cur.fetchall()]
     return {"items": rows, "total": total, "page": page, "size": size}
 
